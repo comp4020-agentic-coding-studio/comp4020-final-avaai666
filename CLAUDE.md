@@ -23,6 +23,7 @@ Authority
 - A timer may read and broadcast state. The only row a timer or a read may
   write is the collapse row.
 - Model and rate constants live only in src/lib/constants.ts.
+- Events and snapshots never contain an idempotency key, a net id or a token.
 
 The ledger
 - No state change without a ledger row, written in the same transaction.
@@ -34,6 +35,8 @@ Scope
 - No free-text input except a name (max 24 characters). No chat. If a feature
   seems to need a message box, stop and ask me.
 - Nothing from "Not building" in DESIGN.md.
+- No client framework and no build step. The page is server-rendered HTML
+  plus one plain script in /static. Node runs src/*.ts directly.
 
 Tests
 - Test first. A first run that fails because a function is "not implemented"
@@ -60,3 +63,6 @@ Safety
 - Never read, print or commit mise.local.toml or FLY_API_TOKEN.
 - Never touch .github/workflows or the app name in fly.toml.
 - Never push. I push.
+- Never run spec/ against production. The app tests dig ponds and join nets;
+  against https://comp4020-final-avaai666.fly.dev they would fill the real
+  register with junk. APP_URL stays local (or CI's container).
