@@ -1,27 +1,30 @@
 import { describe, expect, it } from "vitest";
 import { A, K, MAX_TAPS_PER_MIN, R_PER_MIN } from "../../src/lib/constants.ts";
-import { available, isDead, peakGrowthPerMin, stockAt } from "../../src/lib/pond.ts";
+import { available, collapseAfterMs, isDead, peakGrowthPerMin, stockAt } from "../../src/lib/pond.ts";
 
-// The pond model (DESIGN.md v0.2). Pure functions: these tests need no server.
+// The pond model (DESIGN.md). Pure functions: these tests need no server.
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
-// Steps the model one second at a time with stockAt, then each net catches one
-// fish while one is available, as in sim/pond_sim.py with every net at max.
-// Returns the second the pond died (or null) and the lowest stock seen.
-function fish(nets: number, s0: number, maxSeconds: number): { diedAt: number | null; min: number } {
+// The fastest a net may tap, from the rate constant.
+const TAP_MS = MINUTE / MAX_TAPS_PER_MIN;
+
+// Steps the model one tap interval at a time with stockAt, then each net
+// catches one fish while one is available, as in sim/pond_sim.py with every
+// net at max. Returns the ms the pond died at (or null) and the lowest stock.
+function fish(nets: number, s0: number, maxMs: number): { diedAt: number | null; min: number } {
   let s = s0;
   let min = s0;
-  for (let sec = 0; sec < maxSeconds; sec++) {
-    s = stockAt(s, SECOND);
+  for (let t = TAP_MS; t <= maxMs; t += TAP_MS) {
+    s = stockAt(s, TAP_MS);
     for (let n = 0; n < nets; n++) {
       if (available(s) >= 1) s -= 1;
     }
     min = Math.min(min, s);
-    if (isDead(s)) return { diedAt: sec + 1, min };
+    if (isDead(s)) return { diedAt: t, min };
   }
   return { diedAt: null, min };
 }
@@ -59,6 +62,17 @@ describe("stockAt", () => {
   });
 });
 
+describe("stockAt with a partial last step is within 0.1% of a 10 ms reference RK4", () => {
+  for (const s0 of [45, 150, 290]) {
+    for (const t of [1500, 61_250]) {
+      it(`s0 = ${s0}, t = ${t} ms`, () => {
+        const want = reference(s0, t);
+        expect(Math.abs(stockAt(s0, t) - want)).toBeLessThanOrEqual(0.001 * want);
+      });
+    }
+  }
+});
+
 it("parameter check: one net at max < peak regrowth < two nets at max", () => {
   const g = peakGrowthPerMin();
   expect(g).toBeGreaterThan(MAX_TAPS_PER_MIN);
@@ -67,24 +81,24 @@ it("parameter check: one net at max < peak regrowth < two nets at max", () => {
 
 describe("scenarios", () => {
   it("from a full pond, one net at full speed for 30 minutes never brings stock below A", () => {
-    const { diedAt, min } = fish(1, K, 30 * 60);
+    const { diedAt, min } = fish(1, K, 30 * MINUTE);
     expect(diedAt).toBeNull();
     expect(min).toBeGreaterThanOrEqual(A);
   });
 
   // tuning: update if the parameters change
   it("from a full pond, two nets at full speed kill it between 3 and 8 minutes", () => {
-    const { diedAt } = fish(2, K, 30 * 60);
+    const { diedAt } = fish(2, K, 30 * MINUTE);
     expect(diedAt).not.toBeNull();
-    expect(diedAt!).toBeGreaterThanOrEqual(3 * 60);
-    expect(diedAt!).toBeLessThanOrEqual(8 * 60);
+    expect(diedAt!).toBeGreaterThanOrEqual(3 * MINUTE);
+    expect(diedAt!).toBeLessThanOrEqual(8 * MINUTE);
   });
 
   // the known limit, kept on purpose: one person can finish off a weakened pond
   it("from a quarter-full pond, one net at full speed kills it within 5 minutes", () => {
-    const { diedAt } = fish(1, K / 4, 30 * 60);
+    const { diedAt } = fish(1, K / 4, 30 * MINUTE);
     expect(diedAt).not.toBeNull();
-    expect(diedAt!).toBeLessThanOrEqual(5 * 60);
+    expect(diedAt!).toBeLessThanOrEqual(5 * MINUTE);
   });
 });
 
@@ -128,4 +142,33 @@ it("evaluates a 7-day gap in under 200 ms", () => {
   const start = performance.now();
   stockAt(150, 7 * DAY);
   expect(performance.now() - start).toBeLessThan(200);
+});
+
+describe("collapseAfterMs", () => {
+  it("below A, with nobody fishing, the pond dies in 20 to 40 minutes (the sim says 28)", () => {
+    const ms = collapseAfterMs(0.95 * A);
+    expect(ms).not.toBeNull();
+    expect(ms!).toBeGreaterThanOrEqual(20 * MINUTE);
+    expect(ms!).toBeLessThanOrEqual(40 * MINUTE);
+  });
+
+  it("is null above A, and 0 for a pond already below one fish", () => {
+    expect(collapseAfterMs(1.05 * A)).toBeNull();
+    expect(collapseAfterMs(0.5)).toBe(0);
+  });
+
+  it("agrees with stockAt to one step", () => {
+    const s0 = 0.95 * A;
+    const ms = collapseAfterMs(s0)!;
+    expect(isDead(stockAt(s0, ms))).toBe(true);
+    expect(isDead(stockAt(s0, ms - SECOND))).toBe(false);
+  });
+});
+
+describe("a 7-day gap is fast whether the pond is dying or alive", () => {
+  it.each([0.4, 28.5, 150])("s0 = %d evaluates in under 50 ms", (s0) => {
+    const start = performance.now();
+    stockAt(s0, 7 * DAY);
+    expect(performance.now() - start).toBeLessThan(50);
+  });
 });
