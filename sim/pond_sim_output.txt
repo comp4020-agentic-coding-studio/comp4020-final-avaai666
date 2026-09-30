@@ -1,0 +1,28 @@
+K=300  A=30  r=0.2377/min  peak regrowth G=90.0/min  one net at max=60/min
+Parameter check: one net at max < G < two nets at max?  60 < 90 < 120: True
+
+From a full pond, every net at max:
+  1 net(s): alive after 30 min
+  2 net(s): collapse at 5.2 min
+  3 net(s): collapse at 2.4 min
+  4 net(s): collapse at 1.6 min
+
+From a partly drained pond, ONE net at max (a single person CAN finish off a weakened pond):
+  start at 50% full: alive after 60 min
+  start at 25% full: collapse at 1.4 min
+
+Mixed intensity (30 seeded runs each, 60 min):
+  2 nets at 70% of max (84/min in total): collapsed in 0/30 seeded runs within 60 min
+  2 nets at 75% of max (90/min in total): collapsed in 19/30 seeded runs within 60 min, median 39.7 min
+  2 nets at 80% of max (96/min in total): collapsed in 30/30 seeded runs within 60 min, median 13.5 min
+  2 nets at 90% of max (108/min in total): collapsed in 30/30 seeded runs within 60 min, median 7.4 min
+  4 nets at 35% of max (84/min in total): collapsed in 0/30 seeded runs within 60 min
+  4 nets at 40% of max (96/min in total): collapsed in 30/30 seeded runs within 60 min, median 13.3 min
+  4 nets at 50% of max (120/min in total): collapsed in 30/30 seeded runs within 60 min, median 5.1 min
+  12 nets at 10% of max (72/min in total): collapsed in 0/30 seeded runs within 60 min
+  12 nets at 12% of max (86/min in total): collapsed in 5/30 seeded runs within 60 min, median 35.3 min
+  12 nets at 15% of max (108/min in total): collapsed in 30/30 seeded runs within 60 min, median 7.3 min
+
+From 0.95A with nobody fishing: stock falls below 1 after 28 min
+From 1.05A with nobody fishing: 300 fish after 24 h
+Recovery from 1.5A to 0.9K with nobody fishing: 6.4 min
