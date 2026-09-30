@@ -20,12 +20,14 @@ Authority
 - The server is the only authority on stock and catches. The client never
   computes stock or an outcome. It shows what the server sent.
 - Stock is evaluated only by stockAt() in src/lib/pond.ts.
-- A timer may read and broadcast state. The only row a timer may write is the
-  collapse row.
+- A timer may read and broadcast state. The only row a timer or a read may
+  write is the collapse row.
 - Model and rate constants live only in src/lib/constants.ts.
 
 The ledger
-- Every state change writes exactly one ledger row, in the same transaction.
+- No state change without a ledger row, written in the same transaction.
+  One catch that kills a pond writes two rows (catch, then collapse) in one
+  transaction.
 - Never write UPDATE or DELETE against the ledger.
 
 Scope
@@ -36,6 +38,9 @@ Scope
 Tests
 - Test first. A first run that fails because a function is "not implemented"
   is fine; the test must then pass against real behaviour.
+- Unit tests (spec/unit/) must pass with no server running. Run
+  `pnpm test:unit` after every change to src/lib; run `pnpm check` with the
+  app running before any commit that touches the server.
 - Never edit or delete a test to make it pass. If a test looks wrong, stop and
   tell me why.
 - Before saying "done", paste the real output of every script from Step 0 (b)
