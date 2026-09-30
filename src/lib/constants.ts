@@ -7,3 +7,5 @@ export const MAX_TAPS_PER_MIN = 60; // one tap per second per net
 export const STEP_MS = 1000; // RK4 step
 export const CATCH_INTERVAL_MS = 60_000 / MAX_TAPS_PER_MIN; // a net's cooldown after a catch
 export const NAME_MAX_GRAPHEMES = 24;
+export const MAX_NETS_PER_POND = 100;
+export const REGISTER_SIZE = 50; // ponds listed on the home page

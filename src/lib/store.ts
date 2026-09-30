@@ -3,7 +3,8 @@
 // transaction together with its ledger row.
 import { randomBytes } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-import { CATCH_INTERVAL_MS, K, NAME_MAX_GRAPHEMES } from "./constants.ts";
+import { CATCH_INTERVAL_MS, K, MAX_NETS_PER_POND, NAME_MAX_GRAPHEMES, REGISTER_SIZE } from "./constants.ts";
+import { isIdempotencyKey } from "./keys.ts";
 import { available, collapseAfterMs, isDead, stockAt } from "./pond.ts";
 
 export type Clock = () => number;
@@ -48,12 +49,14 @@ export interface PondSummary {
 
 export type JoinResult =
   | { ok: true; netId: number; token: string }
-  | { ok: false; reason: "bad_name" | "name_taken" | "dead" | "no_pond" };
+  | { ok: false; reason: "bad_name" | "name_taken" | "pond_full" | "dead" | "no_pond" };
 
 export type CatchResult =
   | { ok: true; row: LedgerRow; duplicate: boolean }
   | { ok: false; reason: "too_soon"; retryInMs: number }
-  | { ok: false; reason: "dead" | "no_fish" | "not_in_pond" };
+  // No "no_fish": fewer than one fish available means stock < 1, which is
+  // dead, and dead is checked first.
+  | { ok: false; reason: "dead" | "not_in_pond" | "bad_key" };
 
 export interface Store {
   digPond(): { pondId: number };
@@ -62,13 +65,17 @@ export interface Store {
   // may write the pond's collapse row
   evaluate(pondId: number): PondState;
   ledgerAfter(pondId: number, afterId: number, limit: number): LedgerRow[];
-  listPonds(): PondSummary[];
+  // the pond's last `limit` rows, newest first
+  recentRows(pondId: number, limit: number): LedgerRow[];
+  // newest first
+  listPonds(limit?: number): PondSummary[];
   netByToken(token: string): { netId: number; pondId: number; name: string } | null;
   close(): void;
 }
 
 const PRAGMAS = `
 PRAGMA journal_mode = WAL;
+PRAGMA synchronous = NORMAL;
 PRAGMA foreign_keys = ON;
 PRAGMA busy_timeout = 5000;
 `;
@@ -133,16 +140,21 @@ const toRow = (r: DbLedgerRow): LedgerRow => ({
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
-// A name as stored, or null if it is not one: trimmed, no control characters,
+// A name as stored (trimmed, NFC), or null if it is not one: no control
+// characters, no format characters except the zero-width joiner inside emoji,
 // 1 to NAME_MAX_GRAPHEMES grapheme clusters.
 function cleanName(raw: string): string | null {
-  const name = raw.trim();
-  if (/\p{Cc}/u.test(name)) return null;
+  const name = raw.trim().normalize("NFC");
+  if (/\p{Cc}|(?!\u200D)\p{Cf}/u.test(name)) return null;
   const length = [...graphemes.segment(name)].length;
   return length >= 1 && length <= NAME_MAX_GRAPHEMES ? name : null;
 }
 
-export function openStore(file: string, now: Clock): Store {
+// What two names are compared by.
+const nameKey = (name: string): string => name.normalize("NFKC").toLowerCase();
+
+// onCommit, if given, hears how long each transaction that wrote something took.
+export function openStore(file: string, now: Clock, onCommit?: (ms: number) => void): Store {
   const db = new DatabaseSync(file);
   db.exec(PRAGMAS);
   db.exec(`BEGIN IMMEDIATE; ${SCHEMA} COMMIT;`);
@@ -150,9 +162,10 @@ export function openStore(file: string, now: Clock): Store {
   const q = {
     insertPond: db.prepare("INSERT INTO ponds (dug_at) VALUES (?)"),
     pond: db.prepare("SELECT id, dug_at FROM ponds WHERE id = ?"),
-    pondIds: db.prepare("SELECT id FROM ponds ORDER BY id"),
+    newestPondIds: db.prepare("SELECT id FROM ponds ORDER BY id DESC LIMIT ?"),
     insertNet: db.prepare("INSERT INTO nets (pond, name, name_key, token) VALUES (?, ?, ?, ?)"),
     nameTaken: db.prepare("SELECT 1 FROM nets WHERE pond = ? AND name_key = ?"),
+    netCount: db.prepare("SELECT count(*) AS n FROM nets WHERE pond = ?"),
     netByToken: db.prepare("SELECT id, pond, name FROM nets WHERE token = ?"),
     netsOf: db.prepare(
       `SELECT n.id, n.name, count(l.id) AS catches FROM nets n
@@ -166,13 +179,20 @@ export function openStore(file: string, now: Clock): Store {
     rowByKey: db.prepare("SELECT * FROM ledger WHERE net = ? AND idem_key = ?"),
     lastCatchAt: db.prepare("SELECT max(at) AS at FROM ledger WHERE net = ? AND kind = 'catch'"),
     rowsAfter: db.prepare("SELECT * FROM ledger WHERE pond = ? AND id > ? ORDER BY id LIMIT ?"),
+    recentRows: db.prepare("SELECT * FROM ledger WHERE pond = ? ORDER BY id DESC LIMIT ?"),
+    changes: db.prepare("SELECT total_changes() AS n"),
   };
 
+  const totalChanges = (): number => (q.changes.get() as { n: number }).n;
+
   function tx<T>(fn: () => T): T {
+    const start = performance.now();
+    const changesBefore = totalChanges();
     db.exec("BEGIN IMMEDIATE");
     try {
       const result = fn();
       db.exec("COMMIT");
+      if (onCommit && totalChanges() !== changesBefore) onCommit(performance.now() - start);
       return result;
     } catch (err) {
       db.exec("ROLLBACK");
@@ -193,7 +213,7 @@ export function openStore(file: string, now: Clock): Store {
 
   // The pond's state at time t, inside a transaction. If the pond has died
   // with nobody fishing and has no collapse row yet, writes it, at the moment
-  // stock fell below 1. Null if there is no such pond.
+  // stock fell below 1 but never later than t. Null if there is no such pond.
   function evaluateAt(pondId: number, t: number): PondState | null {
     const pond = q.pond.get(pondId) as { id: number; dug_at: number } | undefined;
     if (!pond) return null;
@@ -207,8 +227,8 @@ export function openStore(file: string, now: Clock): Store {
     } else {
       stock = stockAt(last.stock_after, t - last.at);
       if (isDead(stock)) {
-        const after = collapseAfterMs(last.stock_after) ?? 0;
-        diedAt = append(pondId, last.at + after, "collapse", null, stockAt(last.stock_after, after)).at;
+        const at = Math.min(last.at + (collapseAfterMs(last.stock_after) ?? 0), t);
+        diedAt = append(pondId, at, "collapse", null, stockAt(last.stock_after, at - last.at)).at;
       }
     }
 
@@ -244,17 +264,19 @@ export function openStore(file: string, now: Clock): Store {
         const name = cleanName(rawName);
         if (name === null) return { ok: false, reason: "bad_name" };
         if (state.dead) return { ok: false, reason: "dead" };
-        const nameKey = name.toLowerCase();
-        if (q.nameTaken.get(pondId, nameKey)) return { ok: false, reason: "name_taken" };
+        if ((q.netCount.get(pondId) as { n: number }).n >= MAX_NETS_PER_POND) return { ok: false, reason: "pond_full" };
+        const key = nameKey(name);
+        if (q.nameTaken.get(pondId, key)) return { ok: false, reason: "name_taken" };
 
         const token = randomBytes(16).toString("base64url");
-        const netId = Number(q.insertNet.run(pondId, name, nameKey, token).lastInsertRowid);
+        const netId = Number(q.insertNet.run(pondId, name, key, token).lastInsertRowid);
         append(pondId, t, "join", netId, state.stock);
         return { ok: true, netId, token };
       });
     },
 
     catchFish(token, pondId, key) {
+      if (!isIdempotencyKey(key)) return { ok: false, reason: "bad_key" };
       return tx((): CatchResult => {
         const t = now();
         const net = q.netByToken.get(token) as { id: number; pond: number } | undefined;
@@ -267,7 +289,6 @@ export function openStore(file: string, now: Clock): Store {
         const { at: lastCatchAt } = q.lastCatchAt.get(net.id) as { at: number | null };
         const sinceLast = lastCatchAt === null ? Infinity : t - lastCatchAt;
         if (sinceLast < CATCH_INTERVAL_MS) return { ok: false, reason: "too_soon", retryInMs: CATCH_INTERVAL_MS - sinceLast };
-        if (available(state.stock) < 1) return { ok: false, reason: "no_fish" };
 
         const row = append(pondId, t, "catch", net.id, state.stock - 1, key);
         if (isDead(row.stockAfter)) append(pondId, t, "collapse", null, row.stockAfter);
@@ -285,10 +306,14 @@ export function openStore(file: string, now: Clock): Store {
       return (q.rowsAfter.all(pondId, afterId, limit) as unknown as DbLedgerRow[]).map(toRow);
     },
 
-    listPonds() {
+    recentRows(pondId, limit) {
+      return (q.recentRows.all(pondId, limit) as unknown as DbLedgerRow[]).map(toRow);
+    },
+
+    listPonds(limit = REGISTER_SIZE) {
       return tx(() => {
         const t = now();
-        return (q.pondIds.all() as { id: number }[]).map(({ id }) => {
+        return (q.newestPondIds.all(limit) as { id: number }[]).map(({ id }) => {
           const s = evaluateAt(id, t)!;
           const { nets, ...rest } = s;
           return { ...rest, nets: nets.length };

@@ -53,6 +53,9 @@ function rowCount(): number {
 
 const allRows = (pondId: number) => store.ledgerAfter(pondId, 0, 10_000);
 
+// A valid idempotency key (lowercase UUID v4), distinct for each n.
+const key = (n: number): string => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+
 function joinOk(pondId: number, name: string): { netId: number; token: string } {
   const res = store.join(pondId, name);
   if (!res.ok) throw new Error(`join ${name} failed: ${res.reason}`);
@@ -111,12 +114,12 @@ it("3. a catch writes one catch row with stock_after = stockAt(previous) - 1 and
   const a = joinOk(pondId, "Ava");
   const b = joinOk(pondId, "Bo");
 
-  const first = store.catchFish(a.token, pondId, "k1");
+  const first = store.catchFish(a.token, pondId, key(1));
   expect(first).toMatchObject({ ok: true, duplicate: false, row: { kind: "catch", netId: a.netId, stockAfter: K - 1 } });
 
   t += 400;
   const before = rowCount();
-  const second = store.catchFish(b.token, pondId, "k2");
+  const second = store.catchFish(b.token, pondId, key(2));
   expect(second).toMatchObject({ ok: true, row: { kind: "catch", netId: b.netId, at: t, stockAfter: stockAt(K - 1, 400) - 1 } });
   expect(rowCount()).toBe(before + 1);
 
@@ -128,15 +131,15 @@ it("3. a catch writes one catch row with stock_after = stockAt(previous) - 1 and
 it("4. rate limit: 999 ms later is too_soon with 1 ms left and writes nothing; 1000 ms later succeeds", () => {
   const { pondId } = store.digPond();
   const a = joinOk(pondId, "Ava");
-  expect(store.catchFish(a.token, pondId, "k1").ok).toBe(true);
+  expect(store.catchFish(a.token, pondId, key(1)).ok).toBe(true);
 
   t += 999;
   const before = rowCount();
-  expect(store.catchFish(a.token, pondId, "k2")).toEqual({ ok: false, reason: "too_soon", retryInMs: 1 });
+  expect(store.catchFish(a.token, pondId, key(2))).toEqual({ ok: false, reason: "too_soon", retryInMs: 1 });
   expect(rowCount()).toBe(before);
 
   t += 1;
-  expect(store.catchFish(a.token, pondId, "k2").ok).toBe(true);
+  expect(store.catchFish(a.token, pondId, key(2)).ok).toBe(true);
 });
 
 it("5. idempotency: the same key returns the original row once; another net's same key is its own catch", () => {
@@ -144,15 +147,15 @@ it("5. idempotency: the same key returns the original row once; another net's sa
   const a = joinOk(pondId, "Ava");
   const b = joinOk(pondId, "Bo");
 
-  const first = store.catchFish(a.token, pondId, "same");
+  const first = store.catchFish(a.token, pondId, key(99));
   if (!first.ok) throw new Error("first catch failed");
-  const again = store.catchFish(a.token, pondId, "same");
+  const again = store.catchFish(a.token, pondId, key(99));
   t += 5000;
-  const later = store.catchFish(a.token, pondId, "same");
+  const later = store.catchFish(a.token, pondId, key(99));
   expect(again).toEqual({ ok: true, row: first.row, duplicate: true });
   expect(later).toEqual({ ok: true, row: first.row, duplicate: true });
 
-  const other = store.catchFish(b.token, pondId, "same");
+  const other = store.catchFish(b.token, pondId, key(99));
   expect(other).toMatchObject({ ok: true, duplicate: false, row: { netId: b.netId } });
 
   const catches = allRows(pondId).filter((r) => r.kind === "catch");
@@ -164,7 +167,7 @@ it("6. last fish: ten nets tap at the same moment on 1.5 fish; exactly one catch
   const nets = Array.from({ length: 10 }, (_, i) => joinOk(pondId, `net ${i}`));
   forceStock(pondId, nets[0].netId, 1.5);
 
-  const results = nets.map((n, i) => store.catchFish(n.token, pondId, `k${i}`));
+  const results = nets.map((n, i) => store.catchFish(n.token, pondId, key(i)));
   expect(results.filter((r) => r.ok)).toHaveLength(1);
   for (const r of results.filter((r) => !r.ok)) {
     expect(["no_fish", "dead"]).toContain(r.reason);
@@ -178,7 +181,7 @@ it("7. kill shot: a catch from 1.3 to 0.3 writes catch then collapse together; t
   const b = joinOk(pondId, "Bo");
   forceStock(pondId, a.netId, 1.3);
 
-  const res = store.catchFish(a.token, pondId, "k1");
+  const res = store.catchFish(a.token, pondId, key(1));
   expect(res.ok).toBe(true);
   const [catchRow, collapse] = allRows(pondId).slice(-2);
   expect(catchRow).toMatchObject({ kind: "catch", netId: a.netId, at: t });
@@ -186,7 +189,7 @@ it("7. kill shot: a catch from 1.3 to 0.3 writes catch then collapse together; t
   expect(collapse).toMatchObject({ kind: "collapse", netId: null, at: t, id: catchRow.id + 1 });
 
   t += 1000;
-  expect(store.catchFish(b.token, pondId, "k2")).toEqual({ ok: false, reason: "dead" });
+  expect(store.catchFish(b.token, pondId, key(2))).toEqual({ ok: false, reason: "dead" });
   expect(store.join(pondId, "Cy")).toEqual({ ok: false, reason: "dead" });
   expect(store.evaluate(pondId)).toMatchObject({ dead: true, diedAt: t - 1000 });
 });
@@ -228,7 +231,7 @@ it("10. persistence: close and reopen the same file, and state and ledger are id
   const { pondId } = store.digPond();
   const a = joinOk(pondId, "Ava");
   t += 2000;
-  expect(store.catchFish(a.token, pondId, "k1").ok).toBe(true);
+  expect(store.catchFish(a.token, pondId, key(1)).ok).toBe(true);
   t += 3000;
   const state = store.evaluate(pondId);
   const rows = allRows(pondId);
@@ -265,4 +268,105 @@ it("12. ledgerAfter returns the pond's rows in id order after the given id, at m
 
   expect(store.ledgerAfter(pondId, rows[0].id, 2).map((r) => r.id)).toEqual([rows[1].id, rows[2].id]);
   expect(store.ledgerAfter(pondId, rows[3].id, 10)).toEqual([]);
+});
+
+describe("design v0.4", () => {
+  describe("names (tightened)", () => {
+    it("treat a composed and a decomposed é as the same name", () => {
+      const { pondId } = store.digPond();
+      joinOk(pondId, "Ren\u00e9e");
+      expect(store.join(pondId, "Rene\u0301e")).toEqual({ ok: false, reason: "name_taken" });
+    });
+
+    it("reject a bidi override as bad_name", () => {
+      const { pondId } = store.digPond();
+      expect(store.join(pondId, "Ava\u202Eevil")).toEqual({ ok: false, reason: "bad_name" });
+    });
+
+    it("accept an emoji joined with U+200D", () => {
+      const { pondId } = store.digPond();
+      const { token } = joinOk(pondId, "👩\u200D👩\u200D👧");
+      expect(store.netByToken(token)?.name).toBe("👩\u200D👩\u200D👧");
+    });
+  });
+
+  // A bad key is an answer, not an exception: { ok: false, reason: "bad_key" }.
+  it.each(["k1", "", "00000000-0000-4000-8000-00000000000A", "00000000-0000-1000-8000-000000000001", "not a uuid at all"])(
+    "keys: catchFish with %j returns bad_key and writes nothing",
+    (bad) => {
+      const { pondId } = store.digPond();
+      const a = joinOk(pondId, "Ava");
+      const before = rowCount();
+      expect(store.catchFish(a.token, pondId, bad)).toEqual({ ok: false, reason: "bad_key" });
+      expect(rowCount()).toBe(before);
+    },
+  );
+
+  describe("collapse time is never in the future", () => {
+    it("well after the moment of death (0.95·A, collapseAfterMs + 1500 ms later)", () => {
+      const { pondId } = store.digPond();
+      const a = joinOk(pondId, "Ava");
+      forceStock(pondId, a.netId, 0.95 * A);
+      t += collapseAfterMs(0.95 * A)! + 1500;
+      store.evaluate(pondId);
+      expect(allRows(pondId).at(-1)!.at).toBeLessThanOrEqual(t);
+    });
+
+    // stockAt's partial last step can find a pond dead before collapseAfterMs's
+    // 1 s grid does: 1.001 fish are below 1 after 500 ms, but the grid says 1000.
+    it("when the partial last step finds death before the 1 s grid does", () => {
+      const { pondId } = store.digPond();
+      const a = joinOk(pondId, "Ava");
+      forceStock(pondId, a.netId, 1.001);
+      expect(collapseAfterMs(1.001)).toBe(1000);
+      t += 500;
+      expect(store.evaluate(pondId)).toMatchObject({ dead: true, diedAt: t });
+      expect(allRows(pondId).at(-1)).toMatchObject({ kind: "collapse", at: t });
+    });
+  });
+
+  it("listPonds(limit) returns the newest ponds first, at most limit, alive or dead, with net counts", () => {
+    const p1 = store.digPond().pondId;
+    const p2 = store.digPond().pondId;
+    const p3 = store.digPond().pondId;
+    joinOk(p2, "Ava");
+    const b = joinOk(p2, "Bo");
+    joinOk(p3, "Cy");
+    forceStock(p2, b.netId, 1.3);
+    expect(store.catchFish(b.token, p2, key(1)).ok).toBe(true);
+
+    const two = store.listPonds(2);
+    expect(two.map((p) => p.pondId)).toEqual([p3, p2]);
+    expect(two[0]).toMatchObject({ dead: false, nets: 1, available: K });
+    expect(two[1]).toMatchObject({ dead: true, nets: 2, diedAt: t });
+    expect(store.listPonds(10).map((p) => p.pondId)).toEqual([p3, p2, p1]);
+  });
+
+  it("a pond takes at most 100 nets", () => {
+    const { pondId } = store.digPond();
+    for (let i = 0; i < 100; i++) joinOk(pondId, `net ${i}`);
+    expect(store.join(pondId, "one too many")).toEqual({ ok: false, reason: "pond_full" });
+  });
+
+  it("recentRows returns the pond's last rows, newest first", () => {
+    const { pondId } = store.digPond();
+    joinOk(pondId, "Ava");
+    joinOk(pondId, "Bo");
+    const rows = allRows(pondId);
+    expect(store.recentRows(pondId, 2)).toEqual([rows[2], rows[1]]);
+    expect(store.recentRows(pondId, 30)).toEqual([...rows].reverse());
+  });
+
+  it("onCommit reports each write transaction's time, and not a read that wrote nothing", () => {
+    store.close();
+    const commits: number[] = [];
+    store = openStore(file, now, (ms) => commits.push(ms));
+    const { pondId } = store.digPond();
+    expect(commits).toHaveLength(1);
+    expect(commits[0]).toBeGreaterThanOrEqual(0);
+    store.evaluate(pondId);
+    expect(commits).toHaveLength(1);
+    joinOk(pondId, "Ava");
+    expect(commits).toHaveLength(2);
+  });
 });
