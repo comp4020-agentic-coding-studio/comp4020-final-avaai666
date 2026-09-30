@@ -1,4 +1,4 @@
-# Common Pool: design v0.3
+# Common Pool: design v0.4
 
 ## What it is
 
@@ -9,7 +9,7 @@ changes the pond, and you work out with the people around you how to use it.
 ## A person
 
 A named net in one pond, held by one browser (a cookie token, one year).
-No accounts, no email. Name: 1–24 characters.
+No accounts, no email. Name: 1–24 grapheme clusters (see Names).
 Known limit: one human can open several browsers and hold several nets. We do
 not prevent this. The app is made for people who can see each other.
 
@@ -30,6 +30,13 @@ not prevent this. The app is made for people who can see each other.
   Whitespace-only is rejected.
 - Unique within a pond, compared case-insensitively after trimming, so the
   ledger reads unambiguously.
+
+## Names (tightened)
+
+Stored in Unicode NFC. Compared by NFKC + lower case. Rejected if they contain
+a control character (Cc) or a format character (Cf) other than U+200D (the
+zero-width joiner inside emoji). This removes bidi overrides and other
+invisible characters.
 
 ## The pond model
 
@@ -84,6 +91,11 @@ carries an idempotency key, so a retried request never catches twice.
   (last row time + collapseAfterMs), not the time it was noticed.
 - A pond has at most one collapse row.
 
+## Collapse time (tightened)
+
+An unaided collapse row's time is min(last row time + collapseAfterMs, now).
+It is never in the future.
+
 ## Live state
 
 - Every tap is broadcast to everyone in the pond right after its transaction
@@ -92,7 +104,7 @@ carries an idempotency key, so a retried request never catches twice.
   second: stock evaluated at that moment, fish available, who is present.
   This is how regrowth and a pond dying on its own reach the screen when
   nobody taps.
-- A timer may read and broadcast. It may write exactly one thing: the
+- A timer or a read may broadcast. It may write exactly one thing: the
   collapse row, when evaluated stock falls below 1.
 - The client never computes stock. It shows the latest snapshot.
 
@@ -109,11 +121,31 @@ carries an idempotency key, so a retried request never catches twice.
 ## Present
 
 A net is present while it has an open live connection, and for 15 seconds
-after that connection drops. Used by the vote in v0.3 and shown on screen.
+after that connection drops. Used by the vote (planned v0.5, crit 9) and
+shown on screen.
+
+## Live events
+
+- Viewer: anyone with the pond's stream open, with or without a net.
+- Present: a net whose browser has the stream open, plus 15 seconds after it
+  closes.
+- Ledger event (`event: row`, `id: {row id}`), data:
+  {id, kind, at, name (null for dig and collapse), available}.
+  Never the idempotency key, the net id or a token.
+- Snapshot (`event: snapshot`, no id), once per second while the pond has at
+  least one viewer, and once right after a (re)connect, data:
+  {at, available, regrowthPerMin (growthPerMin at the current stock, rounded
+  to a whole number, 0 if dead), dead, diedAt, viewers,
+  nets: [{name, catches, present}]}.
+- The stream also sends a comment line every 15 seconds so proxies do not
+  close an idle stream.
+- On reconnect with Last-Event-ID: replay rows after it (at most 500; beyond
+  that, `event: reload`), then a snapshot.
 
 ## The ledger
 
-Every state change is exactly one append-only row in the same transaction.
+No state change without a ledger row, written in the same transaction (a
+catch that kills a pond writes two: catch, then collapse). Rows are append-only.
 The database refuses UPDATE and DELETE on it (trigger). Row id = event id for
 the live stream. Failed requests and server errors are NOT in the ledger; they
 go to the server log.
@@ -126,14 +158,85 @@ stock right after this row), idempotency key (catch rows only).
 Stock at any time t = stockAt(stock_after of the pond's latest row,
 t − that row's at).
 
-## Governance (planned, crit 9)
+## Durability
+
+SQLite in WAL mode with synchronous = NORMAL. A commit no longer waits for an
+fsync (about 44 ms each on the dev machine), which would block Node's event
+loop and delay everyone's live updates. The cost: if the Fly machine itself
+crashes (not just the app), the last commits can be lost. For a pond, losing
+the last second of catches after a host crash is acceptable; a live update
+that arrives late for everyone, all the time, is not. The server logs how long
+each commit takes, so this can be checked on Fly.
+
+## Routes
+
+All pages are rendered on the server and work before any script runs.
+- GET  /                 the register: the 50 most recent ponds, and a Dig button
+- POST /dig              digs a pond, 303 to /p/{id}; 429 page if the same
+                         client dug one less than 10 s ago
+- GET  /p/{id}           the pond page (404 page if there is no such pond)
+- POST /p/{id}/join      form field `name`; sets the cookie; 303 to /p/{id}.
+                         Errors re-render the page with the message and status
+                         400 (bad name), 409 (name taken), 410 (dead pond)
+- POST /p/{id}/catch     JSON {"key": "<uuid v4>"}. Answers (JSON):
+                         200 {ok, available, id}     (also for a duplicate key)
+                         429 {retryInMs}             too soon
+                         410 {}                      dead pond
+                         403 {}                      no net in this pond
+                         400 {}                      key is not a lowercase UUID v4
+- GET  /p/{id}/events    the live stream (Server-Sent Events)
+- GET  /readme/          README.md rendered as HTML (images under /docs/ served)
+- GET  /static/*         the page script and stylesheet
+
+## Identity
+
+- One cookie per pond: name `net_{id}`, value the net's token, HttpOnly,
+  SameSite=Lax, Path=/p/{id}, Max-Age one year, Secure when the request came
+  over https (Fly's proxy sets X-Forwarded-Proto).
+- A browser with a valid net in this pond sees "You are {name}" instead of the
+  join form. An unknown or stale token is ignored and the join form shows.
+
+## Requests from other sites, and limits
+
+- Any POST whose Origin header is present and does not match the Host is
+  refused with 403. (Browsers send Origin on POSTs; SameSite=Lax is the
+  second layer.)
+- Idempotency keys must be lowercase UUID v4. The server rejects anything
+  else, and the store checks it too.
+- At most one dig per 10 seconds per client IP, kept in memory. The IP comes
+  from the Fly-Client-IP header, which Fly's proxy sets on every request.
+  Requests without that header (local runs, CI's container) are not limited,
+  so tests can dig freely. At most 100 nets per pond.
+
+## The pond page
+
+- Big: fish available now, and the regrowth per minute. A picture of the
+  pond with one mark per fish (at most 300).
+- One button, "Cast (1 fish)", also on the Space key when the page has focus.
+  After a catch it shows the cooldown until it can be pressed again. It shows
+  "too soon", "dead" and network errors in words, not just colour.
+- The nets in this pond: name, catches, present or not. Your own net marked.
+- The last 30 ledger events, newest first, in plain words
+  ("Mia caught a fish · 12 left", "The pond died").
+- A dead pond shows when it died, how long it lived, the catches per net, and
+  a button to dig a new pond. No blame numbers.
+- Works at 1920×1080 and at 390×844. Everything can be done with the keyboard.
+
+## Logs
+
+Every request and every refused action is one JSON line on stdout:
+{t, method, path, status, ms}, plus {event, pond, net, reason} for refused
+actions and {event: "commit", ms} for each store write. (Crit 10 builds on
+this.)
+
+## Governance (planned v0.5, crit 9)
 
 The rule is a per-NET catch limit per minute (not per person: the app cannot
 see people, only nets). One human holding two nets gets two limits. Stated in
 the README as a known limit.
 
 One rule type only. Anyone proposes a number; it passes when more than half
-of the people present vote yes within 60 seconds. Breaches are not blocked;
+of the nets present vote yes within 60 seconds. Breaches are not blocked;
 they are shown in red with the facts: who, when, how many, stock at the time.
 
 ## Not building
@@ -157,6 +260,9 @@ what changed, not the cause.
 
 ## Changelog
 
+- v0.4: durability (WAL, synchronous NORMAL), routes, cookies, Origin check,
+  limits, event payloads, viewers, stricter names, collapse time never in the
+  future, the pond page, JSON logs.
 - v0.3: ponds, names, rate limit, idempotency, collapse timing, ledger row,
   live-update ids and 'present' decided (the 13 open points from session 1).
   Governance limit is per net, not per person.
