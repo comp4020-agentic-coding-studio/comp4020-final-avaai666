@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { A, K, MAX_TAPS_PER_MIN, R_PER_MIN } from "../src/lib/constants.ts";
-import { available, isDead, peakGrowthPerMin, stockAt } from "../src/lib/pond.ts";
+import { A, K, MAX_TAPS_PER_MIN, R_PER_MIN } from "../../src/lib/constants.ts";
+import { available, isDead, peakGrowthPerMin, stockAt } from "../../src/lib/pond.ts";
 
-// The pond model (DESIGN.md v0.2). Pure functions: these tests need no server,
-// though vitest's global setup still waits for one.
+// The pond model (DESIGN.md v0.2). Pure functions: these tests need no server.
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
