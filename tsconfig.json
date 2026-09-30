@@ -1,6 +1,5 @@
 {
-  // Covers the supplied harness (spec/, scripts/); widen `include` if your app
-  // is TypeScript and you want `pnpm typecheck` to cover it too.
+  // Covers the supplied harness (spec/, scripts/) and the app (src/).
   "compilerOptions": {
     "target": "ES2023",
     "module": "ESNext",
@@ -14,7 +13,10 @@
     "noEmit": true,
     "skipLibCheck": true,
     "moduleDetection": "force",
-    "verbatimModuleSyntax": true
+    "verbatimModuleSyntax": true,
+    // node runs our .ts files directly by stripping types, so only syntax it
+    // can erase (no enums, namespaces or parameter properties)
+    "erasableSyntaxOnly": true
   },
-  "include": ["*.ts", "spec", "scripts"]
+  "include": ["*.ts", "spec", "scripts", "src"]
 }
