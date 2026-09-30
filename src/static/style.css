@@ -1,0 +1,159 @@
+/* Plain and readable for now; visual design comes after the first playtest. */
+:root {
+  --ink: #1b2430;
+  --paper: #f7f9fa;
+  --muted: #5b6875;
+  --water: #d9ecf2;
+  --fish: #1d6f8a;
+  --line: #c8d3db;
+  --error: #a61b1b;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #e6edf2;
+    --paper: #12181e;
+    --muted: #9aa8b4;
+    --water: #173340;
+    --fish: #7cc7df;
+    --line: #2d3a45;
+    --error: #ff8a8a;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0 16px 48px;
+  background: var(--paper);
+  color: var(--ink);
+  font: 1rem/1.5 system-ui, sans-serif;
+}
+
+header {
+  display: flex;
+  gap: 1rem;
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+header .home {
+  font-weight: 700;
+}
+
+main {
+  max-width: 60rem;
+  margin: 0 auto;
+}
+
+a {
+  color: var(--fish);
+}
+
+:focus-visible {
+  outline: 3px solid var(--fish);
+  outline-offset: 2px;
+}
+
+button {
+  font: inherit;
+  padding: 0.5rem 1rem;
+  border: 2px solid var(--fish);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cast {
+  font-size: 1.25rem;
+  min-width: 12rem;
+  background: var(--fish);
+  color: var(--paper);
+}
+
+input {
+  font: inherit;
+  padding: 0.4rem;
+  margin: 0.25rem 0.5rem 0.25rem 0;
+  border: 1px solid var(--muted);
+  border-radius: 4px;
+  max-width: 100%;
+}
+
+label {
+  display: block;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+caption {
+  text-align: left;
+  color: var(--muted);
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.35rem 0.5rem 0.35rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.big {
+  font-size: 3.5rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.picture {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  min-height: 2rem;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--water);
+}
+
+.picture i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fish);
+}
+
+.error {
+  color: var(--error);
+  font-weight: 600;
+}
+
+.me {
+  font-weight: 700;
+}
+
+#status {
+  min-height: 1.5em;
+}
+
+#events,
+#nets {
+  padding-left: 1.25rem;
+}
+
+.readme img {
+  max-width: 100%;
+}

@@ -9,6 +9,9 @@ import { available, collapseAfterMs, isDead, stockAt } from "./pond.ts";
 
 export type Clock = () => number;
 
+// evaluate() on a pond that does not exist
+export class NoPondError extends Error {}
+
 export type LedgerKind = "dig" | "join" | "catch" | "collapse";
 
 export interface LedgerRow {
@@ -298,7 +301,7 @@ export function openStore(file: string, now: Clock, onCommit?: (ms: number) => v
 
     evaluate(pondId) {
       const state = tx(() => evaluateAt(pondId, now()));
-      if (!state) throw new Error(`no pond ${pondId}`);
+      if (!state) throw new NoPondError(`no pond ${pondId}`);
       return state;
     },
 
