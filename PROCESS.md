@@ -2,7 +2,7 @@
 
 ## Where this stands (crit 8)
 
-After one week: a pond model, an append-only ledger, a server with live updates and a page, in 17 commits ([`f71d6dd...9fee210`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/compare/f71d6dd...9fee210)). The design is in `DESIGN.md` (v0.4), the rules in `CLAUDE.md`, the checks in `spec/`.
+After one week: a pond model, an append-only ledger, a server with live updates and a page, in 16 commits after the template ([`f71d6dd...9fee210`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/compare/f71d6dd...9fee210)). The design is in `DESIGN.md` (v0.4), the rules in `CLAUDE.md`, the checks in `spec/`.
 
 ## How I work with the agent
 
@@ -30,7 +30,7 @@ Markers use the app in two browsers. With my first fixed parameters, two nets at
 
 ### A number decided durability
 
-The agent measured about 44 ms per SQLite commit with the default fsync. `node:sqlite` is synchronous, so a dozen people tapping would block the server for half of every second, and everyone's live updates would arrive late. I chose WAL with `synchronous = NORMAL` and wrote down the cost: if the machine itself crashes, the last commits can be lost ([`5ba1c16`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/5ba1c16), [`c3d0df2`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/c3d0df2)). Every commit's time is logged; on Fly, twenty writes took 0.2–1.1 ms each (`docs/checks/2026-10-06/fly-commit-times.txt`).
+With SQLite's default fsync, a commit took about 41 ms on my machine (`docs/checks/2026-10-06/local-commit-times.txt`). `node:sqlite` is synchronous, so a dozen people tapping would block the server for half of every second, and everyone's live updates would arrive late. I chose WAL with `synchronous = NORMAL` and wrote down the cost: if the machine itself crashes, the last commits can be lost ([`5ba1c16`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/5ba1c16), [`c3d0df2`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/c3d0df2)). Every commit's time is logged; on Fly, twenty writes took 0.2–1.1 ms each (`docs/checks/2026-10-06/fly-commit-times.txt`).
 
 ### Checking the layer the tests could not see
 
@@ -38,4 +38,4 @@ The agent reported every check green, and in the same message said the page scri
 
 ## Next
 
-A two-person playtest of assumption H1 in `DESIGN.md`; commit times on Fly; and for crit 9, the one multi-user decision.
+A two-person playtest of assumption H1 in `DESIGN.md`, and for crit 9, the one multi-user decision.

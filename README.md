@@ -23,18 +23,18 @@ Shirky (2004) called software built for one group in one place "situated softwar
 - Chat, or any free text except a name.
 - Accounts. A person is a named net held by one browser.
 - Restocking: a dead pond stays dead, and stays listed.
-- Leaderboards, and blame numbers for who killed a pond.
+- Leaderboards or blame numbers.
 
 ## Enforced and judged
 
 Enforced: a check in `spec/` fails if it breaks.
 
-- One net at full speed cannot empty a full pond; two can (`spec/unit/pond.test.ts`).
+- In a 30-minute run, one net at full speed cannot empty a full pond; two can (`spec/unit/pond.test.ts`).
 - Below 30 fish the pond dies on its own, and a dead pond never regrows.
 - Every catch is one public ledger row; the database refuses edits and deletions (`spec/unit/store.test.ts`).
 - A repeated request never catches twice.
 - A catch reaches another open page within a second on a local run (`spec/pond-app.test.ts`).
-- Ponds and catches survive a restart.
+- Ponds and catches survive reopening the database.
 
 Judged: no check can say.
 

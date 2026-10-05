@@ -6,7 +6,7 @@ Status: accepted, checked on Fly on 2026-10-06
 ## Context
 
 - `node:sqlite` is synchronous (decision 1). While a commit runs, the server does nothing else, including sending live updates.
-- With SQLite's default setting, every commit waits for an fsync. On the development machine that measured about 44 ms per dig, join or catch.
+- With SQLite's default setting, every commit waits for an fsync. On the development machine that measured about 41 ms per write (`docs/checks/2026-10-06/local-commit-times.txt`).
 - A dozen people tapping once a second would then block the server for about half of every second, and every live update would arrive late for everyone.
 
 ## Decision
