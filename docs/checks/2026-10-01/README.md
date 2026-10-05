@@ -1,4 +1,4 @@
-# Browser check, 2026-10-01 (commit 9fee210, before the first deploy)
+# Browser check, 2026-10-01 (code at commit 9fee210, before the first deploy)
 
 The session that wrote the server said the page script had never run in a real
 browser. This check ran it in two real Chromium browsers (Playwright 1.56) against
@@ -33,5 +33,5 @@ the server started locally with `node src/server.ts` and a fresh DATA_DIR.
   growth is zero at capacity) but a player may read it as "fish don't grow".
   Watch whether players understand the regrowth number.
 
-Screenshots: `01-home-desktop.png`, `04-both-joined-desktop.png`, `05-both-joined-mobile.png`, `07-desktop-resized-to-mobile.png`, `10-dead-desktop.png`. Scripts: `e2e.mjs`, `e2e4.mjs`.
+Screenshots: `01-home-desktop.png`, `04-both-joined-desktop.png`, `05-both-joined-mobile.png`, `07-desktop-resized-to-mobile.png`, `08-mobile-after-reconnect.png`, `09-mobile-slow-network.png`, `10-dead-desktop.png`, `11-dead-mobile-watcher.png`. Scripts: `e2e.mjs`, `e2e4.mjs`, `e2e5.mjs`, `e2e6.mjs`.
 The scripts are kept as a record; they are not part of `pnpm check` and need Playwright, which this repo does not install.
