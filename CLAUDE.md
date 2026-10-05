@@ -66,7 +66,18 @@ Honesty
 Safety
 - Never read, print or commit mise.local.toml or FLY_API_TOKEN.
 - Never touch .github/workflows or the app name in fly.toml.
-- Never push. I push.
+- You may push to main, but only when all of these are true:
+  - the tree is clean and every commit is one I have seen in this session;
+  - pnpm typecheck, pnpm test:unit, pnpm check (app running locally, never
+    fly.dev) and pnpm check:evidence have just passed, and you pasted their
+    real output;
+  - it is not between a crit cutoff (Wednesday 13:30 Canberra) and one hour
+    after it, when the course sweep reads the repo.
+  Once the repo is public, every push to main deploys to Fly through CI, so a
+  push is a deploy: after pushing, run `gh run list` until the check and deploy
+  jobs finish, and tell me if either is red.
+  Never force-push, never push another branch, never delete or move a tag.
+  Never deploy with flyctl yourself.
 - Never run spec/ against production. The app tests dig ponds and join nets;
   against https://comp4020-final-avaai666.fly.dev they would fill the real
   register with junk. APP_URL stays local (or CI's container).
