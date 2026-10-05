@@ -1,0 +1,6 @@
+directory: /home/u8077568/comp4020/comp4020-final-avaai666/.data
+node: v24.21.0
+date: 2026-10-05T17:48:30.844Z
+writes per mode: 50 (BEGIN IMMEDIATE; INSERT; COMMIT), WAL
+FULL   median 41.44 ms, p90 42.98 ms, min 39.68 ms, max 59.48 ms
+NORMAL median 0.02 ms, p90 0.05 ms, min 0.02 ms, max 0.11 ms
