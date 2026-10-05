@@ -34,7 +34,7 @@ With SQLite's default fsync, a commit took about 41 ms on my machine (`docs/chec
 
 ### Checking the layer the tests could not see
 
-The agent reported every check green, and in the same message said the page script had never run in a browser. Before the first deploy I ran it in two real Chromium browsers, at 1920×1080 and 390×844: 10–39 ms from one page's tap to the other page, every action reachable by keyboard, no horizontal scroll after a resize mid-use, and a clean reconnect after a server restart. One "bug" turned out to be my own test's mistake: Playwright's offline mode does not cut a stream that is already open ([`789206e`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/789206e)).
+The agent reported every check green, and in the same message said the page script had never run in a browser. Before the first deploy I ran it in two real Chromium browsers, at 1920×1080 and 390×844: 10–39 ms on a local run from one page's tap to the other page, digging, joining and casting each reachable by keyboard, no horizontal scroll after a resize mid-use, and a clean reconnect after a server restart. One "bug" turned out to be my own test's mistake: Playwright's offline mode does not cut a stream that is already open ([`789206e`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/789206e)).
 
 ## Next
 

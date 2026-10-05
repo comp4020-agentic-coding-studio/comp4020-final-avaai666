@@ -35,3 +35,4 @@ the server started locally with `node src/server.ts` and a fresh DATA_DIR.
 
 Screenshots: `01-home-desktop.png`, `04-both-joined-desktop.png`, `05-both-joined-mobile.png`, `07-desktop-resized-to-mobile.png`, `08-mobile-after-reconnect.png`, `09-mobile-slow-network.png`, `10-dead-desktop.png`, `11-dead-mobile-watcher.png`. Scripts: `e2e.mjs`, `e2e4.mjs`, `e2e5.mjs`, `e2e6.mjs`.
 The scripts are kept as a record; they are not part of `pnpm check` and need Playwright, which this repo does not install.
+08-mobile-after-reconnect.png is from the first, mistaken offline run (see 'What this check could not measure'), not from the server-restart row. The server-restart row has a script (e2e4.mjs) but no screenshot.

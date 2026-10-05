@@ -33,7 +33,7 @@ Enforced: a check in `spec/` fails if it breaks.
 - Below 30 fish the pond dies on its own, and a dead pond never regrows.
 - Every catch is one public ledger row; the database refuses edits and deletions (`spec/unit/store.test.ts`).
 - A repeated request never catches twice.
-- A catch reaches another open page within a second on a local run (`spec/pond-app.test.ts`).
+- A catch reaches another open live stream within a second on a local run (`spec/pond-app.test.ts`).
 - Ponds and catches survive reopening the database.
 
 Judged: no check can say.
