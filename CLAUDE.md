@@ -53,6 +53,10 @@ Tests
   test catches a real bug: with the green version committed, change ONE line
   in ONE file, show the test going red, restore that file with
   `git restore <file>`, show `git status` clean and the tests green.
+- README.md's Enforced list claims no more than the named test checks. If a
+  change weakens a test, change the README line in the same commit.
+  spec/unit/readme-paths.test.ts fails if README.md names a file that does not
+  exist.
 
 Honesty
 - Paste real command output, never a summary.
