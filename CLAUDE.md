@@ -17,28 +17,33 @@ work around it. When I agree to a change, update DESIGN.md, bump the version
 and add a changelog line, in the same commit as the code that needs it.
 
 Authority
-- The server is the only authority on stock and catches. The client never
-  computes stock or an outcome. It shows what the server sent.
-- Stock is evaluated only by stockAt(): in src/lib/pond.ts for v0.4 ponds,
-  in src/lib/lake.ts for lakes.
+- The server is the only authority on the fish and the catches. The client
+  never computes where a fish is, what a net takes, or any outcome. It draws
+  what the server sent, and may only move a fish smoothly between two frames
+  it received.
+- The fish are moved, born, aged and caught only by step() in
+  src/lib/lake-sim.ts, which must match sim/lakesim.mjs step for step.
+  (v0.4 ponds keep stockAt() in src/lib/pond.ts until they are retired.)
 - A timer may read and broadcast state. The tick may write only two
-  kinds of rows, each through the same store function a person's request
-  uses: rows that follow from time alone (a year's rule, a collapse, a
-  season's end), stamped with the moment they happened and never later
-  than now; and the actions of bot families (casts, net purchases, votes).
-  Nothing else writes on a timer. The tick never makes up casts a bot
-  missed while the server was down.
-- The season's year and phase come from phaseAt(startedAt, now). Never keep
-  the schedule in a variable that a restart would lose.
-- Every random draw that decides a catch, and every bot's casting point,
-  is draw(seed, label) from src/lib/lake.ts, with a label that names the
-  family and its cast number, so no draw depends on the order requests
-  arrive in. The seed is secret until the season's end row: it never
-  appears in an event, a snapshot, a page or a log line before then.
+  kinds of rows, each through the same store function a request uses: rows
+  that follow from time (a net's haul, a year's rule, the season's end),
+  stamped with the step they happened at; and the actions of bot families
+  (throws, net purchases, votes, seals). Nothing else writes on a timer.
+  While the server is down nothing happens: on restart a lake is replayed
+  from its ledger and stepped on to the present with nobody throwing.
+- The season's step, year and phase come from the start time and the
+  clock (stepAt and phaseAt in src/lib/lake-sim.ts). Never keep the schedule
+  in a variable that a restart would lose.
+- The fish draw only from the lake's own seeded source, inside
+  makeLake() and step(). Bots and the golden carp draw from separate sources
+  derived from the seed, the step and the family, so replaying the ledger
+  never runs a bot. Math.random() is never used in src/lib or the server.
+  The seed is secret until the season's end row: it never appears in an
+  event, a frame, a snapshot, a page or a log line before then.
 - Model and game constants live only in src/lib/constants.ts and
   src/lib/game-constants.ts.
-- Events and snapshots never contain an idempotency key, a net id, a
-  family token, or (before the season's end row) the seed.
+- Events, frames and snapshots never contain an idempotency key, a net
+  id, a family token, or (before the season's end row) the seed.
 
 The ledger
 - No state change without a ledger row, written in the same transaction.

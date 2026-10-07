@@ -1,4 +1,4 @@
-# Next Year, No Fish (明年无鱼): design v1.1
+# Next Year, No Fish (明年无鱼): design v2.0
 
 > 竭泽而渔，岂不获得？而明年无鱼。 Drain the lake to catch the fish, and of
 > course you catch them; but next year there are no fish. (Lüshi Chunqiu, "Yi
@@ -6,185 +6,206 @@
 
 ## What it is
 
-A fishing game for a table of people. Each player is a family on the shore of
-one shared lake. Tap the water to cast; every fish you land is yours. At any
-time while fishing, a family can pay 20 fish for a fine-mesh net, which lands
-more than twice as many. After six short years, the game shows what the table
-did to the lake and why.
+A fishing game for a table of people that explains the tragedy of the commons
+by letting them cause it. Each player is a family on the shore of one shared
+lake. The fish are real: they swim in schools, pair up and spawn in spring,
+and their fry grow up over winter. Tap the water to throw your net; every fish
+inside the ring is yours and builds your house. A fine-mesh net keeps the fry
+too. Every winter the lake freezes and the village chooses a rule. After five
+years the game shows what the table did to the lake, and what five other
+villages did to the same lake.
 
-It is an explainer of the tragedy of the commons that people play rather than
-read. The fish are the example; the subject is any shared resource. The
-dilemma is not scripted: it comes out of the lake's ecology and the nets (see
-"Why it is a dilemma").
+The fish are the example; the subject is any shared resource. Nothing about
+the dilemma is scripted: it comes out of how the fish breed and what the nets
+catch (see "Why it is a dilemma").
+
+Who it is for: two to eight people around one table, each on their own
+phone or laptop; one person alone, with bot families; a room at the
+showcase, watching one lake on a big screen.
 
 ## A lake, before it starts
 
 - Someone opens a lake. It gets a four-letter code from an alphabet without
-  look-alike letters (said aloud at a table: "lake KMPT") and its own URL,
-  /l/KMPT.
+  look-alike letters ("lake KMPT") and its own URL, /l/KMPT.
 - Anyone with the URL joins with a family name: 1 to 24 grapheme clusters, no
   control or format characters except the zero-width joiner inside emoji;
-  names are compared after NFKC and lower case (the v0.4 rules). The bot names
-  Old Wang, Jin and Mei are reserved. A family is a name held by one browser
-  (a cookie for that lake).
-- Up to six families may join before the start. A seventh is told the lake is
-  full and may watch.
-- Any family in the lake may start the season. After the start nobody joins;
-  latecomers watch.
-- A lake nobody starts stays open. It is not on the list of past lakes.
+  names are compared after NFKC and lower case. The bot names Old Wang, Jin and
+  Mei are reserved. A family is a name held by one browser (a cookie for that
+  lake).
+- Up to eight families may join before the start. A ninth, and anyone who
+  arrives after the start, watches.
+- Any family in the lake may start the season. A lake nobody starts stays
+  open and is not on the list of past lakes.
 
 ## A season
 
 - At the start, if fewer than four families have joined, bot families fill
-  the lake to four, in this order: Jin, Mei, Old Wang. One person plays with
-  all three; three people play with Jin. The lake's size is set then:
-  K = 75 fish per family (bots included), A = K / 10. It never changes.
-- Six years. Each year is 45 seconds of fishing. Years 1 to 5 end with a
-  15-second village meeting. The season ends when year 6's fishing ends
-  (5 minutes 45 seconds after the start), or the moment the lake dies. There
-  is no meeting after year 6: its rule would govern nothing.
+  the lake to four, in this order: Jin, Mei, Old Wang.
+- Five years. Each year is 40 seconds of fishing; the first 14 seconds are
+  spring, when fish spawn. Years 1 to 4 end with a 14-second winter meeting.
+  The season ends when year 5's fishing ends (4 min 16 s after the start), or
+  the moment the lake has no fish.
 - Year 1 has no rule.
-- The year and phase are computed from the season's start time and the clock
-  (phaseAt). Nothing about the schedule lives only in memory, so a restart
-  mid-season resumes at the right moment.
-
-## Who writes what, and when
-
-- An action writes its own row: a person's request, or, for a bot, the tick.
-- Some rows follow from time alone: the next year's rule (at the end of a
-  meeting), the collapse (the moment stock fell below 1), the season's end.
-  Whoever touches the lake next, a request or the tick, writes them first,
-  in time order, each stamped with the moment it happened, never later than
-  now.
+- The year, the season and the phase come from the start time and the clock
+  (phaseAt). Nothing about the schedule lives only in memory.
 
 ## The lake
 
-- Growth with a strong Allee threshold:
-  dS/dt = r · S · (S/A − 1) · (1 − S/K), with r = 0.45 per minute.
-  Below A the population shrinks on its own. The lake grows during meetings
-  too.
-- Stock is evaluated from the last recorded stock and the elapsed time (fixed
-  step RK4), as in v0.4. The lake is dead when stock falls below 1; a dead lake
-  never comes back.
+The model is an agent simulation, in fixed steps of 0.1 s. Its reference
+implementation is sim/lakesim.mjs, which produced every number in this file;
+src/lib/lake-sim.ts must give exactly the same fish, step for step, for the
+same seed and the same actions. Every constant lives in
+src/lib/game-constants.ts.
 
-## Casting
+- The lake is an ellipse (1000 by 700 units). The shallows are the band
+  outside 72% of its radius; they are drawn paler.
+- At the start the lake holds 75% of its capacity in grown fish, aged 1 to 3.
+  Capacity is 55 fish per family (bots included), fixed at the start.
+- Grown fish swim in schools (they steer towards nearby grown fish and away
+  from any that come too close). Fry keep to the shallows and do not school.
+- Spring: two grown fish closer than 30 units may spawn two fry, with a
+  probability that falls to zero as the lake fills to capacity. A fish that
+  has spawned rests 6 seconds. When grown fish are few they rarely meet, so
+  few fry are born: the Allee effect, seen rather than stated.
+- Winter (the end of each year's fishing): fry become grown fish, every fish
+  ages a year, fish older than 4 die, and 12% of the others die.
+- The lake is dead when it has no fish; it never comes back.
 
-- A family may cast once every 2.5 seconds after its own last cast, only
-  during fishing. Too soon, a meeting, or a finished season each get their
-  own answer (too soon says how long to wait; a meeting says how long it has
-  left).
-- A cast names a point on the water (x, y in 0..1) and a net. The point is
-  shown to everyone; it does not change the catch. A family that owns a
-  fine-mesh net may still cast its coarse net: that is how it obeys a ban.
-- Catch: a coarse net has capacity 3, a fine-mesh net 8. Expected catch is
-  capacity × S / K, rounded with one random draw (floor, plus one with
-  probability equal to the fraction), never more than the whole fish left. A
-  full lake gives a coarse net about 3 fish; a lake a third full, about 1. The
-  nets come up emptier as the lake empties.
-- Each cast from a person carries an idempotency key. Sending the same key
-  again returns the first answer and writes nothing.
+## Nets
 
-## Fish, and the fine-mesh net
+- A family may throw its net once every 3.5 seconds, only during fishing, at
+  any point inside the lake.
+- The net closes 0.6 seconds after it lands and takes every fish inside its
+  ring at that step. A coarse net (radius 36) holds grown fish; fry slip
+  through. A fine-mesh net (radius 42) holds everything.
+- A fine-mesh net costs 20 fish kept, once per season, bought only during
+  fishing. A family that owns one may still throw its coarse net; that is how
+  it keeps a ban.
+- Fish nearby scatter when a net lands.
+- Two nets that close on the same step take fish in the order they were
+  thrown.
+- Each throw from a person carries an idempotency key; sending the same key
+  again returns the first answer and changes nothing.
 
-- A family's fish landed is the sum of its catches. Its fish kept is fish
-  landed minus 20 if it bought a fine net. The score shown is fish kept.
-- A fine-mesh net costs 20 fish kept, once per season, and can only be bought
-  during fishing. It cannot be sold back. Buying twice is answered as already
-  owned and writes nothing.
-- A quota counts fish landed in that year. Buying a net does not change it.
+## Fish and houses
 
-## Honest draws
-
-- Each season has a secret random seed. The draw for a family's n-th cast is
-  HMAC-SHA256(seed, "cast:<family id>:<n>"), read as a number in [0, 1). It
-  does not depend on who cast first, so the catches can be recomputed from the
-  ledger in any order.
-- The start row publishes SHA-256 of the seed. The end row reveals the seed.
-  After the season, anyone can check that the seed matches the hash published
-  at the start and recompute every catch from the ledger. The server could not
-  have chosen anyone's catch.
-- Until the end row exists, the seed appears in no event, snapshot, page or
-  log line. If it leaked, anyone could predict catches.
+- Fish landed is everything a family's nets took. Fish kept is landed minus
+  20 for a fine net. The score shown is fish kept.
+- Each family's house grows with fish kept: a thatched hut, a tiled house (25),
+  a red gate (60), lanterns (110), a second storey (170), a pagoda (240).
+  Everyone sees every house.
+- The golden carp: once a year, 17 seconds into fishing, a golden carp swims
+  for 12 seconds. The net that takes it lands 8 extra fish. It is outside the
+  ecology: it does not breed and is not counted as a fish of the lake.
 
 ## Why it is a dilemma (checked by spec/unit/dilemma.test.ts)
 
-With four families each casting at 85% of their opportunities, averaged over
-many seeded seasons:
-- whatever the other three do, switching your own net to fine mesh lands you
-  more fish, after its cost;
-- when all four have fine nets, each lands far less than when all four keep
-  coarse nets.
-Numbers from sim/payoff.py: all coarse, about 223 each; all fine, about 91.
+Four families who all aim at the densest school and take 85% of their
+chances, averaged over 24 seeded seasons (sim/payoff_output.txt):
 
-The test gives each family its net from the first cast. In play a net is
-bought after 20 fish (about seven casts), so the test slightly overstates the
-fine net's advantage in year 1. The direction of every comparison holds.
+| other families with fine nets | you keep a coarse net | you switch |
+|---|---|---|
+| 0 | 125 | 178 |
+| 1 | 90 | 112 |
+| 2 | 68 | 84 |
+| 3 | 52 | 59 |
+
+Whatever the others do, switching pays the family that switches, after the
+net's cost. When all four switch, each keeps about 65 fish instead of about
+133, and the lake dies in every one of the 24 seasons; with four coarse nets
+it dies in none.
+
+## What the rules do (checked by spec/unit/rules.test.ts)
+
+Two families with fine nets, each rule kept by everyone from year 2, over 12
+seeded seasons (sim/rules_output.txt): no rule, the lake dies 12 times; a ban,
+a spring closure or protected shallows, it dies none. With four fine nets the
+rules differ: the ban never loses the lake, the spring closure catches the
+most but loses it 3 times in 12, protected shallows once. No rule is best for
+every lake, so the meeting has something to argue about.
 
 ## The village meeting
 
-- Each meeting (after years 1 to 5) chooses next year's rule: no rule, a quota
-  (25 fish landed per family that year), or a ban on fine-mesh nets
-  (数罟不入洿池, Mencius).
-- During the meeting a family may vote, and change its vote; its last vote
-  counts. Votes are shown to everyone as they are cast. Voting for what you
-  already voted writes nothing.
-- A family that does not vote counts as "no rule". An option wins if it has
-  more votes than each other option and at least half of all families'
-  votes. Otherwise there is no rule.
-- Rules do not block anyone. A breach lands, is marked on its ledger row, and
-  is shown to everyone in red. A catch breaks a quota when it takes the
-  family's year past 25; it breaks a ban when it is landed with a fine-mesh
-  net. (Ostrom: rules work when they are monitored.)
+- Each meeting (after years 1 to 4) chooses next year's rule:
+  - 无 no rule;
+  - 禁 ban fine-mesh nets (数罟不入洿池, Mencius);
+  - 休 no fishing in spring (今鱼方别孕, Guoyu, Lu Yu I);
+  - 护 keep out of the shallows (鱼禁鲲鲕, Guoyu, Lu Yu I).
+- A family may vote and change its vote until the meeting ends; its last vote
+  counts. Votes are shown as they are cast. A family that does not vote counts
+  as no rule. An option wins with more votes than each other option and at
+  least half of all families' votes; otherwise there is no rule.
+- Rules block nobody. A throw that breaks the rule lands, is marked 违 on its
+  ledger row, and is shown to everyone: a fine net under a ban, any throw in
+  spring under a spring closure, a net landing in the shallows under
+  protected shallows.
+
+## Seals
+
+A family can stamp a seal on another family: 赞 thanks, 求 please, 怒 stop
+that, 喜 cheers. The seal flies from one house to the other and everyone sees
+it. There is no text: the people are at the same table, and a seal is enough
+to answer a breach in a room where some players are not.
 
 ## Bots
 
-Bot families make a lake playable by one or two people. Each bot is a named
-family with one fixed temperament, stated on screen:
-- Old Wang (careful): keeps a coarse net. Votes to ban fine nets once anyone
-  has one; otherwise for a quota when the lake is below 60% of K; otherwise no
-  rule. Obeys every rule: under a quota he stops casting for the year when
-  one more cast could take him past it.
-- Jin (greedy): buys a fine net as soon as he has 20 fish kept, unless fine
-  nets are banned that year. Votes for no rule. Ignores quotas. Obeys a ban by
-  casting his coarse net: a banned net is seen by everyone, a quota broken is
-  only a number.
-- Mei (follower): buys a fine net once at least two other families have one,
-  unless banned. Votes last, as the human families have voted so far in this
-  meeting (a silent human counts as no rule). Obeys every rule.
+Bot families make a lake playable by one or two people. Each has one fixed
+temperament, stated on screen:
+- Old Wang (careful): never buys a fine net; votes 禁 once anyone has one,
+  otherwise 护 once anyone has taken more than 6 fry, otherwise 休 when grown
+  fish are below 60% of the start, otherwise no rule; keeps every rule; stamps
+  怒 on each family the first time it breaks a rule in a year.
+- Jin (greedy): buys a fine net as soon as he keeps 20 fish; votes no rule;
+  breaks every rule until two different families have stamped 怒 on him in
+  that year, then keeps it for the rest of the year.
+- Mei (follower): buys a fine net once two other families have one; votes,
+  last, as the human families have voted so far; keeps every rule until
+  other families have broken it twice in that year, then breaks it too, until
+  anyone stamps 怒 on her.
+- Bots throw on their own 3.5-second clock, aim at the densest school their
+  net can hold, and skip some chances. In each meeting Old Wang votes at 3
+  seconds, Jin at 6, Mei at 10. Every choice a bot makes comes from the
+  season's state and a random source derived from the seed, the step and
+  the family, separate from the fish's own source. So replaying a season
+  never needs to run a bot again: its actions are in the ledger.
 
-Timing:
-- Bots cast once every THROW_MS / BOT_TAKE (about 2.9 seconds) during
-  fishing, the same average rate as the 85% in the dilemma test. Each bot's
-  first cast of the season waits a seeded offset.
-- In each meeting Old Wang votes at 3 seconds, Jin at 6, Mei at 12.
-- Bots act only when the tick runs. If the server was down, the casts they
-  missed are not made up.
-- A bot's choices are pure functions of the season's state. Its casting point
-  comes from a seeded draw.
+## Real time
 
-## The record
+- The server runs each live lake: ten steps a second, bots included.
+- Every 0.2 seconds it sends every open page a frame of fish positions; a
+  throw, a haul, a seal, a vote and a rule go out the moment they happen.
+  Pages draw between frames. A page that falls behind skips to the latest
+  frame; events are replayed from the last one it saw.
 
-Every state change is one append-only ledger row, written in the same
-transaction: lake opened; family joined; season started (the families,
-bots included, K, and the seed's hash); cast (family, point, net, catch, stock
-after, breach); net bought; vote (year, rule); rule adopted (the year it
-governs, the rule, the counts); collapse; season ended (the seed). The debrief
-is computed from these rows alone.
+## The record, and replay
+
+- Every action is one append-only ledger row, written in the same
+  transaction: lake opened; family joined; season started (the families, bots
+  included, the capacity, and SHA-256 of the seed); throw (family, step,
+  point, net, breach); haul (the throw it closes, fish taken, fry taken,
+  golden carp); net bought; seal; vote; rule adopted; season ended (the seed,
+  and the season's summary).
+- A haul, a year's rule and the season's end follow from time: the server's
+  tick writes them, at the step they happen.
+- Where the fish are is never stored. The seed and the ledger determine the
+  whole season: replaying them gives the same fish, step for step. The step
+  is counted from the start time (ten a second), so a restart mid-season
+  resumes the lake by replaying the ledger and stepping on to the present;
+  while the server was down, nobody threw, bots included.
+- The seed stays secret until the end row, so nobody can predict where the
+  fish will go. Then anyone can check it against the hash published at the
+  start and replay the season.
 
 ## The debrief
 
-When the season ends, every player sees the story of this lake:
-- the stock over the season, with the point of no recovery: the first moment
-  stock fell below A, from which, with nobody restocking, it cannot come back;
-- each family's fish landed, fish kept and breaches;
-- what the table would have landed if every family had kept a coarse net:
-  the same families simulated with coarse nets, at the table's real casting
-  rate (casts made / cast chances in the fishing time played, one chance per
-  family every 2.5 s), averaged over seeds 0 to 19;
-- that every catch was checked against the revealed seed;
-- four short paragraphs: the dilemma, Hardin and Gordon, the Lüshi Chunqiu
-  line, and Ostrom's other ending.
-Every finished season stays on a list of past lakes with its own URL.
+When the season ends, every player sees this lake's story: grown fish and fry
+over five years, with spring, winter and the rule in force marked; each
+family's catch, fry taken, breaches and house; "six villages, one lake": the
+same seed played by four plain families under five other plans (all coarse;
+all fine; all fine with each rule from year 2), and which of them left enough
+fish to come back; then the dilemma, Hardin and Gordon, Ostrom's other ending,
+and Li Ge cutting Duke Xuan's net (Guoyu, Lu Yu I). Every finished season stays
+on the list of past lakes, with its own URL and a replay.
 
 ## Not building
 
@@ -194,48 +215,38 @@ dead lake.
 
 ## Assumptions to test
 
-- H1: people at a table notice within the first two years that the nets are
-  coming up emptier, and talk about it.
-- H2: at least one family buys a fine net in most seasons.
-- H3: when a ban or quota passes, breaches are rarer than in the year before.
+- H1: within two minutes, a new player has thrown a net at a school without
+  being told how.
+- H2: people at a table notice the fry and talk about the fine net before
+  the first meeting.
+- H3: at least one family buys a fine net in most seasons.
+- H4: in a year after someone stamps 怒 on a breaker, there are fewer breaches
+  than in the year before.
 
 ## Migration
 
-The app on Fly still runs v0.4 (one pond, one fish per tap) until the new
-server lands; until then README.md describes v0.4. Lakes live in new tables
-(lakes, families, lake_ledger) in the same SQLite file as the v0.4 ponds. When
-the new server lands, the v0.4 routes go; their tables stay as they are, never
-written again and never dropped.
+The app on Fly still runs v0.4 until the new server lands; until then README.md
+describes v0.4. The v1.x model in src/lib/lake.ts is replaced by
+src/lib/lake-sim.ts. Lakes will live in new tables beside the v0.4 ponds, which
+are never written again and never dropped.
 
 ## Changelog
 
-- v1.1: answers the open points from session 6, except the ledger's columns
-  and the routes and event payloads, which are decided when the store and the
-  server are built. Any family starts a lake;
-  bots fill in the order Jin, Mei, Old Wang; bot names reserved; a 7th joiner
-  or a latecomer watches. No meeting after year 6 (the season is 5 min 45 s).
-  Rows that follow from time are written by the next touch, stamped with
-  their own moment. A fine-net owner may cast coarse; nets are bought only
-  while fishing; fish kept = landed − 20; a quota counts fish landed. Votes
-  can change until the meeting ends. Draws are HMAC(seed, family, cast
-  number); the seed's hash is published at the start and the seed at the end.
-  Bots cast every 2.9 s, vote at fixed moments, Mei follows this meeting's
-  human votes; Jin obeys bans, ignores quotas. Point of no recovery and the
-  all-coarse comparison defined. v0.4 tables kept, not dropped.
-- v1.0: the pivot to a game (after crit 8 feedback). Seasons of six years with
-  village meetings; catch proportional to stock; fine-mesh nets; rules by vote,
-  shown not blocked; bot families; debrief computed from the ledger. Lake
-  parameters K = 75 per family, A = K/10, r = 0.45/min from sim/game_sim.py.
-- v0.4: durability (WAL, synchronous NORMAL), routes, cookies, Origin check,
-  limits, event payloads, viewers, stricter names, collapse time never in the
-  future, the pond page, JSON logs.
+- v2.0: the fish are agents. Prototype 2 showed that tapping a timer while a
+  number falls is not a game: where you threw did not matter and the other
+  families could only be watched. Now fish swim, meet, spawn and grow; a net
+  takes the fish inside its ring; fine nets take fry; the Allee effect comes
+  from fish failing to meet. Five years of 40 s plus 14 s meetings. Rules are
+  the three oldest fishery tools (gear, season, nursery) instead of a quota.
+  Seals let families answer each other without text. Bots react to seals.
+  Up to eight families. Real time by frames; the ledger stores actions and the
+  seed, and replay rebuilds the fish. Numbers from sim/lakesim.mjs.
+- v1.1: open points from session 6 (start, bots, season length, who writes
+  time rows, fine-net casting, votes, honest draws, debrief).
+- v1.0: the pivot to a game (after crit 8 feedback).
+- v0.4: durability, routes, cookies, Origin check, limits, events, viewers,
+  names, the pond page, JSON logs.
 - v0.3: ponds, names, rate limit, idempotency, collapse timing, ledger row,
-  live-update ids and 'present' decided (the 13 open points from session 1).
-  Governance limit is per net, not per person.
-- v0.2: parameters K=300, A=30, G≈90 so that two sessions can meet the core
-  conflict (markers use two sessions). Dropped the slogan "only a room can
-  empty it" (a single net can finish off a weakened pond). Death at stock < 1
-  stated as a design choice. Added the once-per-second server snapshot.
-- v0.1: replaced plain logistic growth (one person could empty the pond; 0.4
-  fish grew back), 1-second batched tides (a fairness promise that
-  contradicted itself) and four rule types (too much before any playtest).
+  live-update ids, 'present'.
+- v0.2: parameters so that two sessions can meet the core conflict.
+- v0.1: replaced plain logistic growth, batched tides and four rule types.
