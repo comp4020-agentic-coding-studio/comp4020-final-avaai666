@@ -1,11 +1,14 @@
-// The game model (DESIGN.md v1.0): the lake, the nets, the season's clock,
-// the village meeting and the bots. Pure functions; randomness only through
-// an Rng passed in, so a seeded season replays exactly.
+// The game model (DESIGN.md v1.1): the lake, the nets, the season's clock,
+// the village meeting, the bots, honest draws and the season check. Pure
+// functions; randomness only through an Rng or a draw passed in, so a seeded
+// season replays exactly.
+import { createHash, createHmac } from "node:crypto";
 import { STEP_MS } from "./constants.ts";
 import {
   ALLEE_FRACTION,
   BOT_TAKE,
   COARSE,
+  COUNTERFACTUAL_SEEDS,
   FINE,
   FINE_COST,
   FISH_MS,
@@ -13,6 +16,7 @@ import {
   MEET_MS,
   QUOTA,
   R_GAME_PER_MIN,
+  SEASON_MS,
   THROW_MS,
   YEARS,
 } from "./game-constants.ts";
@@ -91,6 +95,21 @@ export function seededRng(seed: number): Rng {
   };
 }
 
+// The draw for a label: the first 4 bytes of HMAC-SHA256(seed, label),
+// big-endian, over 2^32. It depends on the seed and the label only, never on
+// the order requests arrive in.
+export function draw(seed: string, label: string): number {
+  return createHmac("sha256", Buffer.from(seed, "hex")).update(label, "utf8").digest().readUInt32BE(0) / 2 ** 32;
+}
+
+// A family's n-th cast of the season, n from 1.
+export const castLabel = (familyId: number, n: number): string => `cast:${familyId}:${n}`;
+
+// Published at the start; the seed itself only at the end.
+export function seedHash(seed: string): string {
+  return createHash("sha256").update(Buffer.from(seed, "hex")).digest("hex");
+}
+
 // ---- casting ----
 
 export type Net = "coarse" | "fine";
@@ -112,16 +131,23 @@ export function catchSize(cap: number, stock: number, K: number, rng: Rng): numb
 
 export type Phase = { year: number; phase: "fish" | "meet" | "over"; msLeft: number };
 
-// Year (1..YEARS) and phase from the season's start time and now. The
-// schedule lives nowhere else.
+// Year (1..YEARS) and phase from the season's start time and now. Years 1
+// to 5 are fishing then a meeting; year 6 is fishing only, then the season is
+// over. The schedule lives nowhere else.
 export function phaseAt(startedAt: number, now: number): Phase {
   const t = Math.max(0, now - startedAt);
-  if (t >= YEARS * YEAR_MS) return { year: YEARS, phase: "over", msLeft: 0 };
+  if (t >= SEASON_MS) return { year: YEARS, phase: "over", msLeft: 0 };
   const year = Math.floor(t / YEAR_MS) + 1;
   const into = t % YEAR_MS;
   return into < FISH_MS
     ? { year, phase: "fish", msLeft: FISH_MS - into }
     : { year, phase: "meet", msLeft: YEAR_MS - into };
+}
+
+// Fishing time played so far: meetings excluded, capped at the season.
+export function fishingMsBefore(startedAt: number, now: number): number {
+  const t = Math.min(SEASON_MS, Math.max(0, now - startedAt));
+  return Math.floor(t / YEAR_MS) * FISH_MS + Math.min(t % YEAR_MS, FISH_MS);
 }
 
 // ---- the village meeting ----
@@ -162,7 +188,8 @@ export type BotState = {
   rule: Rule; // the rule in force this year
   stock: number;
   K: number;
-  lastHumanVotes: Rule[]; // human families' votes at the last meeting
+  humanVotes: Rule[]; // the human families' latest votes so far in this meeting
+  humans: number; // how many human families there are
 };
 
 // Old Wang never buys. Jin buys once he can pay; Mei once two other families
@@ -174,7 +201,7 @@ export function botBuys(kind: BotKind, s: BotState): boolean {
 
 export function botVote(kind: BotKind, s: BotState): Rule {
   if (kind === "greedy") return "none";
-  if (kind === "follower") return tally(s.lastHumanVotes, s.lastHumanVotes.length);
+  if (kind === "follower") return tally(s.humanVotes, s.humans); // a silent human counts as none
   if (s.othersFine > 0) return "ban";
   return s.stock < 0.6 * s.K ? "quota" : "none";
 }
@@ -184,11 +211,25 @@ export function botObeys(kind: BotKind, rule: Rule): boolean {
   return !(kind === "greedy" && rule === "quota");
 }
 
+// A bot that owns a fine net casts it, unless fine nets are banned and it
+// obeys bans: then it casts its coarse net.
+export function botNet(kind: BotKind, rule: Rule, hasFine: boolean): Net {
+  return hasFine && !(rule === "ban" && botObeys(kind, rule)) ? "fine" : "coarse";
+}
+
+// A bot that obeys a quota stops for the year when one more cast could take
+// it past QUOTA. A catch never exceeds the net's capacity, so it never
+// breaches.
+export function botCasts(kind: BotKind, rule: Rule, net: Net, yearLanded: number): boolean {
+  return !(rule === "quota" && botObeys(kind, rule) && yearLanded + capacity(net) > QUOTA);
+}
+
 // ---- a whole season, for the dilemma and the debrief ----
 
 // Every family keeps its net all season and casts on the THROW_MS clock (a
 // random first offset, the clock paused during meetings), taking each chance
-// with probability `take`. The lake grows between casts. Mirrors
+// with probability `take`. The lake grows between casts and during meetings;
+// year 6 has no meeting, so the season stops when its fishing ends. Mirrors
 // sim/game_sim.py with no quota.
 export function simulateSeason(
   nets: Net[],
@@ -222,9 +263,87 @@ export function simulateSeason(
       if (isDead(s)) return { caught, diedInYear: year, stockByYear: [...stockByYear, 0] };
     }
     for (let i = 0; i < nets.length; i++) next[i] -= FISH_MS - t;
-    s = stockAt(s, YEAR_MS - t, p);
+    s = stockAt(s, (year < YEARS ? YEAR_MS : FISH_MS) - t, p);
     if (isDead(s)) return { caught, diedInYear: year, stockByYear: [...stockByYear, 0] };
     stockByYear.push(Math.round(s));
   }
   return { caught, diedInYear: null, stockByYear };
+}
+
+// The table's real casting rate: casts made over cast chances (one per family
+// every THROW_MS of fishing played), at most 1.
+export function castingRate(casts: number, families: number, fishingMs: number): number {
+  if (fishingMs <= 0) return 0;
+  return Math.min(1, (casts * THROW_MS) / (families * fishingMs));
+}
+
+// The debrief's other season: the same families, every net coarse, at the
+// table's casting rate, over seeds 0 .. COUNTERFACTUAL_SEEDS − 1.
+export function coarseCounterfactual(families: number, take: number): { total: number; survived: number } {
+  const nets: Net[] = Array.from({ length: families }, () => "coarse");
+  let total = 0;
+  let survived = 0;
+  for (let seed = 0; seed < COUNTERFACTUAL_SEEDS; seed++) {
+    const run = simulateSeason(nets, seed, take);
+    total += run.caught.reduce((a, b) => a + b, 0);
+    if (run.diedInYear === null) survived++;
+  }
+  return { total: total / COUNTERFACTUAL_SEEDS, survived };
+}
+
+// ---- the season check ----
+
+// A ledger row as the check sees it. stockAfter is null only before the start.
+export type VerifyRow = {
+  at: number;
+  kind: string;
+  family?: number;
+  net?: Net;
+  got?: number;
+  stockAfter: number | null;
+};
+
+export type Verdict = { ok: true; casts: number } | { ok: false; index: number; why: string };
+
+const TOLERANCE = 1e-9;
+
+// Recomputes a finished season from its ledger and the revealed seed. The seed
+// must match the hash published at the start (index −1 if not: no row is at
+// fault). From the start row (stockAfter = K) on, the stock before each row is
+// stockAt from the row before; a cast must land exactly its own draw's catch,
+// and every row's stockAfter must follow.
+export function verifySeason(rows: VerifyRow[], { seed, seedHash: hash, K }: { seed: string; seedHash: string; K: number }): Verdict {
+  if (seedHash(seed) !== hash) return { ok: false, index: -1, why: "seed does not match" };
+  const p = lakeParams(K / FISH_PER_FAMILY);
+  const n = new Map<number, number>();
+  let casts = 0;
+  let prev: VerifyRow | null = null;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (prev === null) {
+      if (row.stockAfter === null) continue;
+      if (Math.abs(row.stockAfter - K) > TOLERANCE) return { ok: false, index: i, why: "start is not at K" };
+      prev = row;
+      continue;
+    }
+    if (row.stockAfter === null) return { ok: false, index: i, why: "no stock after the start" };
+    if (row.at < prev.at) return { ok: false, index: i, why: "out of time order" };
+    const before = stockAt(prev.stockAfter as number, row.at - prev.at, p);
+    let want = before;
+    if (row.kind === "cast") {
+      if (row.family === undefined || row.net === undefined || row.got === undefined) {
+        return { ok: false, index: i, why: "cast without family, net or catch" };
+      }
+      const k = (n.get(row.family) ?? 0) + 1;
+      n.set(row.family, k);
+      casts++;
+      const label = castLabel(row.family, k);
+      const got = catchSize(capacity(row.net), before, K, () => draw(seed, label));
+      if (got !== row.got) return { ok: false, index: i, why: "catch does not match" };
+      want = before - got;
+    }
+    if (Math.abs(row.stockAfter - want) > TOLERANCE) return { ok: false, index: i, why: "stock does not match" };
+    prev = row;
+  }
+  return { ok: true, casts };
 }
