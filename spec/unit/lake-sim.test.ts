@@ -2,20 +2,25 @@ import { describe, expect, it } from "vitest";
 import * as ref from "../../sim/lakesim.mjs";
 import { CLUTCH, FISH_S, MEET_S, R_COARSE, R_FINE, SEASON_MS, SINK_S } from "../../src/lib/game-constants.ts";
 import {
+  adults,
   bestSpot,
   castNet,
   closeNets,
+  dead,
   type Fish,
-  type Haul,
   makeLake,
+  MODEL_VERSION,
+  nextYear,
   phase,
   phaseAt,
-  rngFrom,
+  secretHash,
   stepAt,
   step,
+  streamRng,
 } from "../../src/lib/lake-sim.ts";
 
-// The lake as agents (DESIGN.md v2.0, "The lake" and "Nets"). Pure: no server.
+// The lake as agents (DESIGN.md v2.1, "The lake", "Randomness" and "Nets").
+// Pure: no server.
 
 const fishAt = (id: number, x: number, y: number, age: number): Fish => ({
   id,
@@ -30,18 +35,21 @@ const fishAt = (id: number, x: number, y: number, age: number): Fish => ({
 });
 
 describe("matches the reference", () => {
-  it("same seed, same throws, 700 steps: identical fish and hauls", () => {
-    const SEED = 4242;
-    const L0 = ref.makeLake({ ...ref.DEFAULTS }, 4, SEED);
-    const L1 = makeLake(4, SEED);
-    const aim0 = ref.rngFrom(7);
-    const aim1 = rngFrom(7);
-    const hauls: Haul[] = [];
+  it("same secret, same throws, 700 steps: identical fish and hauls", () => {
+    const SECRET = "reference-check";
+    const L0 = ref.makeLake({ ...ref.DEFAULTS }, 4, SECRET);
+    const L1 = makeLake(4, SECRET);
+    const aim0 = ref.streamRng(SECRET, "aim");
+    const aim1 = streamRng(SECRET, "aim");
+    const refHauls: ref.RefStep["hauls"] = [];
+    const hauls: ReturnType<typeof step>["hauls"] = [];
     let winters = 0;
+    let refSpawns = 0;
+    let spawns = 0;
     for (let k = 0; k < 700; k++) {
       if (phase(L1.t).phase === "fish") {
         if (k % 9 === 3) {
-          // aimed throws: every third one fine
+          // aimed throws: one in three fine
           const fam = k % 4;
           const fine = k % 27 === 3;
           const a = ref.bestSpot(L0, fine, aim0);
@@ -57,23 +65,106 @@ describe("matches the reference", () => {
           castNet(L1, 2, 880, 350, true);
         }
       }
-      ref.step(L0);
-      const out = step(L1);
-      hauls.push(...out.hauls);
-      if (out.winter) winters++;
+      const o0 = ref.step(L0);
+      const o1 = step(L1);
+      refHauls.push(...o0.hauls);
+      hauls.push(...o1.hauls);
+      refSpawns += o0.spawns.length;
+      spawns += o1.spawns.length;
+      expect(o1.winter).toBe(o0.winter);
+      if (o1.winter) winters++;
     }
     expect(winters).toBe(1);
     expect(L1.t).toBe(L0.t);
-    expect(L1.fish.map(({ x, y, age, h }) => ({ x, y, age, h }))).toEqual(
-      L0.fish.map(({ x, y, age, h }) => ({ x, y, age, h })),
+    expect(spawns).toBe(refSpawns);
+    expect(L1.start).toBe(L0.start);
+    expect(L1.fish.map(({ id, x, y, age, h }) => ({ id, x, y, age, h }))).toEqual(
+      L0.fish.map(({ id, x, y, age, h }) => ({ id, x, y, age, h })),
     );
-    const refHauls = L0.events.filter((e) => e.kind === "haul");
-    expect(hauls.map(({ fam, got, gotFry, x, y, fine }) => ({ fam, got, gotFry, x, y, fine }))).toEqual(
-      refHauls.map((e) => ({ fam: e.fam, got: e.got, gotFry: e.gotFry, x: e.x, y: e.y, fine: e.fine })),
-    );
-    // the script did catch fish, so the comparison is not of empty nets
+    const view = (h: { net: { fam: number; x: number; y: number; fine: boolean }; got: number; gotFry: number; slipped: number }) => ({
+      fam: h.net.fam,
+      x: h.net.x,
+      y: h.net.y,
+      fine: h.net.fine,
+      got: h.got,
+      gotFry: h.gotFry,
+      slipped: h.slipped,
+    });
+    expect(hauls.map(view)).toEqual(refHauls.map(view));
+    // the script did catch fish and fry, and fry slipped, so the comparison is not of empty nets
     expect(hauls.reduce((n, h) => n + h.got, 0)).toBeGreaterThan(20);
     expect(hauls.reduce((n, h) => n + h.gotFry, 0)).toBeGreaterThan(0);
+    expect(hauls.reduce((n, h) => n + h.slipped, 0)).toBeGreaterThan(0);
+  });
+
+  it("the model version is the reference's", () => {
+    expect(MODEL_VERSION).toBe("lake-sim 2.1");
+    expect(MODEL_VERSION).toBe(ref.MODEL_VERSION);
+  });
+});
+
+describe("random streams", () => {
+  const take = (r: () => number, n = 50): number[] => Array.from({ length: n }, () => r());
+
+  it("the same secret gives the same streams, equal to the reference's", () => {
+    expect(take(streamRng("s1", "lake"))).toEqual(take(streamRng("s1", "lake")));
+    expect(take(streamRng("s1", "koi"))).toEqual(take(ref.streamRng("s1", "koi")));
+  });
+
+  it('"lake" and "koi" differ', () => {
+    expect(take(streamRng("s1", "lake"))).not.toEqual(take(streamRng("s1", "koi")));
+  });
+
+  it("two secrets that differ in one character give different fish", () => {
+    const a = makeLake(4, "secret-a").fish.map(({ x, y }) => [x, y]);
+    const b = makeLake(4, "secret-b").fish.map(({ x, y }) => [x, y]);
+    expect(a).not.toEqual(b);
+  });
+
+  it("secretHash is SHA-256 of the secret, as the reference", () => {
+    expect(secretHash("s1")).toBe(ref.secretHash("s1"));
+    expect(secretHash("s1")).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
+describe("death", () => {
+  it("dead() is true at 1 fish and false at 2", () => {
+    const L = makeLake(1, "d", { startCount: 0 });
+    L.fish = [fishAt(1, 500, 350, 2)];
+    expect(dead(L)).toBe(true);
+    L.fish.push(fishAt(2, 520, 350, 2));
+    expect(dead(L)).toBe(false);
+  });
+});
+
+describe("winter", () => {
+  it("every fry alive before a winter is alive after it, now grown", () => {
+    const L = makeLake(4, "winter");
+    let fry: number[] = [];
+    for (;;) {
+      fry = L.fish.filter((f) => f.age === 0).map((f) => f.id);
+      if (step(L).winter) break;
+    }
+    expect(fry.length).toBeGreaterThan(10);
+    const after = new Map(L.fish.map((f) => [f.id, f]));
+    for (const id of fry) expect(after.get(id)?.age).toBe(1);
+  });
+});
+
+describe("nextYear", { timeout: 180_000 }, () => {
+  it("an unfished lake holds more grown fish next year than at the season's end", () => {
+    const L = makeLake(4, "next");
+    while (phase(L.t).phase !== "over") step(L);
+    const now = adults(L);
+    expect(nextYear(L)).toBeGreaterThan(now);
+  });
+
+  it("is 0 for a dead lake", () => {
+    const empty = makeLake(4, "next", { startCount: 0 });
+    expect(nextYear(empty)).toBe(0);
+    const oneFry = makeLake(4, "next", { startCount: 0 });
+    oneFry.fish = [fishAt(1, 500, 350, 0)];
+    expect(nextYear(oneFry)).toBe(0);
   });
 });
 
@@ -81,7 +172,7 @@ describe("nets", () => {
   // A lake with no fish of its own, a net thrown, then the fish placed and the
   // clock moved to the moment the net closes.
   function lakeWith(nets: { fam: number; x: number; y: number; fine: boolean }[], fish: Fish[]) {
-    const L = makeLake(1, 1, { startCount: 0 });
+    const L = makeLake(1, "nets", { startCount: 0 });
     for (const n of nets) castNet(L, n.fam, n.x, n.y, n.fine);
     L.fish = fish;
     L.t = SINK_S;
@@ -130,7 +221,7 @@ describe("nets", () => {
       [fishAt(1, 515, 350, 2)],
     );
     const hauls = closeNets(L);
-    expect(hauls.map((h) => [h.fam, h.got])).toEqual([
+    expect(hauls.map((h) => [h.net.fam, h.got])).toEqual([
       [2, 1],
       [0, 0],
     ]);
@@ -142,7 +233,7 @@ describe("spawning", () => {
     const perGrown = (n: number): number => {
       let born = 0;
       for (let seed = 0; seed < 10; seed++) {
-        const L = makeLake(4, seed, { startCount: n });
+        const L = makeLake(4, `allee-${seed}`, { startCount: n });
         while (phase(L.t).spring) born += step(L).spawns.length * CLUTCH;
       }
       return born / (10 * n);
@@ -155,22 +246,22 @@ describe("spawning", () => {
 });
 
 describe("determinism", () => {
-  const after = (seed: number) => {
-    const L = makeLake(4, seed);
+  const after = (secret: string) => {
+    const L = makeLake(4, secret);
     for (let k = 0; k < 300; k++) step(L);
     return L.fish;
   };
 
-  it("the same seed gives the same lake after 300 steps", () => {
-    expect(after(11)).toEqual(after(11));
+  it("the same secret gives the same lake after 300 steps", () => {
+    expect(after("same")).toEqual(after("same"));
   });
 
-  it("a different seed does not", () => {
-    expect(after(12)).not.toEqual(after(11));
+  it("a different secret does not", () => {
+    expect(after("other")).not.toEqual(after("same"));
   });
 
   it("fish ids are unique", () => {
-    const ids = after(11).map((f) => f.id);
+    const ids = after("same").map((f) => f.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 });
@@ -189,6 +280,10 @@ describe("phaseAt", () => {
     [300_000, { step: 3000, year: 5, phase: "over", spring: false, msLeft: 0 }],
   ] as const)("t = %d ms", (t, want) => {
     expect(phaseAt(T0, T0 + t)).toEqual(want);
+  });
+
+  it("comes from the step: 13,950 ms is still step 139", () => {
+    expect(phaseAt(T0, T0 + 13_950)).toEqual(phaseAt(T0, T0 + 13_900));
   });
 
   it("the season is 256 s", () => {

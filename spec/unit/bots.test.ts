@@ -12,9 +12,11 @@ import {
   tally,
   type VoteView,
 } from "../../src/lib/rules.ts";
+import { streamRng } from "../../src/lib/lake-sim.ts";
 
-// The village meeting, breaches and the bots (DESIGN.md v2.0, "The village
-// meeting" and "Bots"). Pure: no server.
+// The village meeting, breaches and the bots (DESIGN.md v2.1, "The village
+// meeting" and "Bots"). Bots follow scripts; these tests check the scripts.
+// Pure: no server.
 
 const FISHING = { phase: "fish", spring: false } as const;
 const SPRING = { phase: "fish", spring: true } as const;
@@ -64,19 +66,19 @@ describe("breachOf", () => {
 });
 
 describe("bots buy", () => {
-  it("Jin buys as soon as he keeps 20 fish", () => {
-    expect(botBuys("greedy", { kept: FINE_COST - 1, hasFine: false, othersFine: 0 })).toBe(false);
-    expect(botBuys("greedy", { kept: FINE_COST, hasFine: false, othersFine: 0 })).toBe(true);
-    expect(botBuys("greedy", { kept: 100, hasFine: true, othersFine: 0 })).toBe(false);
+  it("Jin buys as soon as his basket holds 20", () => {
+    expect(botBuys("greedy", { basket: FINE_COST - 1, hasFine: false, othersFine: 0 })).toBe(false);
+    expect(botBuys("greedy", { basket: FINE_COST, hasFine: false, othersFine: 0 })).toBe(true);
+    expect(botBuys("greedy", { basket: 100, hasFine: true, othersFine: 0 })).toBe(false);
   });
 
   it("Mei buys once two other families have one", () => {
-    expect(botBuys("follower", { kept: 100, hasFine: false, othersFine: 1 })).toBe(false);
-    expect(botBuys("follower", { kept: 100, hasFine: false, othersFine: 2 })).toBe(true);
+    expect(botBuys("follower", { basket: 100, hasFine: false, othersFine: 1 })).toBe(false);
+    expect(botBuys("follower", { basket: 100, hasFine: false, othersFine: 2 })).toBe(true);
   });
 
   it("Old Wang never buys", () => {
-    expect(botBuys("careful", { kept: 1000, hasFine: false, othersFine: 3 })).toBe(false);
+    expect(botBuys("careful", { basket: 1000, hasFine: false, othersFine: 3 })).toBe(false);
   });
 });
 
@@ -169,8 +171,8 @@ describe("botRandom", () => {
   it("is the same for the same arguments, and in [0, 1)", () => {
     for (let step = 0; step < 200; step++) {
       for (let fam = 0; fam < 4; fam++) {
-        const x = botRandom(99, step, fam, 0);
-        expect(botRandom(99, step, fam, 0)).toBe(x);
+        const x = botRandom("s", step, fam, 0);
+        expect(botRandom("s", step, fam, 0)).toBe(x);
         expect(x).toBeGreaterThanOrEqual(0);
         expect(x).toBeLessThan(1);
       }
@@ -178,10 +180,14 @@ describe("botRandom", () => {
   });
 
   it("changes with each argument", () => {
-    const x = botRandom(99, 10, 1, 0);
-    expect(botRandom(98, 10, 1, 0)).not.toBe(x);
-    expect(botRandom(99, 11, 1, 0)).not.toBe(x);
-    expect(botRandom(99, 10, 2, 0)).not.toBe(x);
-    expect(botRandom(99, 10, 1, 1)).not.toBe(x);
+    const x = botRandom("s", 10, 1, 0);
+    expect(botRandom("t", 10, 1, 0)).not.toBe(x);
+    expect(botRandom("s", 11, 1, 0)).not.toBe(x);
+    expect(botRandom("s", 10, 2, 0)).not.toBe(x);
+    expect(botRandom("s", 10, 1, 1)).not.toBe(x);
+  });
+
+  it("is the first draw of the stream SHA-256(secret | bot | step | family | k)", () => {
+    expect(botRandom("s", 10, 1, 2)).toBe(streamRng("s", "bot|10|1|2")());
   });
 });

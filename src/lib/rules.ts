@@ -1,6 +1,6 @@
-// The village meeting, breaches and the bots (DESIGN.md v2.0). Pure functions
+// The village meeting, breaches and the bots (DESIGN.md v2.1). Pure functions
 // of what each can see; a bot's randomness comes from botRandom, never from
-// the lake's own source.
+// the lake's own stream. Bots follow scripts, not models of people.
 import {
   FINE_COST,
   JIN_ANGER,
@@ -8,9 +8,9 @@ import {
   WANG_FRY_ALARM,
   WANG_LOW,
 } from "./game-constants.ts";
-import { inShallows, rngFrom } from "./lake-sim.ts";
+import { inShallows, streamRng } from "./lake-sim.ts";
 
-// 无 no rule, 禁 ban fine nets, 休 no fishing in spring, 护 keep out of the shallows
+// no rule; ban fine nets; no fishing in spring; keep out of the shallows
 export type Rule = "none" | "ban" | "spring" | "nursery";
 const RULES: Rule[] = ["none", "ban", "spring", "nursery"];
 
@@ -29,7 +29,8 @@ export function tally(votes: Rule[], families: number): Rule {
 }
 
 // Does a throw break the rule? A fine net under a ban; any throw in spring
-// under a spring closure; a net landing in the shallows under 护.
+// under a spring closure; a net landing in the shallows under "keep out of
+// the shallows".
 export function breachOf(
   rule: Rule,
   phase: { phase: "fish" | "meet" | "over"; spring?: boolean },
@@ -45,12 +46,12 @@ export function breachOf(
 
 // ---- bots ----
 
-export type BuyView = { kept: number; hasFine: boolean; othersFine: number };
+export type BuyView = { basket: number; hasFine: boolean; othersFine: number };
 
-// Old Wang never buys. Jin buys as soon as he keeps 20 fish; Mei once two
-// other families have a fine net (and she can pay).
+// Old Wang never buys. Jin buys as soon as his basket holds 20; Mei once two
+// other families have a fine net (and her basket can pay).
 export function botBuys(kind: BotKind, v: BuyView): boolean {
-  if (kind === "careful" || v.hasFine || v.kept < FINE_COST) return false;
+  if (kind === "careful" || v.hasFine || v.basket < FINE_COST) return false;
   return kind === "greedy" || v.othersFine >= 2;
 }
 
@@ -75,14 +76,14 @@ export function botVote(kind: BotKind, v: VoteView): Rule {
 export type BreakView = {
   rule: Rule; // the rule in force
   year: number;
-  angerOnMe: { from: number; year: number }[]; // 怒 seals stamped on this bot
+  angerOnMe: { from: number; year: number }[]; // "stop that" (怒) seals stamped on this bot
   breachesByOthers: { family: number; year: number }[];
 };
 
 // Old Wang keeps every rule. Jin breaks every rule until two different
-// families have stamped 怒 on him that year. Mei keeps every rule until
-// others have broken it twice that year, then breaks it too, until anyone
-// stamps 怒 on her that year.
+// families have stamped "stop that" (怒) on him that year. Mei keeps every
+// rule until others have broken it twice that year, then breaks it too, until
+// anyone stamps "stop that" on her that year.
 export function botBreaks(kind: BotKind, v: BreakView): boolean {
   if (v.rule === "none" || kind === "careful") return false;
   const anger = v.angerOnMe.filter((a) => a.year === v.year);
@@ -97,13 +98,9 @@ export function botNet(hasFine: boolean, rule: Rule, breaks: boolean): boolean {
   return hasFine && (rule !== "ban" || breaks);
 }
 
-// A number in [0, 1) that depends only on its arguments: the bot's own
-// source, separate from the lake's. k numbers the draws a bot makes in one step.
-export function botRandom(seed: number, step: number, familyIndex: number, k: number): number {
-  let h = seed >>> 0;
-  for (const v of [step, familyIndex, k]) {
-    h = Math.imul(h ^ (v >>> 0), 0x9e3779b1) >>> 0;
-    h = (h ^ (h >>> 16)) >>> 0;
-  }
-  return rngFrom(h)();
+// A number in [0, 1) that depends only on its arguments: the first draw of
+// the stream SHA-256(secret | bot | step | family | k), separate from the
+// lake's. k numbers the draws a bot makes in one step.
+export function botRandom(secret: string, step: number, familyIndex: number, k: number): number {
+  return streamRng(secret, `bot|${step}|${familyIndex}|${k}`)();
 }

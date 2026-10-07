@@ -1,5 +1,6 @@
-// Game constants (DESIGN.md v2.0). The lake's numbers are sim/lakesim.mjs
-// DEFAULTS, unchanged; the steering weights are the literals in its step().
+// Game constants (DESIGN.md v2.1). The lake's numbers are sim/lakesim.mjs
+// DEFAULTS, unchanged; the steering weights are the literals in its step();
+// the golden carp's are KOI in sim/season.mjs.
 // They live only here and in constants.ts.
 import type { BotKind } from "./rules.ts";
 
@@ -53,7 +54,7 @@ export const SCARE_INNER = 0.7;
 export const LEAD = 15; // an aimer leads a fish by this much
 export const AIM_TRIES = 14;
 export const AIM_ANYWHERE = 9; // bestSpot's default limit: no limit
-export const NURSERY_AIM = 0.95; // × SHALLOW: how far out a family keeping 护 aims
+export const NURSERY_AIM = 0.95; // × SHALLOW: how far out a family keeping "keep out of the shallows" aims
 
 // ---- the schedule ----
 export const STEP_MS = 100; // DT in ms
@@ -62,24 +63,40 @@ export const SEASON_MS = ((YEARS - 1) * (FISH_S + MEET_S) + FISH_S) * 1000; // 2
 // ---- families, houses, the golden carp ----
 export const MAX_FAMILIES = 8;
 export const FILL_TO = 4; // bots fill a lake to this many families
-export const HOUSES = [
-  { name: "thatched hut", from: 0 },
-  { name: "tiled house", from: 25 },
-  { name: "red gate", from: 60 },
-  { name: "lanterns", from: 110 },
-  { name: "second storey", from: 170 },
-  { name: "pagoda", from: 240 },
-] as const; // fish kept
-export const CARP_AT_S = 17; // into each year's fishing
-export const CARP_SWIM_S = 12;
-export const CARP_FISH = 8; // extra fish for the net that takes it
+// A house's parts, in order, each bought from the basket in winter.
+export const HOUSE_PARTS = [
+  { name: "hut", cost: 0 },
+  { name: "tiled roof", cost: 25 },
+  { name: "red gate", cost: 35 },
+  { name: "lanterns", cost: 50 },
+  { name: "upper floor", cost: 60 },
+  { name: "pagoda", cost: 70 },
+] as const;
+
+// The golden carp (sim/season.mjs KOI and its path).
+export const KOI_AT_S = 17; // into each year's fishing
+export const KOI_FOR_S = 12;
+export const KOI_SPEED = 70;
+export const KOI_BONUS = 8; // extra fish for the net that takes it
+export const KOI_REACH = 6; // added to the net's radius
+export const KOI_START_RX = 200; // it starts on this ellipse around the centre
+export const KOI_START_RY = 120;
+export const KOI_TURN = 0.5;
+export const KOI_TURN_BACK = 0.85; // beyond this share of the radius it heads for the centre
+
+// ---- randomness ----
+export const SECRET_BYTES = 32; // 256 bits
+export const RNG_WARMUP = 12; // draws discarded from each new stream
 
 // ---- bots ----
 export const BOT_FILL_ORDER: readonly BotKind[] = ["greedy", "follower", "careful"];
 export const BOT_NAMES: Record<BotKind, string> = { greedy: "Jin", follower: "Mei", careful: "Old Wang" };
 export const BOT_VOTE_AT_S: Record<BotKind, number> = { careful: 3, greedy: 6, follower: 10 }; // into a meeting
 export const BOT_TAKE = 0.85; // share of throwing chances a bot takes
-export const WANG_FRY_ALARM = 6; // Old Wang votes 护 once anyone has taken more fry than this
-export const WANG_LOW = 0.6; // and 休 when grown fish are below this share of the start
-export const JIN_ANGER = 2; // different families stamping 怒 before Jin keeps a rule
+export const WANG_FRY_ALARM = 6; // Old Wang votes "keep out of the shallows" once any one family has taken more fry than this
+export const WANG_LOW = 0.6; // and "no spring fishing" when grown fish are below this share of the start
+export const JIN_ANGER = 2; // different families stamping "stop that" before Jin keeps a rule
 export const MEI_BREACHES = 2; // breaches by others before Mei breaks a rule
+export const MEI_PROMISE_LIMIT = 2; // Mei refuses a promise once this many others own fine nets
+export const JIN_KEEPS = 0.5; // Jin keeps a promise when his draw is at least this
+export const WANG_ASKS_AT_S = 18; // into fishing, once a year
