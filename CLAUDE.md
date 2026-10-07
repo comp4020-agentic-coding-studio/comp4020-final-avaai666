@@ -20,9 +20,17 @@ Authority
 - The server is the only authority on stock and catches. The client never
   computes stock or an outcome. It shows what the server sent.
 - Stock is evaluated only by stockAt() in src/lib/pond.ts.
-- A timer may read and broadcast state. The only row a timer or a read may
-  write is the collapse row.
-- Model and rate constants live only in src/lib/constants.ts.
+- A timer may read and broadcast state. The once-a-second tick may write
+  collapse rows and the actions of bot families (casts, net purchases, votes),
+  each through the same store function a person's request uses. Nothing else
+  writes on a timer.
+- The season's year and phase come from phaseAt(startedAt, now). Never keep
+  the schedule in a variable that a restart would lose.
+- Randomness that decides an outcome (a catch, a bot's choice) comes from a
+  seeded source recorded with the season, so a season can be replayed from
+  its ledger.
+- Model and game constants live only in src/lib/constants.ts and
+  src/lib/game-constants.ts.
 - Events and snapshots never contain an idempotency key, a net id or a token.
 
 The ledger
