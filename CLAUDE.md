@@ -9,7 +9,7 @@ where it lives --- `fly.toml`, the `Dockerfile`, the CI workflow and
 [final project brief](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/assessments/final-project/).
 What the agent needs to carry from any of it is your call.
 
-## Common Pool: rules for every change
+## Next Year, No Fish: rules for every change
 
 DESIGN.md is the current design and has a version number. If it is wrong,
 unclear or silent about what you need, STOP and tell me what and why. Do not
@@ -19,24 +19,31 @@ and add a changelog line, in the same commit as the code that needs it.
 Authority
 - The server is the only authority on stock and catches. The client never
   computes stock or an outcome. It shows what the server sent.
-- Stock is evaluated only by stockAt() in src/lib/pond.ts.
-- A timer may read and broadcast state. The once-a-second tick may write
-  collapse rows and the actions of bot families (casts, net purchases, votes),
-  each through the same store function a person's request uses. Nothing else
-  writes on a timer.
+- Stock is evaluated only by stockAt(): in src/lib/pond.ts for v0.4 ponds,
+  in src/lib/lake.ts for lakes.
+- A timer may read and broadcast state. The tick may write only two
+  kinds of rows, each through the same store function a person's request
+  uses: rows that follow from time alone (a year's rule, a collapse, a
+  season's end), stamped with the moment they happened and never later
+  than now; and the actions of bot families (casts, net purchases, votes).
+  Nothing else writes on a timer. The tick never makes up casts a bot
+  missed while the server was down.
 - The season's year and phase come from phaseAt(startedAt, now). Never keep
   the schedule in a variable that a restart would lose.
-- Randomness that decides an outcome (a catch, a bot's choice) comes from a
-  seeded source recorded with the season, so a season can be replayed from
-  its ledger.
+- Every random draw that decides a catch, and every bot's casting point,
+  is draw(seed, label) from src/lib/lake.ts, with a label that names the
+  family and its cast number, so no draw depends on the order requests
+  arrive in. The seed is secret until the season's end row: it never
+  appears in an event, a snapshot, a page or a log line before then.
 - Model and game constants live only in src/lib/constants.ts and
   src/lib/game-constants.ts.
-- Events and snapshots never contain an idempotency key, a net id or a token.
+- Events and snapshots never contain an idempotency key, a net id, a
+  family token, or (before the season's end row) the seed.
 
 The ledger
 - No state change without a ledger row, written in the same transaction.
   One catch that kills a pond writes two rows (catch, then collapse) in one
-  transaction.
+  transaction; one that kills a lake writes three (cast, collapse, end).
 - Never write UPDATE or DELETE against the ledger.
 
 Scope
