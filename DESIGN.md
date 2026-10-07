@@ -1,265 +1,133 @@
-# Common Pool: design v0.4
+# Next Year, No Fish (明年无鱼): design v1.0
+
+> 竭泽而渔，岂不获得？而明年无鱼。 Drain the lake to catch the fish, and of
+> course you catch them; but next year there are no fish. (Lüshi Chunqiu, "Yi
+> Shang", c. 239 BC)
 
 ## What it is
 
-A shared pond. Fish regrow on their own. Anyone in the pond can tap to catch
-one fish and keep it. You can see how your catching, and everyone else's,
-changes the pond, and you work out with the people around you how to use it.
+A fishing game for a table of people. Each player is a family on the shore of
+one shared lake. Tap the water to cast; every fish you land is yours and builds
+your house. At any time a family can pay 20 fish for a fine-mesh net, which
+lands more than twice as many. After six short years, the game shows what the
+table did to the lake and why.
 
-## A person
+It is an explainer of the tragedy of the commons that people play rather than
+read. The dilemma is not scripted: it comes out of the lake's ecology and the
+nets (see "Why it is a dilemma").
 
-A named net in one pond, held by one browser (a cookie token, one year).
-No accounts, no email. Name: 1–24 grapheme clusters (see Names).
-Known limit: one human can open several browsers and hold several nets. We do
-not prevent this. The app is made for people who can see each other.
+## A season
 
-## Ponds
+- A season is one game on one lake. Someone opens a lake; it gets a short code
+  and its own URL. Others join by the URL or the code. A family is a name held
+  by one browser (a cookie per lake). Two to six families.
+- When the season starts, families are fixed. If there are fewer than four
+  people, bot families fill the lake to four (see "Bots"). The lake's size is
+  set then: K = 75 fish per family, A = K / 10. It never changes mid-season.
+- Six years. Each year is 45 seconds of fishing, then a 15-second village
+  meeting. A season lasts six minutes.
+- The year and phase are computed from the season's start time and the clock
+  (phaseAt). Nothing about the schedule lives only in memory, so a restart
+  mid-season resumes at the right moment.
+- The season ends after year 6, or the moment the lake dies.
 
-- The home page lists every pond: number, alive or dead, age, fish now (or
-  when it died), how many nets. A button digs a new pond.
-- Ponds are numbered ("Pond 7"), not named, so the only free text in the app
-  is a person's name.
-- A pond has its own URL (/p/7). Two people join the same pond by opening the
-  same URL. After a pond dies, its page shows the record and a button to dig a
-  new one.
-- Digging a pond writes a `dig` row with stock K.
+## The lake
 
-## Names
+- Growth with a strong Allee threshold:
+  dS/dt = r · S · (S/A − 1) · (1 − S/K), with r = 0.45 per minute.
+  Below A the population shrinks on its own.
+- Stock is evaluated from the last recorded stock and the elapsed time (fixed
+  step RK4), as in v0.4. The lake is dead when stock falls below 1; a dead lake
+  never comes back.
 
-- Trimmed. 1–24 grapheme clusters (Intl.Segmenter). No control characters.
-  Whitespace-only is rejected.
-- Unique within a pond, compared case-insensitively after trimming, so the
-  ledger reads unambiguously.
+## Casting
 
-## Names (tightened)
+- A family may cast once every 2.5 seconds, only during fishing.
+- A cast names a point on the water (x, y in 0..1). The point is shown to
+  everyone; it does not change the catch.
+- Catch: a coarse net has capacity 3, a fine-mesh net 8. Expected catch is
+  capacity × S / K. The server rounds it with one random draw (floor, plus one
+  with probability equal to the fraction), never more than the whole fish left.
+  So a full lake gives a coarse net about 3 fish, and a lake at a third full
+  about 1: the nets come up emptier as the lake empties.
+- A fine-mesh net costs 20 fish, once per season. It cannot be sold back.
 
-Stored in Unicode NFC. Compared by NFKC + lower case. Rejected if they contain
-a control character (Cc) or a format character (Cf) other than U+200D (the
-zero-width joiner inside emoji). This removes bidi overrides and other
-invisible characters.
+## Why it is a dilemma (checked by spec/unit/dilemma.test.ts)
 
-## The pond model
+With four families each casting at 85% of their opportunities, averaged over
+many seeded seasons:
+- whatever the other three do, switching your own net to fine mesh lands you
+  more fish, after its cost;
+- when all four have fine nets, each lands far less than when all four keep
+  coarse nets.
+Numbers from sim/payoff.py: all coarse, about 223 each; all fine, about 91.
 
-- Growth with a strong Allee threshold A:
-  dS/dt = r · S · (S/A − 1) · (1 − S/K).
-  In the model, a population below A shrinks toward zero even if nobody fishes.
-- Parameters (v0.2, from sim/pond_sim.py): K = 300, A = 30, r = 0.2377 per
-  minute. Peak regrowth G is about 90 fish/min.
-- One tap catches one fish. At most one tap per net per second (60 fish/min),
-  so one net at full speed (60/min) is below G, and two nets (120/min) are
-  above it.
-- Stock is a real number. Fish available = floor(stock). The UI shows floor.
-- Design choice: when stock falls below 1 the pond is dead. A dead pond is
-  read-only and never restocked. The equation only approaches zero; declaring
-  death at 1 is our rule, not a result of the model.
-- Stock is evaluated from the last recorded stock and the elapsed time with
-  fixed-step RK4 (step = 1 second). Stored stock is never changed by a timer.
+## The village meeting
 
-What the simulation shows (tested scenarios, not guarantees):
-- From a full pond, one net at full speed did not empty it in 30 minutes.
-- From a full pond, two nets at full speed emptied it in about 5 minutes.
-- From a quarter-full pond, one net at full speed emptied it in under 2
-  minutes. A single person can finish off a pond that others have weakened.
+- Each meeting chooses next year's rule: no rule, a quota (25 fish per family
+  for the year), or a ban on fine-mesh nets (数罟不入洿池, Mencius).
+- Each family has one vote; a family that does not vote counts as "no rule".
+  An option wins if it has more votes than each other option and at least half
+  of all families' votes. Otherwise there is no rule.
+- Rules do not block anyone. A catch that breaks the rule lands, is marked as a
+  breach on its ledger row, and is shown to everyone in red. (Ostrom: rules work
+  when they are monitored.)
 
-## Casting (v0.2)
+## Bots
 
-First come, first served: a tap is settled in one database transaction when
-the server receives it. The only fairness claim is: when two taps compete for
-the last fish, the one that reaches the server first gets it. Every tap
-carries an idempotency key, so a retried request never catches twice.
+Bot families make a lake playable by two people (or one). Each bot is a named
+family with one fixed temperament, stated on screen:
+- Old Wang (careful): keeps a coarse net; votes to ban fine nets once anyone has
+  one, otherwise for a quota when the lake is below 60%; obeys every rule.
+- Jin (greedy): buys a fine net as soon as he has 20 fish, unless it is banned
+  that year; votes for no rule; ignores quotas.
+- Mei (follower): buys a fine net once at least two families have one, unless
+  banned; votes as the majority of human families voted at the last meeting
+  (no rule if none voted); obeys every rule.
+Bots cast on the same 2.5-second clock, taking 85% of their chances. Their
+decisions are pure functions of the season's state and a seeded random source,
+so a season can be replayed from its ledger.
 
-## Taps and the rate limit
+## The record
 
-- A net may catch again 1000 ms (60000 / MAX_TAPS_PER_MIN) after its last
-  successful catch, by server time.
-- A tap that is too soon gets a "too soon" answer with the milliseconds left.
-  It writes no ledger row (nothing changed) and goes to the server log.
-- A tap on a dead pond gets a "dead" answer. No row.
-- Every tap carries an idempotency key made by the client (a random UUID per
-  tap). It is stored on the catch row, unique per net, and kept. A repeated
-  key gets the original result back and writes nothing.
-  Known limit: a tap refused as "too soon" stores no key, so a retry after the
-  cooldown can succeed. That is intended: a refused tap caught nothing.
+Every state change is one append-only ledger row, written in the same
+transaction: season opened, family joined, season started (with bots and K),
+cast (point, catch, stock after, breach flag), net bought, vote, rule adopted,
+collapse, season ended. The debrief is computed from these rows alone.
 
-## Collapse
+## The debrief
 
-- If a catch leaves stock below 1, the same transaction writes the `catch`
-  row and then a `collapse` row.
-- If a pond dies with nobody fishing, the collapse row is written the first
-  time anything evaluates that pond after the moment of death (a page load, a
-  tap, the live timer). Its time is the computed moment stock fell below 1
-  (last row time + collapseAfterMs), not the time it was noticed.
-- A pond has at most one collapse row.
-
-## Collapse time (tightened)
-
-An unaided collapse row's time is min(last row time + collapseAfterMs, now).
-It is never in the future.
-
-## Live state
-
-- Every tap is broadcast to everyone in the pond right after its transaction
-  commits.
-- While a pond has viewers, the server also broadcasts a snapshot once per
-  second: stock evaluated at that moment, fish available, who is present.
-  This is how regrowth and a pond dying on its own reach the screen when
-  nobody taps.
-- A timer or a read may broadcast. It may write exactly one thing: the
-  collapse row, when evaluated stock falls below 1.
-- The client never computes stock. It shows the latest snapshot.
-
-## Live updates (session 3)
-
-- Server-Sent Events, one stream per pond.
-- Ledger rows go out as events whose id is the row id.
-- Snapshots (once per second while the pond has viewers) go out as a
-  separate event type with no id, so a reconnecting browser's Last-Event-ID
-  is always a ledger row.
-- On reconnect the server replays rows after Last-Event-ID (at most 500; more
-  than that sends a "reload" event), then sends a snapshot at once.
-
-## Present
-
-A net is present while it has an open live connection, and for 15 seconds
-after that connection drops. Used by the vote (planned v0.5, crit 9) and
-shown on screen.
-
-## Live events
-
-- Viewer: anyone with the pond's stream open, with or without a net.
-- Present: a net whose browser has the stream open, plus 15 seconds after it
-  closes.
-- Ledger event (`event: row`, `id: {row id}`), data:
-  {id, kind, at, name (null for dig and collapse), available}.
-  Never the idempotency key, the net id or a token.
-- Snapshot (`event: snapshot`, no id), once per second while the pond has at
-  least one viewer, and once right after a (re)connect, data:
-  {at, available, regrowthPerMin (growthPerMin at the current stock, rounded
-  to a whole number, 0 if dead), dead, diedAt, viewers,
-  nets: [{name, catches, present}]}.
-- The stream also sends a comment line every 15 seconds so proxies do not
-  close an idle stream.
-- On reconnect with Last-Event-ID: replay rows after it (at most 500; beyond
-  that, `event: reload`), then a snapshot.
-
-## The ledger
-
-No state change without a ledger row, written in the same transaction (a
-catch that kills a pond writes two: catch, then collapse). Rows are append-only.
-The database refuses UPDATE and DELETE on it (trigger). Row id = event id for
-the live stream. Failed requests and server errors are NOT in the ledger; they
-go to the server log.
-
-## The ledger row
-
-id (integer, increasing), pond, at (server ms), kind (dig | join | catch |
-collapse), net (null for dig and collapse), stock_after (the real-valued
-stock right after this row), idempotency key (catch rows only).
-Stock at any time t = stockAt(stock_after of the pond's latest row,
-t − that row's at).
-
-## Durability
-
-SQLite in WAL mode with synchronous = NORMAL. A commit no longer waits for an
-fsync (about 44 ms each on the dev machine), which would block Node's event
-loop and delay everyone's live updates. The cost: if the Fly machine itself
-crashes (not just the app), the last commits can be lost. For a pond, losing
-the last second of catches after a host crash is acceptable; a live update
-that arrives late for everyone, all the time, is not. The server logs how long
-each commit takes, so this can be checked on Fly.
-
-## Routes
-
-All pages are rendered on the server and work before any script runs.
-- GET  /                 the register: the 50 most recent ponds, and a Dig button
-- POST /dig              digs a pond, 303 to /p/{id}; 429 page if the same
-                         client dug one less than 10 s ago
-- GET  /p/{id}           the pond page (404 page if there is no such pond)
-- POST /p/{id}/join      form field `name`; sets the cookie; 303 to /p/{id}.
-                         Errors re-render the page with the message and status
-                         400 (bad name), 409 (name taken), 410 (dead pond)
-- POST /p/{id}/catch     JSON {"key": "<uuid v4>"}. Answers (JSON):
-                         200 {ok, available, id}     (also for a duplicate key)
-                         429 {retryInMs}             too soon
-                         410 {}                      dead pond
-                         403 {}                      no net in this pond
-                         400 {}                      key is not a lowercase UUID v4
-- GET  /p/{id}/events    the live stream (Server-Sent Events)
-- GET  /readme/          README.md rendered as HTML (images under /docs/ served)
-- GET  /static/*         the page script and stylesheet
-
-## Identity
-
-- One cookie per pond: name `net_{id}`, value the net's token, HttpOnly,
-  SameSite=Lax, Path=/p/{id}, Max-Age one year, Secure when the request came
-  over https (Fly's proxy sets X-Forwarded-Proto).
-- A browser with a valid net in this pond sees "You are {name}" instead of the
-  join form. An unknown or stale token is ignored and the join form shows.
-
-## Requests from other sites, and limits
-
-- Any POST whose Origin header is present and does not match the Host is
-  refused with 403. (Browsers send Origin on POSTs; SameSite=Lax is the
-  second layer.)
-- Idempotency keys must be lowercase UUID v4. The server rejects anything
-  else, and the store checks it too.
-- At most one dig per 10 seconds per client IP, kept in memory. The IP comes
-  from the Fly-Client-IP header, which Fly's proxy sets on every request.
-  Requests without that header (local runs, CI's container) are not limited,
-  so tests can dig freely. At most 100 nets per pond.
-
-## The pond page
-
-- Big: fish available now, and the regrowth per minute. A picture of the
-  pond with one mark per fish (at most 300).
-- One button, "Cast (1 fish)", also on the Space key when the page has focus.
-  After a catch it shows the cooldown until it can be pressed again. It shows
-  "too soon", "dead" and network errors in words, not just colour.
-- The nets in this pond: name, catches, present or not. Your own net marked.
-- The last 30 ledger events, newest first, in plain words
-  ("Mia caught a fish · 12 left", "The pond died").
-- A dead pond shows when it died, how long it lived, the catches per net, and
-  a button to dig a new pond. No blame numbers.
-- Works at 1920×1080 and at 390×844. Everything can be done with the keyboard.
-
-## Logs
-
-Every request and every refused action is one JSON line on stdout:
-{t, method, path, status, ms}, plus {event, pond, net, reason} for refused
-actions and {event: "commit", ms} for each store write. (Crit 10 builds on
-this.)
-
-## Governance (planned v0.5, crit 9)
-
-The rule is a per-NET catch limit per minute (not per person: the app cannot
-see people, only nets). One human holding two nets gets two limits. Stated in
-the README as a known limit.
-
-One rule type only. Anyone proposes a number; it passes when more than half
-of the nets present vote yes within 60 seconds. Breaches are not blocked;
-they are shown in red with the facts: who, when, how many, stock at the time.
+When the season ends, every player sees the story of this lake: the stock over
+six years with the point of no recovery, each family's catch and breaches, and
+what the table would have caught if every family had kept a coarse net (a
+simulation with the season's real casting rate). Then four short paragraphs:
+the dilemma, Hardin and Gordon, the Lüshi Chunqiu line, and Ostrom's other
+ending. Every finished season stays on a list of past lakes with its own URL.
 
 ## Not building
 
-Chat, or any free text except a name. Accounts. Cross-pond leaderboards.
-AI-generated anything. Restocking a dead pond. Async voting. Blame numbers
-that claim how much one person shortened the pond's life.
+Chat, or free text other than a family name. Accounts. Leaderboards across
+lakes. Blame numbers for who killed a lake. AI-generated anything. Restocking a
+dead lake.
 
 ## Assumptions to test
 
-- H1 (two people): two strangers in two browsers notice within a few minutes
-  that the other's catching changes what they can catch, and react to it.
-- H2 (four people): with no rules, someone tries to coordinate before the pond
-  dies.
-- H3 (tap rates): real tap rates are close enough to the simulated ones that
-  the timings above hold roughly. Check against the ledger after a playtest.
+- H1: people at a table notice within the first two years that the nets are
+  coming up emptier, and talk about it.
+- H2: at least one family buys a fine net in most seasons.
+- H3: when a ban or quota passes, breaches are rarer than in the year before.
 
-A playtest where the same group plays again after a collapse cannot show WHY
-their behaviour changed (they also learned the game and each other). We report
-what changed, not the cause.
+## Migration
+
+The app on Fly still runs v0.4 (one pond, one fish per tap). It moves to v1.0
+when the new server lands; until then README.md describes v0.4.
 
 ## Changelog
 
+- v1.0: the pivot to a game (after crit 8 feedback). Seasons of six years with
+  village meetings; catch proportional to stock; fine-mesh nets; rules by vote,
+  shown not blocked; bot families; debrief computed from the ledger. Lake
+  parameters K = 75 per family, A = K/10, r = 0.45/min from sim/game_sim.py.
 - v0.4: durability (WAL, synchronous NORMAL), routes, cookies, Origin check,
   limits, event payloads, viewers, stricter names, collapse time never in the
   future, the pond page, JSON logs.
