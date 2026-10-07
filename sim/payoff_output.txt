@@ -1,12 +1,7 @@
-net payoff per family after paying 20 fish for a big net (r=0.45, 4 families, 40 runs)
-  ['small', 'small', 'small', 'small']: [223, 223, 223, 225]
-  ['big', 'small', 'small', 'small']: [480, 186, 186, 188]
-  ['big', 'big', 'small', 'small']: [248, 247, 99, 100]
-  ['big', 'big', 'big', 'small']: [137, 134, 134, 58]
-  ['big', 'big', 'big', 'big']: [91, 90, 90, 92]
-
-The question each family faces: switch from small to big, given what the others do?
-  0 others already big: stay small -> 225, switch to big -> 480  (switching pays)
-  1 others already big: stay small -> 188, switch to big -> 247  (switching pays)
-  2 others already big: stay small -> 100, switch to big -> 134  (switching pays)
-  3 others already big: stay small -> 58, switch to big -> 92  (switching pays)
+0 fine: pay  133  132  133  125  deaths 0  endAdults 88
+1 fine: pay  178   92   90   90  deaths 4  endAdults 13
+2 fine: pay  110  112   68   68  deaths 24  endAdults 0
+3 fine: pay   80   78   84   52  deaths 24  endAdults 0
+4 fine: pay   65   71   68   59  deaths 24  endAdults 0
+switch: 125->178  90->112  68->84  52->59  all-coarse 133  all-fine 65
+ms 26654

@@ -1,0 +1,8 @@
+2 fine, rule from year 2: none     deaths 12/12  table catch 392  end adults 0
+2 fine, rule from year 2: ban      deaths 0/12  table catch 517  end adults 83
+2 fine, rule from year 2: spring   deaths 0/12  table catch 587  end adults 77
+2 fine, rule from year 2: nursery  deaths 0/12  table catch 527  end adults 76
+4 fine, rule from year 2: none     deaths 12/12  table catch 327  end adults 0
+4 fine, rule from year 2: ban      deaths 0/12  table catch 453  end adults 69
+4 fine, rule from year 2: spring   deaths 3/12  table catch 516  end adults 19
+4 fine, rule from year 2: nursery  deaths 1/12  table catch 449  end adults 25
