@@ -1,0 +1,30 @@
+
+=== r=0.45/min, 4 families, K=300, A=30, throw every 2.5 s, 85% of throws, 6 years of 45 s fishing + 15 s meeting
+  4 small : died 0/20 | table total 895 fish | stock by year (seed0) [271, 261, 261, 263, 256, 259]
+  1 big   : died 0/20 | table total 1060 fish | stock by year (seed0) [255, 225, 219, 218, 195, 204]
+  2 big   : died 0/20 | table total 745 fish | stock by year (seed0) [226, 162, 122, 73, 26, 3]
+  3 big   : died 20/20 (median year 5) | table total 526 fish | stock by year (seed0) [188, 92, 31, 6, 0]
+  4 big   : died 20/20 (median year 4) | table total 443 fish | stock by year (seed0) [143, 41, 6, 0]
+  2 fam 2 small       : died 0/20 | stock [135, 133, 128, 131, 132, 129]
+  2 fam 1 big 1 small : died 5/20 (median year 6) | stock [105, 87, 60, 38, 15, 5]
+  2 fam 2 big         : died 20/20 (median year 4) | stock [70, 24, 4, 0]
+
+=== r=0.55/min, 4 families, K=300, A=30, throw every 2.5 s, 85% of throws, 6 years of 45 s fishing + 15 s meeting
+  4 small : died 0/20 | table total 936 fish | stock by year (seed0) [281, 275, 276, 278, 272, 275]
+  1 big   : died 0/20 | table total 1190 fish | stock by year (seed0) [270, 253, 251, 252, 242, 255]
+  2 big   : died 0/20 | table total 1236 fish | stock by year (seed0) [249, 216, 210, 204, 174, 169]
+  3 big   : died 16/20 (median year 6) | table total 724 fish | stock by year (seed0) [215, 139, 73, 23, 1, 0]
+  4 big   : died 20/20 (median year 5) | table total 526 fish | stock by year (seed0) [176, 72, 18, 0]
+  2 fam 2 small       : died 0/20 | stock [140, 140, 136, 138, 139, 137]
+  2 fam 1 big 1 small : died 0/20 | stock [117, 111, 95, 98, 98, 91]
+  2 fam 2 big         : died 20/20 (median year 4) | stock [81, 42, 9, 0]
+
+=== r=0.65/min, 4 families, K=300, A=30, throw every 2.5 s, 85% of throws, 6 years of 45 s fishing + 15 s meeting
+  4 small : died 0/20 | table total 962 fish | stock by year (seed0) [287, 284, 285, 286, 282, 284]
+  1 big   : died 0/20 | table total 1260 fish | stock by year (seed0) [279, 269, 269, 272, 264, 272]
+  2 big   : died 0/20 | table total 1451 fish | stock by year (seed0) [264, 243, 242, 248, 232, 243]
+  3 big   : died 0/20 | table total 1263 fish | stock by year (seed0) [242, 192, 189, 168, 124, 68]
+  4 big   : died 20/20 (median year 5) | table total 680 fish | stock by year (seed0) [211, 118, 49, 6, 0]
+  2 fam 2 small       : died 0/20 | stock [143, 143, 140, 142, 143, 142]
+  2 fam 1 big 1 small : died 0/20 | stock [128, 127, 118, 122, 124, 117]
+  2 fam 2 big         : died 20/20 (median year 5) | stock [98, 76, 34, 7, 0]
