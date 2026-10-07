@@ -1,6 +1,11 @@
-// Agent-based lake for "Next Year, No Fish" v2. Pure, seeded, deterministic.
-// Fish swim, meet, spawn in spring; fry grow into adults over winter; coarse nets
-// let fry slip through, fine nets take everything in the circle.
+// Agent-based lake for "Next Year, No Fish", model v2.1. Pure, seeded,
+// deterministic. Fish swim, meet, spawn in spring; fry grow into adults over
+// winter; coarse nets let fry slip through, fine nets take everything in the
+// ring. v2.1: random streams are sfc32 seeded from SHA-256 of a long secret
+// (128 bits of state, not 32), fish carry ids, step() returns what happened,
+// dead() and nextYear() are defined here once.
+import { createHash } from "node:crypto";
+export const MODEL_VERSION = "lake-sim 2.1";
 export const DEFAULTS = {
   W: 1000, H: 700, RX: 460, RY: 315,      // lake ellipse in world units
   DT: 0.1,                                 // tick, seconds
@@ -20,37 +25,56 @@ export const DEFAULTS = {
   SHALLOW: 0.72,
 };
 
-export function rngFrom(seed) {
-  let a = seed >>> 0;
+// sfc32 (Chris Doty-Humphrey's small fast counter generator), 128-bit state
+export function sfc32(a, b, c, d) {
   return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    a |= 0; b |= 0; c |= 0; d |= 0;
+    const t = (((a + b) | 0) + d) | 0;
+    d = (d + 1) | 0;
+    a = b ^ (b >>> 9);
+    b = (c + (c << 3)) | 0;
+    c = (c << 21) | (c >>> 11);
+    c = (c + t) | 0;
+    return (t >>> 0) / 4294967296;
   };
 }
+
+// One named random stream of a season: the lake's own ("lake"), the bots'
+// aim in the simulations ("aim"), the golden carp ("koi").
+export function streamRng(secret, name) {
+  const h = createHash("sha256").update(`${secret}|${name}`).digest();
+  const r = sfc32(h.readUInt32BE(0), h.readUInt32BE(4), h.readUInt32BE(8), h.readUInt32BE(12));
+  for (let i = 0; i < 12; i++) r(); // warm up
+  return r;
+}
+
+export const secretHash = (secret) => createHash("sha256").update(secret).digest("hex");
 
 export function inLake(P, x, y, m = 1) {
   const dx = (x - P.W / 2) / (P.RX * m), dy = (y - P.H / 2) / (P.RY * m);
   return dx * dx + dy * dy < 1;
 }
 
-export function makeLake(P, families, seed) {
-  const rng = rngFrom(seed);
+export function makeLake(P, families, secret, opts = {}) {
+  const rng = streamRng(secret, "lake");
   const cap = P.CAP_PER_FAMILY * families;
-  const fish = [];
-  const n0 = Math.round(cap * P.START_FRAC);
-  for (let i = 0; i < n0; i++) fish.push(spawn(P, rng, null, null, 1 + Math.floor(rng() * 3)));
-  return { P, rng, cap, fish, t: 0, year: 1, nextId: 0, events: [], nets: [], hist: [] };
+  const L = { P, rng, cap, fish: [], t: 0, nextId: 0, nets: [], hist: [], start: 0 };
+  const n0 = opts.startCount ?? Math.round(cap * P.START_FRAC);
+  for (let i = 0; i < n0; i++) L.fish.push(spawn(L, null, null, 1 + Math.floor(rng() * 3)));
+  L.start = n0;
+  return L;
 }
 
-function spawn(P, rng, x, y, age) {
+function spawn(L, x, y, age) {
+  const P = L.P, rng = L.rng;
   if (x === null) {
     do { x = P.W / 2 + (rng() * 2 - 1) * P.RX; y = P.H / 2 + (rng() * 2 - 1) * P.RY; } while (!inLake(P, x, y, 0.9));
   }
-  return { x, y, h: rng() * Math.PI * 2, age, cool: 0, scare: 0, sx: 0, sy: 0 };
+  return { id: L.nextId++, x, y, h: rng() * Math.PI * 2, age, cool: 0, scare: 0, sx: 0, sy: 0 };
 }
+
+// Fewer than two fish cannot spawn: the lake is dead and never comes back.
+export const dead = (L) => L.fish.length < 2;
 
 export const adults = (L) => L.fish.filter((f) => f.age >= 1).length;
 export const fry = (L) => L.fish.filter((f) => f.age === 0).length;
@@ -78,8 +102,10 @@ function grid(L) {
   };
 }
 
-// one tick: movement, spring breeding, nets closing, winter
-export function step(L, rules = {}) {
+// one step: movement, spring breeding, nets closing, winter. Returns what
+// happened: hauls (in the order the nets were thrown), spawns, winter.
+export function step(L) {
+  const out = { hauls: [], spawns: [], winter: false };
   const P = L.P, rng = L.rng, dt = P.DT;
   const ph = phase(P, L.t);
   const near = grid(L);
@@ -117,12 +143,12 @@ export function step(L, rules = {}) {
     f.x += Math.cos(h) * v * dt; f.y += Math.sin(h) * v * dt;
     if (f.cool > 0) f.cool -= dt;
     // spring: two adults that meet may spawn
-    if (ph.phase === "fish" && ph.spring && mate >= 0 && f.cool <= 0 && !rules.closedSpringBreeding) {
+    if (ph.phase === "fish" && ph.spring && mate >= 0 && f.cool <= 0) {
       if (rng() < P.BREED * dt * crowd) {
         const o = L.fish[mate];
         f.cool = o.cool = P.COOL_S;
-        for (let c = 0; c < P.CLUTCH; c++) born.push(spawn(P, rng, (f.x + o.x) / 2 + (rng() - 0.5) * 10, (f.y + o.y) / 2 + (rng() - 0.5) * 10, 0));
-        L.events.push({ t: L.t, kind: "spawn", x: (f.x + o.x) / 2, y: (f.y + o.y) / 2 });
+        for (let c = 0; c < P.CLUTCH; c++) born.push(spawn(L, (f.x + o.x) / 2 + (rng() - 0.5) * 10, (f.y + o.y) / 2 + (rng() - 0.5) * 10, 0));
+        out.spawns.push({ x: (f.x + o.x) / 2, y: (f.y + o.y) / 2 });
       }
     }
   }
@@ -132,24 +158,23 @@ export function step(L, rules = {}) {
   for (const net of L.nets) {
     if (net.closeAt > L.t + 1e-9) { still.push(net); continue; }
     const r = net.fine ? P.R_FINE : P.R_COARSE;
-    let got = 0, gotFry = 0;
+    let got = 0, gotFry = 0, slipped = 0;
     L.fish = L.fish.filter((f) => {
       const dx = f.x - net.x, dy = f.y - net.y;
       if (dx * dx + dy * dy > r * r) return true;
-      if (f.age === 0 && !net.fine) return true; // fry slip through a coarse mesh
+      if (f.age === 0 && !net.fine) { slipped++; return true; } // fry slip through a coarse mesh
       got++; if (f.age === 0) gotFry++;
       return false;
     });
-    net.got = got; net.gotFry = gotFry;
-    L.events.push({ t: L.t, kind: "haul", fam: net.fam, got, gotFry, x: net.x, y: net.y, fine: net.fine });
-    if (net.onHaul) net.onHaul(net);
+    out.hauls.push({ net, got, gotFry, slipped });
   }
   L.nets = still;
   const before = phase(P, L.t);
   L.t = Math.round((L.t + dt) * 1000) / 1000;
   const after = phase(P, L.t);
   // winter: at the end of each year's fishing, fry grow up, the old die
-  if (before.phase === "fish" && after.phase !== "fish") winter(L);
+  if (before.phase === "fish" && after.phase !== "fish") { winter(L); out.winter = true; }
+  return out;
 }
 
 function winter(L) {
@@ -163,14 +188,25 @@ function winter(L) {
 }
 
 // a net lands now; it closes SINK_S later. Fish nearby scatter.
-export function cast(L, fam, x, y, fine, onHaul) {
+export function cast(L, fam, x, y, fine) {
   const P = L.P;
-  L.nets.push({ fam, x, y, fine, closeAt: Math.round((L.t + P.SINK_S) * 1000) / 1000, onHaul });
+  const net = { fam, x, y, fine, closeAt: Math.round((L.t + P.SINK_S) * 1000) / 1000 };
+  L.nets.push(net);
   const r = (fine ? P.R_FINE : P.R_COARSE) * 1.6;
   for (const f of L.fish) {
     const dx = f.x - x, dy = f.y - y, d = Math.hypot(dx, dy);
     if (d < r && d > (fine ? P.R_FINE : P.R_COARSE) * 0.7) { f.scare = 0.5; f.sx = dx / d; f.sy = dy / d; }
   }
+  return net;
+}
+
+// Left alone after the season, how many grown fish would greet next year?
+// Steps the same lake on through one more spring and summer with no nets,
+// to the next winter. Changes the lake.
+export function nextYear(L) {
+  L.P = { ...L.P, YEARS: L.P.YEARS + 1 };
+  for (;;) { if (step(L).winter || dead(L)) break; }
+  return adults(L);
 }
 
 // a bot-like aim: try fish positions, pick the spot with the most catchable fish

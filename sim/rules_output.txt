@@ -1,8 +1,8 @@
-2 fine, rule from year 2: none     deaths 12/12  table catch 392  end adults 0
-2 fine, rule from year 2: ban      deaths 0/12  table catch 517  end adults 83
-2 fine, rule from year 2: spring   deaths 0/12  table catch 587  end adults 77
-2 fine, rule from year 2: nursery  deaths 0/12  table catch 527  end adults 76
-4 fine, rule from year 2: none     deaths 12/12  table catch 327  end adults 0
-4 fine, rule from year 2: ban      deaths 0/12  table catch 453  end adults 69
-4 fine, rule from year 2: spring   deaths 3/12  table catch 516  end adults 19
-4 fine, rule from year 2: nursery  deaths 1/12  table catch 449  end adults 25
+2 fine, rule from year 2: none     lake died 12/12  table kept 363  grown fish at the end 0  next year 0
+2 fine, rule from year 2: ban      lake died 0/12  table kept 478  grown fish at the end 83  next year 177
+2 fine, rule from year 2: spring   lake died 0/12  table kept 550  grown fish at the end 67  next year 153
+2 fine, rule from year 2: nursery  lake died 0/12  table kept 499  grown fish at the end 84  next year 169
+4 fine, rule from year 2: none     lake died 12/12  table kept 280  grown fish at the end 0  next year 0
+4 fine, rule from year 2: ban      lake died 0/12  table kept 420  grown fish at the end 82  next year 173
+4 fine, rule from year 2: spring   lake died 0/12  table kept 466  grown fish at the end 21  next year 51
+4 fine, rule from year 2: nursery  lake died 0/12  table kept 434  grown fish at the end 55  next year 121

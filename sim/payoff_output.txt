@@ -1,7 +1,7 @@
-0 fine: pay  133  132  133  125  deaths 0  endAdults 88
-1 fine: pay  178   92   90   90  deaths 4  endAdults 13
-2 fine: pay  110  112   68   68  deaths 24  endAdults 0
-3 fine: pay   80   78   84   52  deaths 24  endAdults 0
-4 fine: pay   65   71   68   59  deaths 24  endAdults 0
-switch: 125->178  90->112  68->84  52->59  all-coarse 133  all-fine 65
-ms 26654
+paired comparison, 24 seeds x 4 seats (fish kept, after paying for a fine net)
+others with fine nets 0: keep coarse 132.2  switch 164.7  switching paid in 86/96
+others with fine nets 1: keep coarse 95.1  switch 107.9  switching paid in 70/96
+others with fine nets 2: keep coarse 74.6  switch 81.7  switching paid in 64/96
+others with fine nets 3: keep coarse 68.2  switch 66.9  switching paid in 39/96
+all coarse: 132.2 each, lake died 0/24, grown fish next year 176.9
+all fine:   66.9 each, lake died 24/24, grown fish next year 0.0
