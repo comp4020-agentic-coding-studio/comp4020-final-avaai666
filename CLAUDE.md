@@ -34,12 +34,15 @@ Authority
 - The season's step, year and phase come from the start time and the
   clock (stepAt and phaseAt in src/lib/lake-sim.ts). Never keep the schedule
   in a variable that a restart would lose.
-- The fish draw only from the lake's own seeded source, inside
-  makeLake() and step(). Bots and the golden carp draw from separate sources
-  derived from the seed, the step and the family, so replaying the ledger
-  never runs a bot. Math.random() is never used in src/lib or the server.
-  The seed is secret until the season's end row: it never appears in an
-  event, a frame, a snapshot, a page or a log line before then.
+- Each season has a 256-bit secret. Every random stream is sfc32 seeded
+  from SHA-256 of the secret and the stream's name (streamRng). The fish draw
+  only from the "lake" stream, inside makeLake() and step(); the golden carp
+  only from "koi"; bots from SHA-256(secret | bot | step | family | k).
+  Replaying the ledger never runs a bot. Math.random() is never used in
+  src/lib or the server. The secret appears in no event, frame, snapshot,
+  page or log line before the season's end row.
+- A lake records the model version it was played with, and is only ever
+  replayed by that version.
 - Model and game constants live only in src/lib/constants.ts and
   src/lib/game-constants.ts.
 - Events, frames and snapshots never contain an idempotency key, a net
@@ -48,7 +51,8 @@ Authority
 The ledger
 - No state change without a ledger row, written in the same transaction.
   One catch that kills a pond writes two rows (catch, then collapse) in one
-  transaction; one that kills a lake writes three (cast, collapse, end).
+  transaction; a haul that leaves a lake with fewer than two fish
+  writes the haul and the season's end row in the same transaction.
 - Never write UPDATE or DELETE against the ledger.
 
 Scope
@@ -57,6 +61,9 @@ Scope
 - Nothing from "Not building" in DESIGN.md.
 - No client framework and no build step. The page is server-rendered HTML
   plus one plain script in /static. Node runs src/*.ts directly.
+- Every word on a page that carries meaning is English. Chinese is the
+  print's decoration (seals, the title, quotations) and always appears with
+  its English.
 
 Tests
 - Test first. A first run that fails because a function is "not implemented"
@@ -82,6 +89,10 @@ Honesty
 - Paste real command output, never a summary.
 - Never write in any file that something happened unless it happened in this
   repo (for example "deployed", "users liked it", "faster").
+- Simulation results are claims about the strategies, parameters and seeds
+  in sim/, and are written that way, never as facts about people.
+- Bot behaviour is a script. Never write in README.md, PROCESS.md or a test
+  name that a bot's response shows how people behave.
 
 Safety
 - Never read, print or commit mise.local.toml or FLY_API_TOKEN.
