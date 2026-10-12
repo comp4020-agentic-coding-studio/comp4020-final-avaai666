@@ -1,4 +1,4 @@
-// The dilemma, compared fairly (model v2.1). For each seed, each family in
+// The dilemma, compared fairly (model v2.2). For each seed, each family in
 // turn is the "focal" family; k of the other three plan fine nets. The same
 // seed is played twice: once with the focal family keeping a coarse net, once
 // with it planning a fine net. Same lake, same family, same seat: the only

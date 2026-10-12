@@ -3,9 +3,10 @@
 // winter; coarse nets let fry slip through, fine nets take everything in the
 // ring. v2.1: random streams are sfc32 seeded from SHA-256 of a long secret
 // (128 bits of state, not 32), fish carry ids, step() returns what happened,
-// dead() and nextYear() are defined here once.
+// dead() and nextYear() are defined here once. v2.2: the golden carp is part
+// of the model (its own "koi" stream), and inShallows() is defined once.
 import { createHash } from "node:crypto";
-export const MODEL_VERSION = "lake-sim 2.1";
+export const MODEL_VERSION = "lake-sim 2.2";
 export const DEFAULTS = {
   W: 1000, H: 700, RX: 460, RY: 315,      // lake ellipse in world units
   DT: 0.1,                                 // tick, seconds
@@ -23,6 +24,7 @@ export const DEFAULTS = {
   FINE_COST: 20,
   AIM_NOISE: 25,
   SHALLOW: 0.72,
+  KOI_AT_S: 17, KOI_FOR_S: 12, KOI_SPEED: 70, KOI_BONUS: 8, KOI_REACH: 6, // the golden carp
 };
 
 // sfc32 (Chris Doty-Humphrey's small fast counter generator), 128-bit state
@@ -58,7 +60,7 @@ export function inLake(P, x, y, m = 1) {
 export function makeLake(P, families, secret, opts = {}) {
   const rng = streamRng(secret, "lake");
   const cap = P.CAP_PER_FAMILY * families;
-  const L = { P, rng, cap, fish: [], t: 0, nextId: 0, nets: [], hist: [], start: 0 };
+  const L = { P, rng, cap, fish: [], t: 0, nextId: 0, nets: [], hist: [], start: 0, koiRng: streamRng(secret, "koi"), koi: null, koiYear: 0 };
   const n0 = opts.startCount ?? Math.round(cap * P.START_FRAC);
   for (let i = 0; i < n0; i++) L.fish.push(spawn(L, null, null, 1 + Math.floor(rng() * 3)));
   L.start = n0;
@@ -72,6 +74,9 @@ function spawn(L, x, y, age) {
   }
   return { id: L.nextId++, x, y, h: rng() * Math.PI * 2, age, cool: 0, scare: 0, sx: 0, sy: 0 };
 }
+
+// The shallows: one function, used everywhere (a point exactly on the line is in).
+export const inShallows = (P, x, y) => Math.hypot((x - P.W / 2) / P.RX, (y - P.H / 2) / P.RY) >= P.SHALLOW;
 
 // Fewer than two fish cannot spawn: the lake is dead and never comes back.
 export const dead = (L) => L.fish.length < 2;
@@ -106,6 +111,16 @@ function grid(L) {
 // happened: hauls (in the order the nets were thrown), spawns, winter.
 export function step(L) {
   const out = { hauls: [], spawns: [], winter: false };
+  // the golden carp: once a year, KOI_AT_S into fishing, for KOI_FOR_S; outside the ecology
+  {
+    const P = L.P, ph = phase(P, L.t);
+    if (ph.phase !== "fish") L.koi = null;
+    else if (L.koiYear !== ph.year && ph.into >= P.KOI_AT_S) {
+      L.koiYear = ph.year;
+      const a = L.koiRng() * Math.PI * 2;
+      L.koi = { x: P.W / 2 + Math.cos(a) * 200, y: P.H / 2 + Math.sin(a) * 120, h: a + Math.PI, until: L.t + P.KOI_FOR_S };
+    }
+  }
   const P = L.P, rng = L.rng, dt = P.DT;
   const ph = phase(P, L.t);
   const near = grid(L);
@@ -166,13 +181,22 @@ export function step(L) {
       got++; if (f.age === 0) gotFry++;
       return false;
     });
-    out.hauls.push({ net, got, gotFry, slipped });
+    let koi = false;
+    if (L.koi && Math.hypot(L.koi.x - net.x, L.koi.y - net.y) < r + P.KOI_REACH) { koi = true; L.koi = null; }
+    out.hauls.push({ net, got, gotFry, slipped, koi });
   }
   L.nets = still;
   const before = phase(P, L.t);
   L.t = Math.round((L.t + dt) * 1000) / 1000;
   const after = phase(P, L.t);
   // winter: at the end of each year's fishing, fry grow up, the old die
+  if (L.koi) {
+    const k = L.koi;
+    k.h += (L.koiRng() - 0.5) * 0.5;
+    if (Math.hypot((k.x - P.W / 2) / P.RX, (k.y - P.H / 2) / P.RY) > 0.85) k.h = Math.atan2(P.H / 2 - k.y, P.W / 2 - k.x);
+    k.x += Math.cos(k.h) * P.KOI_SPEED * dt; k.y += Math.sin(k.h) * P.KOI_SPEED * dt;
+    if (L.t >= k.until) L.koi = null;
+  }
   if (before.phase === "fish" && after.phase !== "fish") { winter(L); out.winter = true; }
   return out;
 }

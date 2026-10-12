@@ -1,7 +1,7 @@
 paired comparison, 24 seeds x 4 seats (fish kept, after paying for a fine net)
-others with fine nets 0: keep coarse 132.2  switch 164.7  switching paid in 86/96
-others with fine nets 1: keep coarse 95.1  switch 107.9  switching paid in 70/96
-others with fine nets 2: keep coarse 74.6  switch 81.7  switching paid in 64/96
-others with fine nets 3: keep coarse 68.2  switch 66.9  switching paid in 39/96
+others with fine nets 0: keep coarse 132.2  switch 164.3  switching paid in 86/96
+others with fine nets 1: keep coarse 95.1  switch 106.0  switching paid in 66/96
+others with fine nets 2: keep coarse 73.7  switch 79.5  switching paid in 64/96
+others with fine nets 3: keep coarse 66.5  switch 64.3  switching paid in 41/96
 all coarse: 132.2 each, lake died 0/24, grown fish next year 176.9
-all fine:   66.9 each, lake died 24/24, grown fish next year 0.0
+all fine:   64.3 each, lake died 24/24, grown fish next year 0.0

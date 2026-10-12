@@ -1,4 +1,4 @@
-// What the three village rules do (model v2.1). Four families, k of them
+// What the three village rules do (model v2.2). Four families, k of them
 // planning fine nets; from year 2 everyone keeps the rule. Run: node sim/rules.mjs 12
 import { season } from "./season.mjs";
 
