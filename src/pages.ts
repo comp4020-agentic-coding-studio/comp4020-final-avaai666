@@ -2,9 +2,9 @@
 // person typed is escaped.
 import { CATCH_INTERVAL_MS, K } from "./lib/constants.ts";
 import { available, growthPerMin } from "./lib/pond.ts";
-import type { LedgerRow, PondState, PondSummary } from "./lib/store.ts";
+import type { LedgerRow, PondState } from "./lib/store.ts";
 
-const esc = (s: string): string =>
+export const esc = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
 // A plain duration: "40 s", "12 min", "5 h", "3 days".
@@ -17,7 +17,7 @@ export function duration(ms: number): string {
 }
 
 // The script replaces the UTC text with the reader's local time.
-const time = (ms: number): string => {
+export const time = (ms: number): string => {
   const iso = new Date(ms).toISOString();
   return `<time datetime="${iso}">${iso.slice(0, 16).replace("T", " ")} UTC</time>`;
 };
@@ -38,7 +38,7 @@ export function rowWords(row: LedgerRow, name: string | null): string {
   }
 }
 
-function layout(title: string, body: string, head = ""): string {
+export function layout(title: string, body: string, head = ""): string {
   return `<!doctype html>
 <html lang="en-AU">
   <head>
@@ -48,6 +48,7 @@ function layout(title: string, body: string, head = ""): string {
     ${head}
     <link rel="stylesheet" href="/static/style.css" />
     <script src="/static/app.js" defer></script>
+    <script src="/static/lake.js" defer></script>
   </head>
   <body>
     <header><a href="/" class="home">Common Pool</a> <a href="/readme/">About</a></header>
@@ -59,37 +60,6 @@ function layout(title: string, body: string, head = ""): string {
 
 const digForm = (label = "Dig a new pond"): string =>
   `<form method="post" action="/dig" class="dig"><button type="submit">${label}</button></form>`;
-
-export function registerPage(ponds: PondSummary[], now: number): string {
-  const rows = ponds
-    .map(
-      (p) => `<tr>
-        <td><a href="/p/${p.pondId}">Pond ${p.pondId}</a></td>
-        <td>${p.dead ? "dead" : "alive"}</td>
-        <td>${duration(now - p.dugAt)}</td>
-        <td>${p.dead ? `died ${time(p.diedAt!)}` : `${p.available} fish`}</td>
-        <td>${p.nets}</td>
-      </tr>`,
-    )
-    .join("");
-  const table = ponds.length
-    ? `<table>
-        <caption>The most recent ponds</caption>
-        <thead><tr><th scope="col">Pond</th><th scope="col">State</th><th scope="col">Age</th><th scope="col">Fish</th><th scope="col">Nets</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>`
-    : "<p>No ponds yet. Dig the first one.</p>";
-  return layout(
-    "Common Pool",
-    `<main>
-      <h1>Common Pool</h1>
-      <p>A shared pond. Fish regrow on their own. Anyone in the pond can catch one at a time and keep it.
-      Catch too fast, all of you together, and the pond dies for good.</p>
-      ${digForm()}
-      ${table}
-    </main>`,
-  );
-}
 
 export interface PondView {
   state: PondState;

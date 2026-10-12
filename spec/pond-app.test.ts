@@ -117,11 +117,12 @@ function expectNoSecrets(data: string): void {
   expect(data).not.toMatch(/"(key|token|netId|net|idem_key)"/);
 }
 
-it("1. GET / is 200 and lists a pond after POST /dig, which answers 303 to /p/{id}", async () => {
+// GET / is now the lake home (DESIGN.md v2.2, "Pages and routes"); it no
+// longer lists ponds. The pond route itself is unchanged.
+it("1. POST /dig answers 303 to /p/{id}, which still answers 200", async () => {
   const pond = await dig();
-  const res = await fetch(at("/"));
+  const res = await fetch(at(`/p/${pond}`));
   expect(res.status).toBe(200);
-  expect(await res.text()).toContain(`href="/p/${pond}"`);
 });
 
 describe("2. join", () => {

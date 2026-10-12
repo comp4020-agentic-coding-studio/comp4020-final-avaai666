@@ -125,7 +125,9 @@ export type Snapshot = {
   rows: PublicRow[];
 };
 
-function publicRow(r: LakeLedgerRow, seatOf: Map<number, number>): PublicRow {
+// Exported so routes.ts can build the same public row shape for a lake that
+// has no live runner (before the start, or after the end).
+export function publicRow(r: LakeLedgerRow, seatOf: Map<number, number>): PublicRow {
   const data = r.kind === "end" ? r.data : stripSeed(r.data);
   return { id: r.id, at: r.at, step: r.step, kind: r.kind, seat: r.familyId === null ? null : (seatOf.get(r.familyId) ?? null), data };
 }
@@ -166,6 +168,7 @@ export interface Runner {
   seal(seat: number, to: number, seal: string): ActionResult<SealReason>;
   frame(): Frame;
   snapshot(): Snapshot;
+  rowsAfter(afterId: number, limit: number): PublicRow[];
   isOver(): boolean;
 }
 
@@ -559,8 +562,9 @@ class RunnerImpl implements Runner {
   // ---- human actions ----
 
   throwNet(seat: number, args: { x: number; y: number; net: "coarse" | "fine"; key: string }): ActionResult<ThrowReason> {
-    if (this.ended) return { ok: false, reason: "over" };
     const fam = this.families[seat];
+    if (this.store.throwByKey(fam.familyId, args.key)) return { ok: true }; // the same key again: the first answer, nothing changes
+    if (this.ended) return { ok: false, reason: "over" };
     const ph = phase(this.L.t, this.L.years);
     if (ph.phase !== "fish") return { ok: false, reason: "not_fishing" };
     if (!inLake(args.x, args.y)) return { ok: false, reason: "outside" };
@@ -690,6 +694,10 @@ class RunnerImpl implements Runner {
       vote: [...this.votes.entries()].map(([seat, rule]) => ({ seat, rule })),
       rows: this.store.allRows(this.lakeId).map((r) => publicRow(r, this.seatOf)),
     };
+  }
+
+  rowsAfter(afterId: number, limit: number): PublicRow[] {
+    return this.store.rowsAfter(this.lakeId, afterId, limit).map((r) => publicRow(r, this.seatOf));
   }
 }
 
