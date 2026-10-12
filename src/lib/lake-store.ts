@@ -71,14 +71,27 @@ export interface StartResult {
   bots: { familyId: number; seat: number; name: string; bot: BotKind }[];
 }
 
+export interface FamilyRow {
+  familyId: number;
+  seat: number;
+  name: string;
+  bot: BotKind | null;
+  token: string | null;
+}
+
 export interface LakeStore {
   openLake(): { lakeId: number; code: string };
   lakeByCode(code: string): LakeRow | null;
   lakeById(id: number): LakeRow | null;
   join(code: string, name: string): LakeJoinResult;
   familyByToken(token: string): { familyId: number; lakeId: number; seat: number; name: string } | null;
+  familiesOf(lakeId: number): FamilyRow[];
   start(lakeId: number, startedAt: number, bots: number): StartResult;
   append(lakeId: number, step: number, rows: NewRow[]): LakeLedgerRow[];
+  // One transaction for one step: `build` may call `write` more than once,
+  // each call seeing the row (with its id) the previous call wrote, so a
+  // haul can carry the id of the throw it closes.
+  appendStep<T>(lakeId: number, step: number, build: (write: (row: NewRow) => LakeLedgerRow) => T): T;
   rowsAfter(lakeId: number, afterId: number, limit: number): LakeLedgerRow[];
   allRows(lakeId: number): LakeLedgerRow[];
   throwByKey(familyId: number, key: string): LakeLedgerRow | null;
@@ -228,7 +241,7 @@ export function openLakeStore(file: string, now: Clock, onCommit?: (ms: number) 
     familyCount: db.prepare("SELECT count(*) AS n FROM families WHERE lake = ?"),
     nameTaken: db.prepare("SELECT 1 FROM families WHERE lake = ? AND name_key = ?"),
     familyByToken: db.prepare("SELECT id, lake, seat, name FROM families WHERE token = ?"),
-    familiesOf: db.prepare("SELECT id, seat, name, bot FROM families WHERE lake = ? ORDER BY seat"),
+    familiesOf: db.prepare("SELECT id, seat, name, bot, token FROM families WHERE lake = ? ORDER BY seat"),
     hasStart: db.prepare("SELECT 1 FROM lake_ledger WHERE lake = ? AND kind = 'start'"),
     hasEnd: db.prepare("SELECT 1 FROM lake_ledger WHERE lake = ? AND kind = 'end'"),
     insertRow: db.prepare(
@@ -277,6 +290,20 @@ export function openLakeStore(file: string, now: Clock, onCommit?: (ms: number) 
     key: string | null,
   ): LakeLedgerRow {
     return toRow(q.insertRow.get(lakeId, at, step, kind, familyId, JSON.stringify(data), key) as unknown as DbLedgerRow);
+  }
+
+  // A throw's key, seen again, returns the row already written; otherwise one
+  // row is inserted. Shared by append() (independent rows) and appendStep()
+  // (a step's rows, some of which may reference another's freshly-made id).
+  function writeRow(lakeId: number, at: number, step: number | null, r: NewRow): LakeLedgerRow {
+    if (r.kind === "throw" && r.key) {
+      const prior = q.throwByKey.get(r.familyId, r.key) as unknown as DbLedgerRow | undefined;
+      if (prior) return toRow(prior);
+    }
+    if (LAKE_WIDE_KINDS.has(r.kind) !== (r.familyId === null)) {
+      throw new Error(`append: ${r.kind} must ${LAKE_WIDE_KINDS.has(r.kind) ? "not " : ""}carry a family`);
+    }
+    return insertRow(lakeId, at, step, r.kind, r.familyId, r.data, r.key ?? null);
   }
 
   return {
@@ -334,6 +361,12 @@ export function openLakeStore(file: string, now: Clock, onCommit?: (ms: number) 
       return row ? { familyId: row.id, lakeId: row.lake, seat: row.seat, name: row.name } : null;
     },
 
+    familiesOf(lakeId) {
+      return (q.familiesOf.all(lakeId) as { id: number; seat: number; name: string; bot: BotKind | null; token: string | null }[]).map(
+        (f) => ({ familyId: f.id, seat: f.seat, name: f.name, bot: f.bot, token: f.token }),
+      );
+    },
+
     start(lakeId, startedAt, bots) {
       return tx((): StartResult => {
         if (bots > BOT_FILL_ORDER.length) throw new Error(`start: ${bots} bots requested, only ${BOT_FILL_ORDER.length} kinds exist`);
@@ -369,16 +402,14 @@ export function openLakeStore(file: string, now: Clock, onCommit?: (ms: number) 
     append(lakeId, step, rows) {
       return tx(() => {
         const at = now();
-        return rows.map((r) => {
-          if (r.kind === "throw" && r.key) {
-            const prior = q.throwByKey.get(r.familyId, r.key) as unknown as DbLedgerRow | undefined;
-            if (prior) return toRow(prior);
-          }
-          if (LAKE_WIDE_KINDS.has(r.kind) !== (r.familyId === null)) {
-            throw new Error(`append: ${r.kind} must ${LAKE_WIDE_KINDS.has(r.kind) ? "not " : ""}carry a family`);
-          }
-          return insertRow(lakeId, at, step, r.kind, r.familyId, r.data, r.key ?? null);
-        });
+        return rows.map((r) => writeRow(lakeId, at, step, r));
+      });
+    },
+
+    appendStep(lakeId, step, build) {
+      return tx(() => {
+        const at = now();
+        return build((r) => writeRow(lakeId, at, step, r));
       });
     },
 

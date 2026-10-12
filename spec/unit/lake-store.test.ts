@@ -118,6 +118,19 @@ describe("familyByToken", () => {
   });
 });
 
+describe("familiesOf", () => {
+  it("lists every family, people then bots, in seat order with each bot's kind and no token", () => {
+    const { lakeId, code } = store.openLake();
+    const ava = joinOk(code, "Ava");
+    store.start(lakeId, t, 2);
+    expect(store.familiesOf(lakeId)).toEqual([
+      { familyId: ava.familyId, seat: 0, name: "Ava", bot: null, token: ava.token },
+      { familyId: expect.any(Number), seat: 1, name: "Jin", bot: "greedy", token: null },
+      { familyId: expect.any(Number), seat: 2, name: "Mei", bot: "follower", token: null },
+    ]);
+  });
+});
+
 describe("start", () => {
   it("writes the start row (families, capacity, model, secretHash) and the bot families, seated after the people", () => {
     const { lakeId, code } = store.openLake();
@@ -182,6 +195,35 @@ describe("append and throw idempotency", () => {
     expect(all.map((r) => r.kind)).toContain("seal");
     const after = store.rowsAfter(lakeId, rows[0].id - 1, 10);
     expect(after.map((r) => r.id)).toEqual(expect.arrayContaining(rows.map((r) => r.id)));
+  });
+});
+
+describe("appendStep", () => {
+  it("lets a later row in the same transaction carry an earlier one's freshly-made id", () => {
+    const { lakeId, code } = store.openLake();
+    const { familyId } = joinOk(code, "Ava");
+    store.start(lakeId, t, 0);
+    const [throwRow, haulRow] = store.appendStep(lakeId, 40, (write) => {
+      const thrown = write({ kind: "throw", familyId, data: { x: 1, y: 2, fine: false, breach: false, under: 0 } });
+      const haul = write({ kind: "haul", familyId, data: { throw: thrown.id, got: 1, fry: 0, slipped: 0, koi: false, rival: null } });
+      return [thrown, haul];
+    });
+    expect((haulRow.data as { throw: number }).throw).toBe(throwRow.id);
+    expect(store.allRows(lakeId).map((r) => r.kind)).toContain("haul");
+  });
+
+  it("rolls back every row if build throws", () => {
+    const { lakeId, code } = store.openLake();
+    const { familyId } = joinOk(code, "Ava");
+    store.start(lakeId, t, 0);
+    const before = store.allRows(lakeId).length;
+    expect(() =>
+      store.appendStep(lakeId, 40, (write) => {
+        write({ kind: "buy", familyId, data: {} });
+        throw new Error("boom");
+      }),
+    ).toThrow("boom");
+    expect(store.allRows(lakeId).length).toBe(before);
   });
 });
 

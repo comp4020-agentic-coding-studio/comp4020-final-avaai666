@@ -100,3 +100,5 @@ export const MEI_BREACHES = 2; // breaches by others before Mei breaks a rule
 export const MEI_PROMISE_LIMIT = 2; // Mei refuses a promise once this many others own fine nets
 export const JIN_KEEPS = 0.5; // Jin keeps a promise when his draw is at least this
 export const WANG_ASKS_AT_S = 18; // into fishing, once a year
+export const THROW_COOLDOWN_STEPS = 35; // CAST_S / DT: a family may throw this often
+export const RIVAL_REACH = 84; // an empty net blames a rival's haul within this many units, in the 6 steps before

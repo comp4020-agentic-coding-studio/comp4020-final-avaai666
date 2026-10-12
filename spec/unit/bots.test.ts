@@ -168,26 +168,29 @@ describe("bots vote", () => {
 });
 
 describe("botRandom", () => {
-  it("is the same for the same arguments, and in [0, 1)", () => {
-    for (let step = 0; step < 200; step++) {
-      for (let fam = 0; fam < 4; fam++) {
-        const x = botRandom("s", step, fam, 0);
-        expect(botRandom("s", step, fam, 0)).toBe(x);
-        expect(x).toBeGreaterThanOrEqual(0);
-        expect(x).toBeLessThan(1);
+  const take = (r: () => number, n = 5): number[] => Array.from({ length: n }, () => r());
+
+  it("is a stream of numbers in [0, 1), the same stream for the same arguments", () => {
+    for (let step = 0; step < 50; step++) {
+      for (let seat = 0; seat < 4; seat++) {
+        const draws = take(botRandom("s", step, seat));
+        expect(take(botRandom("s", step, seat))).toEqual(draws);
+        for (const x of draws) {
+          expect(x).toBeGreaterThanOrEqual(0);
+          expect(x).toBeLessThan(1);
+        }
       }
     }
   });
 
   it("changes with each argument", () => {
-    const x = botRandom("s", 10, 1, 0);
-    expect(botRandom("t", 10, 1, 0)).not.toBe(x);
-    expect(botRandom("s", 11, 1, 0)).not.toBe(x);
-    expect(botRandom("s", 10, 2, 0)).not.toBe(x);
-    expect(botRandom("s", 10, 1, 1)).not.toBe(x);
+    const x = botRandom("s", 10, 1)();
+    expect(botRandom("t", 10, 1)()).not.toBe(x);
+    expect(botRandom("s", 11, 1)()).not.toBe(x);
+    expect(botRandom("s", 10, 2)()).not.toBe(x);
   });
 
-  it("is the first draw of the stream SHA-256(secret | bot | step | family | k)", () => {
-    expect(botRandom("s", 10, 1, 2)).toBe(streamRng("s", "bot|10|1|2")());
+  it("is streamRng(secret, \"bot|step|seat\"): one stream per bot's step, seeded with SHA-256(secret | bot | step | seat)", () => {
+    expect(take(botRandom("s", 10, 1))).toEqual(take(streamRng("s", "bot|10|1")));
   });
 });

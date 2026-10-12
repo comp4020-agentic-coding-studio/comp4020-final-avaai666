@@ -98,9 +98,9 @@ export function botNet(hasFine: boolean, rule: Rule, breaks: boolean): boolean {
   return hasFine && (rule !== "ban" || breaks);
 }
 
-// A number in [0, 1) that depends only on its arguments: the first draw of
-// the stream SHA-256(secret | bot | step | family | k), separate from the
-// lake's. k numbers the draws a bot makes in one step.
-export function botRandom(secret: string, step: number, familyIndex: number, k: number): number {
-  return streamRng(secret, `bot|${step}|${familyIndex}|${k}`)();
+// A bot's decisions in one step draw from one stream, seeded with
+// SHA-256(secret | bot | step | seat), separate from the lake's and from
+// each other bot's and other step's.
+export function botRandom(secret: string, step: number, seat: number): () => number {
+  return streamRng(secret, `bot|${step}|${seat}`);
 }
