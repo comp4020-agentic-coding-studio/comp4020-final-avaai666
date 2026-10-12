@@ -1,11 +1,12 @@
-// The lake as agents (DESIGN.md v2.1): a typed port of sim/lakesim.mjs
-// (model "lake-sim 2.1"), which it must match step for step, and of
+// The lake as agents (DESIGN.md v2.2): a typed port of sim/lakesim.mjs
+// (model "lake-sim 2.2"), which it must match step for step, and of
 // sim/season.mjs and sim/payoff.mjs for the simulations. Every arithmetic
 // operation is in the same order as there, so the numbers are identical, not
 // close. Differences, none of which draws a random number or changes a fish:
 // the lake's sfc32 state is a plain object on the lake (so a lake is plain
 // data); nets carry the order they were thrown in; the year count is on the
-// lake instead of in a copied parameter object.
+// lake instead of in a copied parameter object; the golden carp's own stream
+// state lives in koiRand rather than a closure.
 import { createHash } from "node:crypto";
 import {
   AIM_ANYWHERE,
@@ -72,7 +73,7 @@ import {
 import type { Rule } from "./rules.ts";
 import { canBuyFine } from "./village.ts";
 
-export const MODEL_VERSION = "lake-sim 2.1";
+export const MODEL_VERSION = "lake-sim 2.2";
 
 export type Fish = {
   id: number;
@@ -90,8 +91,15 @@ export type Net = { seq: number; fam: number; x: number; y: number; fine: boolea
 
 export type Sfc = { a: number; b: number; c: number; d: number };
 
+// The golden carp: outside the ecology, does not breed, is not a fish of the
+// lake.
+export type Koi = { x: number; y: number; h: number; until: number };
+
 export type Lake = {
   rand: Sfc; // the "lake" stream
+  koiRand: Sfc; // the "koi" stream
+  koi: Koi | null;
+  koiYear: number; // the year the golden carp last appeared
   years: number; // YEARS, or one more once nextYear() has run
   cap: number;
   fish: Fish[];
@@ -108,6 +116,7 @@ export type Haul = {
   got: number; // fish taken, fry included
   gotFry: number;
   slipped: number; // fry inside a coarse ring that slipped through
+  koi: boolean; // did this net take the golden carp
 };
 
 export type StepResult = { hauls: Haul[]; spawns: { x: number; y: number }[]; winter: boolean };
@@ -155,6 +164,7 @@ export function streamRng(secret: string, name: string): () => number {
 export const secretHash = (secret: string): string => createHash("sha256").update(secret).digest("hex");
 
 const rng = (L: Lake): number => sfcNext(L.rand);
+const koiRng = (L: Lake): number => sfcNext(L.koiRand);
 
 // ---- the lake ----
 
@@ -179,6 +189,9 @@ export function makeLake(families: number, secret: string, { startCount }: { sta
   const cap = CAP_PER_FAMILY * families;
   const L: Lake = {
     rand: streamState(secret, "lake"),
+    koiRand: streamState(secret, "koi"),
+    koi: null,
+    koiYear: 0,
     years: YEARS,
     cap,
     fish: [],
@@ -278,6 +291,14 @@ function grid(L: Lake): (x: number, y: number, fn: (j: number) => void) => void 
 export function step(L: Lake): StepResult {
   const dt = DT;
   const ph = phase(L.t, L.years);
+  // the golden carp: once a year, KOI_AT_S into fishing, for KOI_FOR_S; outside the ecology
+  if (ph.phase !== "fish") {
+    L.koi = null;
+  } else if (L.koiYear !== ph.year && ph.into >= KOI_AT_S) {
+    L.koiYear = ph.year;
+    const a = koiRng(L) * Math.PI * 2;
+    L.koi = { x: W / 2 + Math.cos(a) * KOI_START_RX, y: H / 2 + Math.sin(a) * KOI_START_RY, h: a + Math.PI, until: L.t + KOI_FOR_S };
+  }
   const near = grid(L);
   const N = L.fish.length;
   const crowd = Math.max(0, 1 - N / L.cap);
@@ -365,6 +386,14 @@ export function step(L: Lake): StepResult {
   L.t = Math.round((L.t + dt) * 1000) / 1000;
   const after = phase(L.t, L.years);
   // winter: at the end of each year's fishing, fry grow up, the old die
+  if (L.koi) {
+    const k = L.koi;
+    k.h += (koiRng(L) - 0.5) * KOI_TURN;
+    if (ellipseRadius(k.x, k.y) > KOI_TURN_BACK) k.h = Math.atan2(H / 2 - k.y, W / 2 - k.x);
+    k.x += Math.cos(k.h) * KOI_SPEED * dt;
+    k.y += Math.sin(k.h) * KOI_SPEED * dt;
+    if (L.t >= k.until) L.koi = null;
+  }
   const isWinter = before.phase === "fish" && after.phase !== "fish";
   if (isWinter) winter(L);
   return { hauls, spawns, winter: isWinter };
@@ -396,7 +425,12 @@ export function closeNets(L: Lake): Haul[] {
       if (f.age === 0) gotFry++;
       return false;
     });
-    hauls.push({ net, got, gotFry, slipped });
+    let koi = false;
+    if (L.koi && Math.hypot(L.koi.x - net.x, L.koi.y - net.y) < r + KOI_REACH) {
+      koi = true;
+      L.koi = null;
+    }
+    hauls.push({ net, got, gotFry, slipped, koi });
   }
   L.nets = still;
   return hauls;
@@ -487,14 +521,13 @@ export type SeasonResult = {
   nextYearAdults: number; // grown fish next year if left alone; 0 if it died
 };
 
-type Koi = { x: number; y: number; h: number; until: number };
-
 // The twin of season() in sim/season.mjs, with the same random streams in the
 // same order. Every family throws on its own CAST_S clock at the densest spot
 // its net can hold, taking a chance with probability `take`. A family that
 // plans a fine net buys it the moment its basket can pay (not under a ban);
 // until then it throws coarse. Everyone keeps `ruleFrom2` from year 2. The
-// golden carp swims each year.
+// golden carp swims each year, as part of the lake (step()). The season ends
+// when the lake dies, as in the game.
 export function simulateSeason(
   plansFine: boolean[],
   secret: string,
@@ -502,26 +535,17 @@ export function simulateSeason(
 ): SeasonResult {
   const n = plansFine.length;
   const L = makeLake(n, secret);
-  const aim = streamRng(secret, "aim"),
-    koiRng = streamRng(secret, "koi");
+  const aim = streamRng(secret, "aim");
   const landed: number[] = new Array(n).fill(0),
     spent: number[] = new Array(n).fill(0),
     hasFine: boolean[] = new Array(n).fill(false);
   const next = plansFine.map(() => aim() * CAST_S);
   let died: number | null = null,
-    koi: Koi | null = null,
-    koiYear = 0,
     fryTaken = 0;
   for (;;) {
     const ph = phase(L.t);
-    if (ph.phase === "over") break;
+    if (ph.phase === "over" || died !== null) break;
     if (ph.phase === "fish") {
-      // the golden carp
-      if (koiYear !== ph.year && ph.into >= KOI_AT_S) {
-        koiYear = ph.year;
-        const a = koiRng() * Math.PI * 2;
-        koi = { x: W / 2 + Math.cos(a) * KOI_START_RX, y: H / 2 + Math.sin(a) * KOI_START_RY, h: a + Math.PI, until: L.t + KOI_FOR_S };
-      }
       const rule = ph.year >= 2 ? ruleFrom2 : "none";
       const order = plansFine.map((_, i) => i).sort(() => aim() - 0.5);
       for (const i of order) {
@@ -535,31 +559,24 @@ export function simulateSeason(
         if (rule === "spring" && ph.spring) continue;
         const fine = hasFine[i] && rule !== "ban";
         const s = bestSpot(L, fine, aim, AIM_TRIES, rule === "nursery" ? SHALLOW * NURSERY_AIM : AIM_ANYWHERE);
-        castNet(L, i, s.x + (aim() - 0.5) * 2 * AIM_NOISE, s.y + (aim() - 0.5) * 2 * AIM_NOISE, fine);
+        let x = s.x + (aim() - 0.5) * 2 * AIM_NOISE;
+        let y = s.y + (aim() - 0.5) * 2 * AIM_NOISE;
+        // a family keeping the shallows rule never lands past the line
+        if (rule === "nursery" && inShallows(x, y)) {
+          x = s.x;
+          y = s.y;
+        }
+        castNet(L, i, x, y, fine);
       }
     } else {
       plansFine.forEach((_, i) => {
         if (next[i] < L.t) next[i] = L.t + CAST_S * aim();
       });
-      koi = null;
     }
     const out = step(L);
     for (const h of out.hauls) {
-      landed[h.net.fam] += h.got;
+      landed[h.net.fam] += h.got + (h.koi ? KOI_BONUS : 0);
       fryTaken += h.gotFry;
-      const r = (h.net.fine ? R_FINE : R_COARSE) + KOI_REACH;
-      if (koi && Math.hypot(koi.x - h.net.x, koi.y - h.net.y) < r) {
-        landed[h.net.fam] += KOI_BONUS;
-        koi = null;
-      }
-    }
-    if (koi) {
-      koi.h += (koiRng() - 0.5) * KOI_TURN;
-      const e = ellipseRadius(koi.x, koi.y);
-      if (e > KOI_TURN_BACK) koi.h = Math.atan2(H / 2 - koi.y, W / 2 - koi.x);
-      koi.x += Math.cos(koi.h) * KOI_SPEED * DT;
-      koi.y += Math.sin(koi.h) * KOI_SPEED * DT;
-      if (L.t >= koi.until) koi = null;
     }
     if (died === null && dead(L)) died = ph.year;
   }

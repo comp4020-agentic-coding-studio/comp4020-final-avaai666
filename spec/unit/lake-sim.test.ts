@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as ref from "../../sim/lakesim.mjs";
-import { CLUTCH, FISH_S, MEET_S, R_COARSE, R_FINE, SEASON_MS, SINK_S } from "../../src/lib/game-constants.ts";
+import { CLUTCH, FISH_S, KOI_AT_S, KOI_REACH, MEET_S, R_COARSE, R_FINE, SEASON_MS, SINK_S } from "../../src/lib/game-constants.ts";
 import {
   adults,
   bestSpot,
@@ -35,7 +35,7 @@ const fishAt = (id: number, x: number, y: number, age: number): Fish => ({
 });
 
 describe("matches the reference", () => {
-  it("same secret, same throws, 700 steps: identical fish and hauls", () => {
+  it("same secret, same throws, 700 steps (a winter and a golden carp): identical fish and hauls", () => {
     const SECRET = "reference-check";
     const L0 = ref.makeLake({ ...ref.DEFAULTS }, 4, SECRET);
     const L1 = makeLake(4, SECRET);
@@ -81,7 +81,13 @@ describe("matches the reference", () => {
     expect(L1.fish.map(({ id, x, y, age, h }) => ({ id, x, y, age, h }))).toEqual(
       L0.fish.map(({ id, x, y, age, h }) => ({ id, x, y, age, h })),
     );
-    const view = (h: { net: { fam: number; x: number; y: number; fine: boolean }; got: number; gotFry: number; slipped: number }) => ({
+    const view = (h: {
+      net: { fam: number; x: number; y: number; fine: boolean };
+      got: number;
+      gotFry: number;
+      slipped: number;
+      koi: boolean;
+    }) => ({
       fam: h.net.fam,
       x: h.net.x,
       y: h.net.y,
@@ -89,6 +95,7 @@ describe("matches the reference", () => {
       got: h.got,
       gotFry: h.gotFry,
       slipped: h.slipped,
+      koi: h.koi,
     });
     expect(hauls.map(view)).toEqual(refHauls.map(view));
     // the script did catch fish and fry, and fry slipped, so the comparison is not of empty nets
@@ -98,8 +105,46 @@ describe("matches the reference", () => {
   });
 
   it("the model version is the reference's", () => {
-    expect(MODEL_VERSION).toBe("lake-sim 2.1");
+    expect(MODEL_VERSION).toBe("lake-sim 2.2");
     expect(MODEL_VERSION).toBe(ref.MODEL_VERSION);
+  });
+});
+
+describe("the golden carp", () => {
+  it("is part of the lake: a net that closes within its radius plus 6 of it takes it, got counted separately", () => {
+    const L = makeLake(1, "koi-catch", { startCount: 0 });
+    L.koi = { x: 500, y: 350, h: 0, until: 999 };
+    castNet(L, 0, 500, 350, true);
+    L.fish = [fishAt(1, 500, 350, 1)];
+    L.t = SINK_S;
+    const [haul] = closeNets(L);
+    expect(haul).toMatchObject({ got: 1, koi: true });
+    expect(L.koi).toBeNull();
+  });
+
+  it("a net that does not reach it leaves it swimming", () => {
+    const L = makeLake(1, "koi-miss", { startCount: 0 });
+    L.koi = { x: 500 + R_FINE + KOI_REACH + 1, y: 350, h: 0, until: 999 };
+    castNet(L, 0, 500, 350, true);
+    L.t = SINK_S;
+    const [haul] = closeNets(L);
+    expect(haul.koi).toBe(false);
+    expect(L.koi).not.toBeNull();
+  });
+
+  it("appears once a year at KOI_AT_S into fishing and is gone by winter", () => {
+    const L = makeLake(4, "koi-year");
+    let sawEarly = false;
+    for (;;) {
+      const ph = phase(L.t);
+      if (ph.phase === "fish" && ph.into < KOI_AT_S && L.koi !== null) sawEarly = true;
+      const out = step(L);
+      if (out.winter) {
+        expect(L.koi).toBeNull();
+        break;
+      }
+    }
+    expect(sawEarly).toBe(false);
   });
 });
 

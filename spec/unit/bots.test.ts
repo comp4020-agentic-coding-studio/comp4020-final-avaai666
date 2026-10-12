@@ -91,7 +91,7 @@ describe("bots break rules", () => {
     ...over,
   });
 
-  it("Jin keeps a rule only after two different families stamp 怒 in the same year", () => {
+  it("Jin keeps a rule only after two different families stamp \"stop that\" (怒) in the same year", () => {
     expect(botBreaks("greedy", view({}))).toBe(true);
     expect(botBreaks("greedy", view({ angerOnMe: [{ from: 1, year: 3 }] }))).toBe(true);
     expect(botBreaks("greedy", view({ angerOnMe: [{ from: 1, year: 3 }, { from: 2, year: 3 }] }))).toBe(false);
@@ -107,7 +107,7 @@ describe("bots break rules", () => {
     expect(botBreaks("greedy", view({ angerOnMe: anger, year: 4 }))).toBe(true);
   });
 
-  it("Mei breaks a rule after two breaches by others that year, and stops after one 怒", () => {
+  it("Mei breaks a rule after two breaches by others that year, and stops after one \"stop that\" (怒)", () => {
     expect(botBreaks("follower", view({ breachesByOthers: [{ family: 1, year: 3 }] }))).toBe(false);
     expect(botBreaks("follower", view({ breachesByOthers: [{ family: 1, year: 2 }, { family: 1, year: 3 }] }))).toBe(false);
     const two = [{ family: 1, year: 3 }, { family: 2, year: 3 }];
@@ -142,16 +142,16 @@ describe("bots vote", () => {
     ...over,
   });
 
-  it("Old Wang votes 禁 once anyone has a fine net", () => {
+  it("Old Wang votes ban once anyone has a fine net", () => {
     expect(botVote("careful", view({ anyFine: true, maxFryTaken: 50, adults: 10 }))).toBe("ban");
   });
 
-  it("otherwise 护 once anyone has taken more than 6 fry", () => {
+  it("otherwise keep out of the shallows once anyone has taken more than 6 fry", () => {
     expect(botVote("careful", view({ maxFryTaken: 7, adults: 10 }))).toBe("nursery");
     expect(botVote("careful", view({ maxFryTaken: 6 }))).toBe("none");
   });
 
-  it("otherwise 休 when grown fish are below 60% of the start", () => {
+  it("otherwise no spring fishing when grown fish are below 60% of the start", () => {
     expect(botVote("careful", view({ adults: 59 }))).toBe("spring");
     expect(botVote("careful", view({ adults: 60 }))).toBe("none");
   });
