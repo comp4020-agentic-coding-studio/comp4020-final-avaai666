@@ -24,20 +24,23 @@ Authority
 - The fish are moved, born, aged and caught only by step() in
   src/lib/lake-sim.ts, which must match sim/lakesim.mjs step for step.
   (v0.4 ponds keep stockAt() in src/lib/pond.ts until they are retired.)
-- A timer may read and broadcast state. The tick may write only two
-  kinds of rows, each through the same store function a request uses: rows
-  that follow from time (a net's haul, a year's rule, the season's end),
-  stamped with the step they happened at; and the actions of bot families
-  (throws, net purchases, votes, seals). Nothing else writes on a timer.
-  While the server is down nothing happens: on restart a lake is replayed
-  from its ledger and stepped on to the present with nobody throwing.
+- A timer may read and broadcast state. The lake runner's timer may write
+  only two kinds of rows, through the same store functions a request uses:
+  rows that follow from time (a haul, a winter's building, a year's rule, the
+  season's end), at the step they happen; and the actions of bot families
+  (throws, net purchases, promise asks and answers, seals, votes). All rows of
+  one step are written in one transaction. Nothing else writes on a timer.
+  While the server is down nothing happens: on restart a lake is rebuilt from
+  its ledger and stepped on to the present with nobody throwing, bots
+  included.
 - The season's step, year and phase come from the start time and the
   clock (stepAt and phaseAt in src/lib/lake-sim.ts). Never keep the schedule
   in a variable that a restart would lose.
 - Each season has a 256-bit secret. Every random stream is sfc32 seeded
   from SHA-256 of the secret and the stream's name (streamRng). The fish draw
   only from the "lake" stream, inside makeLake() and step(); the golden carp
-  only from "koi"; bots from SHA-256(secret | bot | step | family | k).
+  only from "koi"; a bot's decisions in one step from one stream seeded with
+  SHA-256(secret | bot | step | seat).
   Replaying the ledger never runs a bot. Math.random() is never used in
   src/lib or the server. The secret appears in no event, frame, snapshot,
   page or log line before the season's end row.
@@ -64,6 +67,7 @@ Scope
 - Every word on a page that carries meaning is English. Chinese is the
   print's decoration (seals, the title, quotations) and always appears with
   its English.
+- Test names are English too.
 
 Tests
 - Test first. A first run that fails because a function is "not implemented"

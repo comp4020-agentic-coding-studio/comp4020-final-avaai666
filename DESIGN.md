@@ -1,4 +1,4 @@
-# Next Year, No Fish (明年无鱼): design v2.1
+# Next Year, No Fish (明年无鱼): design v2.2
 
 ## What it is
 
@@ -50,7 +50,7 @@ quotations) and always with its English.
   the step (stepAt, phaseAt). Nothing about the schedule lives only in memory.
 - Year 1 has no rule.
 
-## The lake (model "lake-sim 2.1")
+## The lake (model "lake-sim 2.2")
 
 The reference implementation is sim/lakesim.mjs. src/lib/lake-sim.ts must give
 exactly the same fish, step for step, for the same secret and the same
@@ -74,13 +74,22 @@ model version it was played with.
   12% of the older fish die.
 - The lake is dead when fewer than two fish are left: one fish cannot spawn.
   This is the only definition of death, in the sims, the tests and the game.
+  The season ends at that step, in the sims too: nobody fishes a dead lake.
+- The golden carp is part of the model, with its own "koi" stream. Once a
+  year, at the first step 17 seconds into fishing, it appears; it swims for 12
+  seconds and leaves at winter. At each step, after the nets close, a net that
+  closed within its radius + 6 of the carp takes it (nets in throw order);
+  then the carp moves. It is outside the ecology: it does not breed and is not
+  a fish of the lake. A haul that takes it lands 8 extra fish.
 
 ## Randomness, and why the seed is secret
 
 - Each season has a 256-bit secret. Each random stream is sfc32 (128 bits of
   state) seeded from SHA-256(secret | name): "lake" for the fish, "koi" for
-  the golden carp, and, for bots, SHA-256(secret | bot | step | family | k).
-  Replaying the ledger never runs a bot.
+  the golden carp, and, for a bot's decisions in one step, one stream from
+  SHA-256(secret | bot | step | seat). Replaying the ledger never runs a bot.
+- The secret is 32 random bytes (randomBytes(32), hex). It is kept in the
+  lake's row in the database, which no route reads before the end row.
 - The start row publishes SHA-256(secret). The end row reveals the secret.
   While the season runs, the secret is in no event, frame, page or log line,
   so nobody can predict where the fish will swim. Afterwards anyone can check
@@ -89,10 +98,10 @@ model version it was played with.
 ## Nets
 
 - A family may throw once every 3.5 seconds, only during fishing, at any point
-  inside the lake. A throw that reaches the server between two steps is
-  applied at the start of the next step, before the fish move; throws in the
-  same step are applied in the order the server accepted them. The ledger
-  row records that step.
+  inside the lake. A throw is applied at the next step the lake's runner
+  will run (the runner's own step counter, not the clock), before the fish
+  move; throws in the same step are applied in ledger order (the row id is
+  the accepted order). The ledger row records that step.
 - The net closes 0.6 seconds (6 steps) after it lands and takes every fish
   inside its ring at that step. A coarse net (radius 36) holds grown fish; fry
   slip through. A fine-mesh net (radius 42) holds everything. Nets that close
@@ -117,17 +126,16 @@ model version it was played with.
   during fishing. A family that owns one may still throw its coarse net.
 - A family's score is fish kept: built plus basket. Everyone sees every
   house, every basket and every net.
-- The golden carp: once a year, 17 seconds into fishing, a golden carp swims
-  for 12 seconds along a path from the "koi" stream. A net that closes within
-  its radius + 6 of it takes it (first net thrown first) and lands 8 extra
-  fish in the basket. It is outside the ecology: it does not breed and is not
-  a fish of the lake. The simulations include it.
+- The golden carp's 8 fish go into the basket like any other catch (see The
+  lake). The simulations include it.
 
 ## Promises
 
 - During fishing a family may ask another: "coarse nets only, until winter?"
   The other accepts or says no. An accepted promise is a red thread between
   the two houses until winter.
+- Promises work between any two families, people or bots. With two people
+  and two bots, the two people can promise each other.
 - Nothing enforces a promise. A family that throws a fine net while it has a
   promise breaks it: the thread snaps, everyone sees, and the record keeps it.
 - This is the game's one negotiation between people. It works with two
@@ -167,11 +175,13 @@ what they do is not evidence about how people behave.
   otherwise "keep out of the shallows" once any one family has taken more than
   6 fry in the season, otherwise "no spring fishing" when grown fish are below
   60% of the start, otherwise no rule; keeps every rule and promise; stamps
-  怒 on a family the first time each year it breaks a rule; asks the player
-  for a promise once a year, after 18 seconds of fishing (in year 1, only
-  once someone has a fine net).
+  怒 on a family the first time each year it breaks a rule; once a year,
+  after 18 seconds of fishing (in year 1, only once someone has a fine net),
+  asks one human family for a promise: the one with the most fish in its
+  basket that has no promise with him, lowest seat first on a tie.
 - Any bot that a promise was broken to stamps 怒 on the breaker.
-- Jin (greedy): buys a fine net as soon as his basket holds 20; votes no rule;
+- Jin (greedy): buys a fine net as soon as his basket holds 20, ban or not
+  (buying under a ban is part of breaking it); votes no rule;
   breaks every rule until two different families have stamped 怒 on him in
   that year (Old Wang's counts); accepts a promise only while he has no fine
   net, and breaks it half the times he could.
@@ -180,11 +190,16 @@ what they do is not evidence about how people behave.
   others already have fine nets, and keeps it; keeps every rule until other
   families have broken it twice that year, then breaks it too, until anyone
   stamps 怒 on her.
-- Bots throw on their own 3.5-second clock, skip 15% of their chances, and aim
-  at the densest school their net can hold. Keeping a spring closure means
-  not throwing in spring; keeping the shallows rule means aiming inside 95% of
-  the shallows line and never landing past it. In each meeting Old Wang votes
-  at 3 seconds, Jin at 6, Mei at 10.
+- Bots throw every 35 steps from a first step drawn from their stream at
+  step 0 (0 to 34), skip a chance when a draw is ≥ 0.85, aim at the densest
+  school their net can hold (bestSpot with their step's stream), then add up
+  to ±25 units of aim noise; a bot keeping the shallows rule that would land
+  past the line throws at the spot it chose, without the noise. Keeping a
+  spring closure means not throwing in spring. In each meeting Old Wang votes
+  at 3 seconds, Jin at 6, Mei at 10. Bots answer a promise in the step after
+  they are asked.
+- The simulated families in sim/ are not these bots: they keep every rule
+  from year 2, which includes not buying a fine net under a ban.
 
 ## What the simulations show (sim/payoff_output.txt, sim/rules_output.txt)
 
@@ -197,14 +212,14 @@ keeping a coarse net and once buying a fine net as soon as it can afford one
 
 | other families with fine nets | keep coarse | switch | switching paid |
 |---|---|---|---|
-| 0 | 132 | 165 | 86 of 96 |
-| 1 | 95 | 108 | 70 of 96 |
-| 2 | 75 | 82 | 64 of 96 |
-| 3 | 68 | 67 | 39 of 96 |
+| 0 | 132 | 164 | 86 of 96 |
+| 1 | 95 | 106 | 66 of 96 |
+| 2 | 74 | 80 | 64 of 96 |
+| 3 | 67 | 64 | 41 of 96 |
 
 The first, second and third family to switch gain by it; once three have, the
 fourth gains nothing: the lake is already going. All coarse: about 132 each,
-and the lake died in 0 of 24 seasons. All fine: about 67 each, and it died in
+and the lake died in 0 of 24 seasons. All fine: about 64 each, and it died in
 24 of 24. That is a social dilemma in the usual sense: each switch helps the
 switcher until it is too late to matter, and the table ends far worse off.
 
@@ -212,41 +227,100 @@ The rules, kept by everyone from year 2 (12 seeds): with two fine nets, no
 rule loses the lake 12 times, and every rule saves it; with four fine nets,
 the ban leaves the most fish (173 grown fish next year), no spring fishing
 catches the most but leaves the lake thin (51 next year), keeping out of the
-shallows sits between (121). No rule is best for every lake.
+shallows sits between (116). No rule is best for every lake.
 
 ## Real time
 
-- The server runs each live lake: ten steps a second, bots included. If it
-  falls behind, it runs the missing steps before the next frame; it never
-  skips a step. At most 12 live lakes per machine.
-- Every 0.2 seconds it sends every open page a frame of fish positions; a
-  throw, a haul, a seal, a promise, a vote and a rule go out the moment they
-  happen. Pages draw between frames. A page that falls behind skips to the
-  latest frame; events are replayed from the last one it saw.
+- The server runs each live lake in memory: a runner per lake, driven by a
+  timer every 100 ms. Each time, it runs every step from its own step counter
+  up to stepAt(start, now), and never skips one. At most 12 live lakes per
+  machine; a thirteenth start is refused with a message.
+- In each step, in this order: the bots decide (writing their rows); the
+  throws for this step are applied in ledger order; the lake steps; hauls,
+  winter building, a year's rule and the season's end are written. All rows
+  of one step are written in one transaction.
+- Every second step (0.2 s) the runner sends every open page a frame; every
+  row goes out as an event the moment it is written. A page that reconnects
+  sends the last event id it saw and gets the rows after it, then a fresh
+  snapshot; frames are never replayed. Pages move a fish smoothly between two
+  frames they received, and draw nothing they were not sent.
 - A page says when an action is waiting, accepted or refused; an animation
   never pretends an action succeeded.
 
+## Pages and routes
+
+- GET / : open a lake; the list of past lakes; a short line of what the game
+  is, and a link to /readme/.
+- POST /lakes : opens a lake and answers 303 to /l/CODE.
+- GET /l/CODE : the lake. Before the start: who has joined, a name form, and
+  Start. During the season: the game. After it: the debrief.
+- POST /l/CODE/join {name} : 303 back, with the cookie fam_CODE
+  (HttpOnly, SameSite=Lax, Path=/l/CODE, Secure on https, a year).
+- POST /l/CODE/start, /throw {x, y, net, key}, /buy, /vote {rule},
+  /promise {to}, /promise/answer {from, yes}, /seal {to, seal}: JSON answers.
+  200 with what was accepted, or 4xx with a reason the page can show:
+  not_in_lake (no cookie for this lake), not_started, over, not_fishing,
+  not_meeting, too_soon (with steps to wait), outside (not on the water),
+  no_fine_net, cannot_afford, already_owned, already_promised, no_such_ask,
+  self, bad_rule, bad_seal, bad_key, full (eight families), started.
+- GET /l/CODE/events : the stream (text/event-stream): "snapshot" on open,
+  "row" for each public row (with its id), "frame" for fish.
+- Every POST passes the Origin check. A family may send at most 10 POSTs a
+  second; more are refused with 429.
+
+## Frames and events
+
+- A frame is JSON: { s: step, f: [id, x, y, h, a, ...], n: [...nets in the
+  water: seat, x, y, fine, closeStep], k: [x, y, h] or null }. x and y are
+  whole units, h is the heading in hundredths of a radian, a is 0 for fry and
+  1 for grown fish. With 220 fish a frame is about 4 KB.
+- A row event carries only public fields: never a token, an idempotency key,
+  a name key or (before the end row) the secret.
+- The snapshot carries the lake's phase and step, the rule, every family's
+  seat, name, bot or not, basket, house parts, fine net, breaches, broken
+  promises and current vote, the open promises and asks, and the recent rows.
+
 ## The record, and replay
 
-- Every action is one append-only ledger row, written in the same
-  transaction: lake opened; family joined; season started (the families,
-  bots included, the capacity, the model version, SHA-256 of the secret);
-  throw (family, step, point, net, breach); haul (the throw it closes, fish,
-  fry, fry slipped, golden carp); net bought; promise asked, answered,
-  broken; seal; vote; rule adopted; winter building; season ended (the secret
-  and the summary).
-- A haul, a winter's building, a year's rule and the season's end follow from
-  time: the tick writes them at the step they happen. A haul that leaves fewer
-  than two fish writes the haul and the end row in one transaction.
-- Where the fish are is never stored. Replaying the ledger with the secret
-  gives the same fish, step for step. A restart mid-season replays each live
-  lake to its last row and steps on to the present; while the server was down
-  nobody threw, bots included.
+Tables: lakes (id, code, opened_at, secret, secret_hash, model); families
+(id, lake, seat 0–7 in joining order with bots after the people, name,
+name_key, token or null for a bot, bot kind or null); lake_ledger (id, lake,
+at, step or null before the start, kind, family or null, data as JSON, key
+or null). The ledger is append-only (triggers), with at most one open, one
+start and one end row per lake, and one rule row per year.
+
+Row kinds and their data:
+- open {}; join {name}; start {families: [{seat, name, bot}], capacity,
+  model, secretHash, startedAt}
+- throw {x, y, fine, breach, under}: under is how many fish the net could
+  hold under its ring at that step, for the empty-net answer; key is the
+  idempotency key
+- haul {throw: the throw row's id, got, fry, slipped, koi, rival}: rival is
+  the seat of a family whose net closed in the 6 steps before, within 84
+  units, and took fish, or null
+- buy {}; ask {to}; answer {from, yes}; broken {to}: a promise broken by a
+  fine net; seal {to, seal}; vote {year, rule}
+- build {parts: [...], left} at each winter, one row per family that built
+- rule {year, rule, votes}; end {secret, step, kept: [...], parts: [...],
+  grownFish, nextYear}
+
+Where the fish are is never stored. A lake is rebuilt by makeLake(secret)
+and stepping: before each step, the throw rows for that step are cast in id
+order; after it, the hauls must equal the haul rows (a test checks this for a
+whole season). On restart, each started lake without an end row is rebuilt
+to the step of its last row, then stepped on to the present with nobody
+throwing, bots included (they act again only from the step the server came
+back at).
+
+The end row's nextYear is computed by nextYear() on a copy of the lake in the
+step the season ends. It holds the server up for a fraction of a second, once
+per season; if logs show that delaying other lakes' frames, it moves to a
+worker thread (decided then, not now).
 
 ## The debrief
 
 The first screen answers three questions: what happened to my house (the
-house, fish kept, its place among the four); what happened to the lake (how
+house, fish kept, its place among the families); what happened to the lake (how
 many grown fish are left, and how many the lake would hold next year if left
 alone: "next year, no fish" when that is none); and what happened (two to five
 moments from this season: the first fine net, a rule agreed, a promise broken,
@@ -292,6 +366,13 @@ written again and never dropped.
 
 ## Changelog
 
+- v2.2: the server. The golden carp is part of the model; the sims stop at a
+  dead lake, as the game does, and a family keeping the shallows rule never
+  lands past the line (numbers re-run). Throws apply at the runner's next
+  step in ledger order. Secret storage, bot streams per step and seat, bot
+  timing, which family Old Wang asks, Jin buying under a ban. Promises work
+  between people. The runner, pages and routes, refusal reasons, frames and
+  events, tables and row kinds, rebuild and restart.
 - v2.1: after a review of v2.0 and prototype 3. A 256-bit secret seeds sfc32
   streams (the 32-bit seed could be brute-forced from its published hash).
   One definition of a dead lake (fewer than two fish). Winter wording matches
