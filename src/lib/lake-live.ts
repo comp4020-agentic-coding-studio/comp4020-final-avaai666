@@ -3,8 +3,13 @@
 // `row` event the moment it is written; every other step (0.2 s) a `frame`
 // event carries the fish. A page that reconnects gets the rows after its
 // last event id, then a fresh snapshot; frames are never replayed.
+//
+// Before the start, a lake has no runner, but its lobby is live too: a
+// stream opened on /l/CODE/events gets each join as a public `row` event as
+// it is written, and `reload` (then closes) when the season starts.
 import type { ServerResponse } from "node:http";
-import { type PublicRow, type Runner } from "./lake-runner.ts";
+import { publicRow, type PublicRow, type Runner } from "./lake-runner.ts";
+import type { FamilyRow, LakeLedgerRow } from "./lake-store.ts";
 
 const HEARTBEAT_TICKS = 150; // a comment line every 15 s at a 100 ms tick
 const MAX_REPLAY = 2000;
@@ -35,6 +40,13 @@ export interface LakeHub {
   // Every 100 ms: advances every runner, flushes new rows, sends frames due.
   tick(): void;
   close(): void;
+
+  // ---- the lobby, before a lake has started ----
+  openLobby(lakeId: number, res: ServerResponse): void;
+  // A join row was just written: sends it to the lake's lobby streams.
+  lobbyJoined(lakeId: number, row: LakeLedgerRow, families: FamilyRow[]): void;
+  // The season just started: `reload` to every lobby stream, then closes them.
+  lobbyStarted(lakeId: number): void;
 }
 
 function publicRowEvent(row: PublicRow): string {
@@ -51,10 +63,15 @@ function snapshotEvent(snapshot: unknown): string {
 
 export function createLakeHub(onError: (err: unknown) => void): LakeHub {
   const lakes = new Map<number, LiveLake>();
+  const lobbies = new Map<number, Set<ServerResponse>>();
   let ticks = 0;
 
   const write = (s: Stream, chunk: string): void => {
     if (!s.res.destroyed) s.res.write(chunk);
+  };
+
+  const writeRes = (res: ServerResponse, chunk: string): void => {
+    if (!res.destroyed) res.write(chunk);
   };
 
   // Every public row after sentUpTo, to the lake's streams.
@@ -133,11 +150,51 @@ export function createLakeHub(onError: (err: unknown) => void): LakeHub {
           onError(err);
         }
       }
+      if (ticks % HEARTBEAT_TICKS === 0) {
+        for (const streams of lobbies.values()) for (const res of streams) writeRes(res, ": keep-alive\n\n");
+      }
     },
 
     close() {
       for (const live of lakes.values()) for (const s of live.streams) s.res.end();
       lakes.clear();
+      for (const streams of lobbies.values()) for (const res of streams) res.end();
+      lobbies.clear();
+    },
+
+    openLobby(lakeId, res) {
+      res.writeHead(200, {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-store",
+        connection: "keep-alive",
+        "x-accel-buffering": "no",
+      });
+      writeRes(res, "retry: 1000\n\n");
+      let streams = lobbies.get(lakeId);
+      if (!streams) {
+        streams = new Set();
+        lobbies.set(lakeId, streams);
+      }
+      streams.add(res);
+      res.on("close", () => streams!.delete(res));
+    },
+
+    lobbyJoined(lakeId, row, families) {
+      const streams = lobbies.get(lakeId);
+      if (!streams || streams.size === 0) return;
+      const seatOf = new Map(families.map((f) => [f.familyId, f.seat]));
+      const chunk = publicRowEvent(publicRow(row, seatOf));
+      for (const res of streams) writeRes(res, chunk);
+    },
+
+    lobbyStarted(lakeId) {
+      const streams = lobbies.get(lakeId);
+      if (!streams) return;
+      for (const res of streams) {
+        writeRes(res, "event: reload\ndata: {}\n\n");
+        res.end();
+      }
+      lobbies.delete(lakeId);
     },
   };
 }

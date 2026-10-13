@@ -260,6 +260,8 @@ export function createHandler({ store, hub, lakeStore, lakeHub, now, readmeHtml,
     const name = new URLSearchParams(await readBody(req, BODY_LIMIT)).get("name") ?? "";
     const result = lakeStore.join(code, name);
     if (result.ok) {
+      const lake = lakeStore.lakeByCode(code)!;
+      lakeHub.lobbyJoined(lake.id, result.row, lakeStore.familiesOf(lake.id));
       const secure = overHttps(req) ? "; Secure" : "";
       const setCookie = `fam_${code}=${result.token}; HttpOnly; SameSite=Lax; Path=/l/${code}; Max-Age=${COOKIE_MAX_AGE_S}${secure}`;
       return redirect(res, `/l/${code}`, { "set-cookie": setCookie });
@@ -294,6 +296,7 @@ export function createHandler({ store, hub, lakeStore, lakeHub, now, readmeHtml,
     const startedAt = now();
     lakeStore.start(lake.id, startedAt, bots);
     liveRunner(lake.id, code, lake.secret, startedAt);
+    lakeHub.lobbyStarted(lake.id);
     redirect(res, `/l/${code}`);
   }
 
@@ -334,7 +337,7 @@ export function createHandler({ store, hub, lakeStore, lakeHub, now, readmeHtml,
     if (!lake) return notFound(res);
     const rows = lakeStore.allRows(lake.id);
     const startRow = rows.find((r) => r.kind === "start");
-    if (!startRow) return sendJson(res, 409, { ok: false, reason: "not_started" });
+    if (!startRow) return lakeHub.openLobby(lake.id, res);
     const { startedAt } = startRow.data as { startedAt: number };
     liveRunner(lake.id, code, lake.secret, startedAt);
     const header = req.headers["last-event-id"];
@@ -361,7 +364,14 @@ export function createHandler({ store, hub, lakeStore, lakeHub, now, readmeHtml,
 
     if (req.method === "POST" && !sameOrigin(req)) return crossOrigin(res);
 
-    if (path === "/" && method === "GET") return sendHtml(res, 200, lakeHomePage(lakeStore.pastLakes()));
+    if (path === "/" && method === "GET") {
+      const rawCode = url.searchParams.get("code");
+      if (rawCode !== null) {
+        const upper = rawCode.toUpperCase();
+        if (new RegExp(`^${CODE}$`).test(upper)) return redirect(res, `/l/${upper}`);
+      }
+      return sendHtml(res, 200, lakeHomePage(lakeStore.pastLakes()));
+    }
     if (path === "/dig" && method === "POST") return dig(req, res);
     if (path === "/lakes" && method === "POST") return openLake(res);
     if (path === "/readme") return redirect(res, "/readme/");

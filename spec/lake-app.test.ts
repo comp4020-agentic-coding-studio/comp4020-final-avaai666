@@ -185,3 +185,29 @@ it("6. a ninth join is refused with full", async () => {
   const ninth = await join(code, "one-too-many");
   expect(ninth.status).toBe(409);
 });
+
+it("7. the lobby stream sees a second client's join row within 1s, and reload when the season starts", async () => {
+  const code = await openLake();
+  const ava = await joinOk(code, "Ava");
+  const stream = openStream(code);
+  try {
+    const sent = performance.now();
+    await joinOk(code, "Bo");
+    const row = await stream.next((e) => e.event === "row");
+    expect(row.arrived - sent).toBeLessThan(1000);
+    const data = JSON.parse(row.data);
+    expect(data.kind).toBe("join");
+    expect(data.data).toEqual({ name: "Bo" });
+
+    expect((await start(code, ava)).status).toBe(303);
+    await stream.next((e) => e.event === "reload");
+  } finally {
+    await stream.close();
+  }
+});
+
+it("8. GET /?code=bkmt answers 303 to /l/BKMT", async () => {
+  const res = await fetch(at("/?code=bkmt"), { redirect: "manual" });
+  expect(res.status).toBe(303);
+  expect(res.headers.get("location")).toBe("/l/BKMT");
+});

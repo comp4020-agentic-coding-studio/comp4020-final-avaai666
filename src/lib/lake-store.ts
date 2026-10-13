@@ -63,7 +63,7 @@ export interface LakeRow {
 }
 
 export type LakeJoinResult =
-  | { ok: true; familyId: number; token: string; seat: number }
+  | { ok: true; familyId: number; token: string; seat: number; row: LakeLedgerRow }
   | { ok: false; reason: "bad_name" | "name_taken" | "bot_name" | "full" | "started" | "no_lake" };
 
 export interface StartResult {
@@ -351,8 +351,8 @@ export function openLakeStore(file: string, now: Clock, onCommit?: (ms: number) 
 
         const token = randomBytes(16).toString("base64url");
         const familyId = Number((q.insertFamily.get(lake.id, n, name, key, token, null) as { id: number }).id);
-        insertRow(lake.id, now(), null, "join", familyId, { name }, null);
-        return { ok: true, familyId, token, seat: n };
+        const row = insertRow(lake.id, now(), null, "join", familyId, { name }, null);
+        return { ok: true, familyId, token, seat: n, row };
       });
     },
 
