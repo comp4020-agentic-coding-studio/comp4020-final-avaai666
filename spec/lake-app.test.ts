@@ -211,3 +211,19 @@ it("8. GET /?code=bkmt answers 303 to /l/BKMT", async () => {
   expect(res.status).toBe(303);
   expect(res.headers.get("location")).toBe("/l/BKMT");
 });
+
+it("9. /static/lake.css is 200 text/css; a started lake's page contains canvas#lake and a #boot that parses", async () => {
+  const css = await fetch(at("/static/lake.css"));
+  expect(css.status).toBe(200);
+  expect(css.headers.get("content-type")).toMatch(/^text\/css/);
+
+  const code = await openLake();
+  const ava = await joinOk(code, "Ava");
+  expect((await start(code, ava)).status).toBe(303);
+  const page = await (await fetch(at(`/l/${code}`), { headers: { cookie: ava } })).text();
+  expect(page).toContain("canvas id=\"lake\"");
+  const bootMatch = page.match(/<script type="application\/json" id="boot">([^<]*)<\/script>/);
+  expect(bootMatch, "no #boot script found").toBeTruthy();
+  const boot = JSON.parse(bootMatch![1]) as { code: string };
+  expect(boot.code).toBe(code);
+});

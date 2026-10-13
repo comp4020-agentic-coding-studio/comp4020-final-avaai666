@@ -28,6 +28,7 @@ const CODE = "[BCDFGHJKLMNPQRSTVWXZ]{4}";
 const STATIC: Record<string, string> = {
   "app.js": "text/javascript; charset=utf-8",
   "lake.js": "text/javascript; charset=utf-8",
+  "lake.css": "text/css; charset=utf-8",
   "style.css": "text/css; charset=utf-8",
 };
 const IMAGE_TYPES: Record<string, string> = {
@@ -223,7 +224,7 @@ export function createHandler({ store, hub, lakeStore, lakeHub, now, readmeHtml,
     const families = lakeStore.familiesOf(lake.id);
 
     if (endRow) {
-      const end = endRow.data as { kept: number[]; parts: number[]; grownFish: number; nextYear: number };
+      const end = endRow.data as { kept: number[]; parts: number[]; grownFish: number; nextYear: number; secret: string; step: number; years: number[] };
       return sendHtml(
         res,
         status,
