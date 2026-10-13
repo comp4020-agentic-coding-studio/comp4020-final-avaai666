@@ -1,4 +1,4 @@
-# Next Year, No Fish (明年无鱼): design v2.2
+# Next Year, No Fish (明年无鱼): design v2.3
 
 ## What it is
 
@@ -364,8 +364,66 @@ The app on Fly still runs v0.4 until the new server lands; until then README.md
 describes v0.4. Lakes live in new tables beside the v0.4 ponds, which are never
 written again and never dropped.
 
+## The page (v2.3)
+
+The live page is drawn by `src/static/lake.js` from three things only: the
+snapshot embedded in the page (`<script type="application/json" id="boot">`,
+with `<` escaped), the rows and frames on the stream, and the answers to its
+own POSTs. It never decides an outcome. What it adds is drawing and words.
+
+- **Where everyone sits.** The houses stand round the shore, evenly spaced;
+  your own house is always at the bottom, so every player sees the lake from
+  their own shore. A family's colour comes from its seat (bots keep their own:
+  Old Wang blue, Jin gold, Mei green). Bots are known by their reserved names.
+- **The fish.** Drawn 230 ms (2.3 steps) behind the newest frame, between the
+  two frames around that moment, so motion is smooth at five frames a second.
+  The page's clock is the frames': the smallest (arrival time − step × 100 ms)
+  seen, creeping up 1.5 ms a frame. A new fry in a frame draws a heart.
+- **My net.** It flies from my shore the moment I tap (a ghost), and the throw
+  row replaces it. A refusal removes it and says why in words ("Your net is
+  still drying", "The lake is frozen until spring", "That's the shore"). The
+  drying ring runs from my last throw row's step to that step + 35. A network
+  failure retries once with the same key.
+- **Every net.** Drawn from its throw row until its haul row, which shows
+  +n, or "empty" with why: "X got there first" (the haul's `rival`), "missed:
+  no fish there" (the throw's `under` was 0), or "they swam off". A coarse
+  net shows the fry that slipped through.
+- **Promises and seals.** Tap a family's card: four seals and, while fishing
+  with nothing open between you, "Ask for a promise". An ask to me shows
+  Promise / Say no. An open promise is a red thread between two houses; a
+  broken row snaps it and stamps 失 on the house that broke it. A breach
+  stamps 违 where the net landed.
+- **The meeting.** Opens when the clock reaches winter: three facts (grown
+  fish now, fry netted this year, who has fine nets, promises broken and
+  breaches), every family's portrait with its vote stamp as vote rows arrive,
+  and the four rules. The rule row closes it and shows the New Year card.
+- **Phones.** A finger shows the ring 70 units above itself, drags, and throws
+  on lift. Fish are drawn larger below 900 px; nets always true size. Your
+  basket and the fine-net button stay pinned at the bottom.
+- **Keyboard.** The lake is focusable: arrows aim, Space or Enter throws, B
+  buys, F switches nets, Esc closes the seal box. Cards and votes are buttons.
+- **Reconnecting.** The browser's EventSource reconnects with the last row id;
+  rows after it replay, rows already seen are ignored, and the snapshot that
+  follows replaces the families, rule, votes, asks and promises. A chip says
+  "live" or "reconnecting…".
+- **The lobby** lists who has joined and updates without a refresh: the stream
+  works before the start (join rows, then `reload` when the season starts).
+- **The debrief** (first screen): your house, the lake's verdict (next year
+  ≥ 60% of what you found: "Fish to spare"; ≥ 2 fish: "Fewer fish"; else
+  "Next year, no fish"), and up to six moments taken from the rows. Below:
+  every house; a chart of grown fish at the start of each year (the end row's
+  `years`), at the end and next year; a table per family; the simulation
+  table and what it means; Ostrom; Li Ge; the whole record with the secret.
+
+Server changes this needs: the end row gains `years` (grown fish at the start
+of each year reached, the same after a rebuild); `/l/CODE/events` works before
+the start; `GET /?code=abcd` answers 303 to `/l/ABCD`.
+
 ## Changelog
 
+- v2.3 (13 Oct): the page; the end row's years; a lobby stream; three runner
+  bugs found by playing (bots stopped throwing after the first winter, bots
+  voted at the meeting's first step, the tally ignored bots' votes).
 - v2.2: the server. The golden carp is part of the model; the sims stop at a
   dead lake, as the game does, and a family keeping the shallows rule never
   lands past the line (numbers re-run). Throws apply at the runner's next

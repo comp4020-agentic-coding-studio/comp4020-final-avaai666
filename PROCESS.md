@@ -1,41 +1,120 @@
 # Process
 
-## Where this stands (crit 8)
+## Where this stands (crit 9)
 
-After one week: a pond model, an append-only ledger, a server with live updates and a page, in 16 commits after the template ([`f71d6dd...9fee210`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/compare/f71d6dd...9fee210)). The design is in `DESIGN.md` (v0.4), the rules in `CLAUDE.md`, the checks in `spec/`.
+The app started as Common Pool, one shared pond where each tap caught a fish
+(crit 8, [`f71d6dd...82a90d7`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/compare/f71d6dd...82a90d7)).
+It is now Next Year, No Fish: a game for one table in which families fish a
+lake of fish that school, spawn and grow, with a server that runs each lake
+and streams it to every player ([`82a90d7...5f0fc7f`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/compare/82a90d7...5f0fc7f)).
+The design is `DESIGN.md` (v2.3), the rules `CLAUDE.md`, the checks `spec/`.
+Two pivots happened in between, and both are the story of this document.
 
 ## How I work with the agent
 
-Each session is one prompt with the same shape. First, paste the real state of the repo. Then make the change test-first. Then prove one or two key tests catch a real bug, by breaking the code on purpose and restoring it. Last, list what the design gets wrong or leaves out, without fixing it. I decide each listed point and write it into `DESIGN.md` with a version bump and a changelog line. The agent never pushes or deploys.
+Every session is one prompt with the same shape: paste the real state of the
+repo, change it test-first, break one or two key tests on purpose to prove
+they can fail, and list what the design gets wrong without fixing it. I answer
+each listed point myself and the answers become the next version of
+`DESIGN.md`, with a changelog line.
+
+Two habits were added after crit 8. I build a playable prototype in a single
+HTML file before I spend a session on a mechanic, and play it myself. And I
+have a second model review the design and the simulations, then check each
+of its claims before I act on it. The agent never decides what the game is;
+it is told, and it tells me where the telling is incomplete.
 
 ## Stack
 
-The constraint is in `fly.toml`: one shared-cpu machine with 256 MB and one volume. I chose Node 24 running TypeScript directly, `node:sqlite`, `node:http` and Server-Sent Events, with no client framework and no build step ([`e0f6bea`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/e0f6bea), [`698dc13`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/698dc13), [`8c8b6bc`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/8c8b6bc)).
-
-What I weighed it against: a full-stack framework such as Astro with SQLite and SSE (a framework and a build for a two-page app); better-sqlite3 (a native build in Docker); WebSockets (writes are plain POSTs, and SSE's Last-Event-ID lets a reconnecting page replay ledger rows by id, so the ledger is also the stream). The record is `docs/decisions/0001-stack.md`.
+One small Fly machine, one volume (`fly.toml`). Node 24 runs TypeScript
+directly, with `node:sqlite`, `node:http` and Server-Sent Events, and no
+client framework or build (`docs/decisions/0001-stack.md`). The game kept the
+stack and changed how it is used. A lake is simulated in memory by one runner,
+ten steps a second, and sent as a frame of fish positions five times a
+second. Fish positions are never stored: the ledger stores only what people
+and bots did, and a 256-bit secret seeds every random stream, so a season can
+be rebuilt by replaying its ledger. That is also how a lake survives a
+restart. SSE still fits: actions are plain POSTs, rows replay by id after a
+reconnect, and frames are simply not replayed.
 
 ## Moments
 
-### A simulation threw away three promises
+### A pond became a game
 
-The first design used plain logistic growth, promised that "only a room can empty it", and settled taps in one-second "tides" with ties going to the lower ledger id. A second agent reviewed it, and a short simulation showed three problems. One person could empty the pond in 12 minutes. A pond with 0.4 fish grew back. And ledger ids are arrival order, so "the split doesn't depend on arrival order" contradicted the tie rule; my shuffle test kept the ids, so it could not see this. Instead of building it, I replaced the model with an Allee threshold, dropped tides for first-come-first-served, and committed the simulation ([`8d15c9c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/8d15c9c)). The changelog in `DESIGN.md` records what was thrown away ([`c7b17b3`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/c7b17b3)).
+At crit 8 my tutor said the pond was an explainer and should be a game that
+three people at a table understand in two minutes. I did not add buttons to
+the pond. I went back to the model: if a net's catch depends on how many fish
+are left, buying a fine net becomes a social dilemma by itself. A simulation
+checked it before any code ([`0a7423a`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/0a7423a)),
+and the dilemma became a test ([`91021fa`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/91021fa)).
 
-### Designing for two sessions
+### The prototype said it was not fun
 
-Markers use the app in two browsers. With my first fixed parameters, two nets at full speed never emptied the pond, so a marker could never meet the conflict. I made the pond smaller (300 fish): in the simulation two nets empty it in about five minutes and one never does. That claim is now a test: one net's maximum is below the peak regrowth, and two nets' maximum is above it ([`f93a9f8`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/f93a9f8)). I also dropped the slogan, because one net can finish off a weakened pond; that limit is kept as a test too.
+I built that version as a prototype and played it. Tapping a timer while a
+number falls is not a game: where you threw did not matter, and other
+families could only be watched. Instead of adding features, I made the fish
+agents. Two grown fish must meet to spawn, so a thin lake fails to recover on
+its own (the Allee effect, seen instead of stated); fry live in the shallows
+and slip through a coarse net; a fine net takes them, and they were next
+year's fish. The re-run simulations ([`15185ac`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/15185ac))
+became `DESIGN.md` v2.0 ([`e23c32d`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/e23c32d)),
+and the TypeScript model must match the reference model step for step
+([`c979c36`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/c979c36)).
 
-### A test that could not fail
+### A review overturned my proof
 
-`CLAUDE.md` says to prove that key tests catch a bug ([`76f538c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/76f538c)). Changing the per-net rate turned the parameter check red but left three scenario tests green: their helper hard-coded one tap per second. The fix derives the interval from the constant ([`f93a9f8...2753509`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/compare/f93a9f8...2753509)).
+The v2.0 tests said switching to a fine net always pays. A review pointed out
+that the simulation gave fine nets from the first throw, compared different
+seats, and left out the golden carp. Each point held. When each family is
+compared with itself, and nets are bought when a family can afford one,
+switching pays the first three families but not the fourth: by then the lake
+is already going ([`403ea6f`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/403ea6f)).
+I changed the claim rather than the parameters. The test no longer checks the
+fourth row, and `CLAUDE.md` now says simulation results are claims about the
+strategies and seeds in `sim/`, never about people
+([`584fd89`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/584fd89), [`7d92014`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/7d92014)).
+The agent's own list at the end of session 8 caught a mistake of mine: a
+32-bit seed whose SHA-256 I meant to publish could be found by trying every
+seed. The secret is now 256 bits.
 
-### A number decided durability
+### Who gets the fish (crit 9)
 
-With SQLite's default fsync, a commit took about 41 ms on my machine (`docs/checks/2026-10-06/local-commit-times.txt`). `node:sqlite` is synchronous, so a dozen people tapping would block the server for half of every second, and everyone's live updates would arrive late. I chose WAL with `synchronous = NORMAL` and wrote down the cost: if the machine itself crashes, the last commits can be lost ([`5ba1c16`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/5ba1c16), [`c3d0df2`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/c3d0df2)). Every commit's time is logged; on Fly, twenty writes took 0.2–1.1 ms each (`docs/checks/2026-10-06/fly-commit-times.txt`).
+Two families aiming at the same school is the game working. When their nets
+close on the same fish, the net thrown first takes it, and the other family
+is told who got there first. I chose this over splitting, nearest-centre and
+random draws because it is what the table sees, it never counts a fish twice,
+and it replays exactly from the ledger order. It costs a player on a slow
+connection some ties (`docs/decisions/0003-two-nets-one-fish.md`). A test
+builds two throws in one step over one school; reversing the order a step's
+throws are applied turns it red ([`ff3084c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/ff3084c)).
 
-### Checking the layer the tests could not see
+### Playing the page found what 222 green tests missed
 
-The agent reported every check green, and in the same message said the page script had never run in a browser. Before the first deploy I ran it in two real Chromium browsers, at 1920×1080 and 390×844: 10–39 ms on a local run from one page's tap to the other page, digging, joining and casting each reachable by keyboard, no horizontal scroll after a resize mid-use, and a clean reconnect after a server restart. One "bug" turned out to be my own test's mistake: Playwright's offline mode does not cut a stream that is already open ([`789206e`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/789206e)).
+The server had 222 passing tests when the page first ran a whole season
+against it. Watching it, the bots' houses stopped growing after the first
+winter: a bot threw only on the exact step its net was dry again, and that
+step passed while the lake was frozen, so no bot threw again. The same season
+showed two meeting bugs: bots voted the moment winter began, so Mei could
+never follow a person's vote, and the tally counted only people's votes,
+treating Old Wang's ban as "no rule". Each test had checked a step in
+isolation; none had watched five years. Each got a test that fails first
+([`44fda84`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/44fda84)).
+
+### Corrections land in the harness
+
+The markers read English, and my prototype still had Chinese-only labels.
+That became a rule in `CLAUDE.md`: every word that carries meaning is
+English; Chinese is decoration and always comes with its English. The bots
+became a rule too: their behaviour is a script and may never be cited as
+evidence about people. From crit 8, two older corrections still stand: a
+simulation threw out three promises before they were built
+([`8d15c9c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/8d15c9c)),
+and a measured 41 ms commit decided durability
+([`5ba1c16`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/5ba1c16)).
 
 ## Next
 
-A two-person playtest of assumption H1 in `DESIGN.md`, and for crit 9, the one multi-user decision.
+Playtests with people, not bots: two people with no bots, four people, and
+one person with bots, recording whether newcomers throw without being told,
+whether they talk about each other's nets, and whether they ask for promises.
+For crit 10, server-side logs that tell two people apart.

@@ -1,0 +1,1060 @@
+<title>Next Year, No Fish</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=ZCOOL+QingKe+HuangYou&family=Fraunces:opsz,wght@9..144,600;9..144,800;9..144,900&family=Nunito:wght@400;600;800;900&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: a New Year print (年画) board. The lake fills the middle of the board, the four homesteads sit on its four shores and grow as each family lands fish; the side panel holds the families, your net and the village rule. The whole print drains of colour as the lake empties. One committed look: woodblock primaries on festival paper, indigo key line. */
+:root{
+  --paper:#fff6e3; --paper-2:#fbe7bf; --key:#1f2a5c; --red:#d7261e; --gold:#f2b705;
+  --green:#1f8a5b; --pink:#f06b8f; --water:#1f7f8c; --muted:#5b628a; --ice:#e8f4f6;
+  --f-zh:"Ma Shan Zheng","Kaiti SC","STKaiti","KaiTi",serif;
+  --f-zh-bold:"ZCOOL QingKe HuangYou","Ma Shan Zheng","PingFang SC",sans-serif;
+  --f-display:"Fraunces",Georgia,serif;
+  --f-body:"Nunito",system-ui,sans-serif;
+  --f-data:"IBM Plex Mono",ui-monospace,monospace;
+  color-scheme:light;
+}
+[hidden]{display:none!important}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--paper);color:var(--key);font-family:var(--f-body);font-size:15px;line-height:1.45;padding-inline:16px;padding-block:10px;
+  background-image:radial-gradient(circle at 12px 12px,rgba(215,38,30,.07) 2px,transparent 2.5px);background-size:24px 24px}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,canvas:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.app{max-width:1400px;margin:0 auto;display:flex;flex-direction:column;gap:10px}
+/* top bar */
+.bar{display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap}
+.seal{background:var(--red);color:var(--paper);font-family:var(--f-zh);font-size:28px;line-height:1;padding:6px 8px 4px;border-radius:6px;box-shadow:inset 0 0 0 2px var(--paper),0 0 0 2px var(--red);letter-spacing:.06em;white-space:nowrap}
+.titles{display:flex;flex-direction:column;min-width:0}
+.title-en{font-family:var(--f-display);font-weight:900;font-size:22px;line-height:1.1}
+.sub{font-weight:800;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.clock{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.yearchip{white-space:nowrap;background:var(--key);color:var(--paper);padding:4px 11px;border-radius:999px;font-weight:900}
+.yearchip b{font-family:var(--f-zh-bold);font-weight:400;font-size:18px;color:var(--gold);margin:0 2px}
+.seasons{display:flex;border:2.5px solid var(--key);border-radius:999px;overflow:hidden;position:relative;height:30px;width:220px;background:var(--paper-2)}
+.seasons span{flex:var(--w);display:grid;place-items:center;font-family:var(--f-zh);font-size:17px;border-right:2px solid var(--key);position:relative;z-index:1}
+.seasons span:last-child{border-right:0}
+.seasons .fill{position:absolute;left:0;top:0;bottom:0;background:var(--gold);opacity:.55;z-index:0;width:0}
+.counts{display:flex;gap:10px;font-family:var(--f-data);font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.counts b{font-family:var(--f-zh-bold);font-weight:400;font-size:20px;color:var(--red)}
+.tiny{font-family:var(--f-data);font-size:11px;border:2px solid var(--key);background:var(--paper);border-radius:999px;padding:3px 9px;white-space:nowrap}
+/* board */
+.board{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:14px;align-items:start}
+.stagewrap{position:relative;border:4px solid var(--key);border-radius:16px;background:var(--paper-2);box-shadow:0 0 0 4px var(--paper),0 0 0 8px var(--red),8px 10px 0 8px rgba(31,42,92,.18);overflow:hidden;aspect-ratio:1160/860;max-height:calc(100vh - 96px);max-width:100%;margin-inline:auto;width:100%}
+canvas#lake{display:block;width:100%;height:100%;touch-action:manipulation;cursor:crosshair;--life:1;filter:saturate(calc(.06 + .94 * var(--life))) contrast(calc(.9 + .1 * var(--life)));transition:filter 1.4s}
+.banner{position:absolute;left:50%;top:14px;transform:translateX(-50%);background:var(--paper);border:3px solid var(--key);border-radius:12px;box-shadow:4px 5px 0 var(--key);padding:7px 14px;max-width:min(560px,86%);font-weight:800;font-size:14px;display:flex;gap:10px;align-items:center;pointer-events:none}
+.banner .g{font-family:var(--f-zh);font-size:26px;color:var(--red);line-height:1}
+.overlay{position:absolute;inset:0;display:grid;place-items:center;padding:14px;background:rgba(255,246,227,.5)}
+.card{background:var(--paper);border:3px solid var(--key);border-radius:14px;box-shadow:6px 7px 0 var(--key);max-width:640px;width:100%;padding:18px 20px;max-height:100%;overflow:auto}
+.card h2{font-family:var(--f-display);font-weight:800;font-size:23px;line-height:1.2;margin:0 0 6px;text-wrap:balance}
+.eyebrow{font-weight:900;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--red);margin:0 0 6px}
+.cta{background:var(--red);color:var(--paper);border:3px solid var(--key);border-radius:999px;padding:10px 22px;font-weight:900;font-size:17px;box-shadow:3px 4px 0 var(--key)}
+.cta:active{transform:translate(2px,2px);box-shadow:1px 2px 0 var(--key)}
+.print{display:grid;grid-template-columns:150px minmax(0,1fr);gap:16px;align-items:center}
+.print svg{width:100%;height:auto;display:block}
+.blessing{font-family:var(--f-zh);font-size:44px;line-height:1;color:var(--red);margin:0}
+.quote{font-family:var(--f-zh);font-size:21px;margin:8px 0 2px}
+.en{font-family:var(--f-display);font-style:italic;font-weight:600;color:var(--muted);margin:0}
+.how{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0}
+.how div{border:2px solid var(--key);border-radius:10px;padding:8px 10px;background:var(--paper-2);font-size:13.5px}
+.how b{display:block;font-family:var(--f-zh);font-size:22px;color:var(--red);font-weight:400;line-height:1.1}
+/* meeting */
+.council{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:8px 0 10px}
+.member{text-align:center;position:relative;font-weight:800;font-size:12px}
+.member svg{width:74px;height:auto;display:block;margin:0 auto}
+.member .stamp{position:absolute;top:-2px;right:6px;width:34px;height:34px;display:grid;place-items:center;background:var(--red);color:var(--paper);font-family:var(--f-zh);font-size:22px;border-radius:6px;transform:rotate(9deg);box-shadow:0 0 0 2px var(--paper),0 0 0 3.5px var(--red)}
+.vote{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.vote button{display:grid;grid-template-columns:40px minmax(0,1fr);gap:2px 10px;align-items:center;text-align:left;background:var(--paper);border:2.5px solid var(--key);border-radius:12px;padding:8px 10px}
+.vote button .glyph{grid-row:span 2;font-family:var(--f-zh);font-size:32px;color:var(--red);line-height:1;text-align:center}
+.vote button small{color:var(--muted);font-size:12px;line-height:1.3}
+.vote button[aria-pressed="true"]{background:var(--key);color:var(--paper)}
+.vote button[aria-pressed="true"] small{color:var(--paper-2)}
+.vote button[aria-pressed="true"] .glyph{color:var(--gold)}
+.meterline{height:8px;border:2px solid var(--key);border-radius:999px;overflow:hidden;margin-top:10px;background:var(--paper-2)}
+.meterline i{display:block;height:100%;background:var(--red);width:100%}
+.newyear{text-align:center}
+.newyear .big{font-family:var(--f-zh);font-size:64px;line-height:1;color:var(--red);margin:4px 0}
+/* side panel */
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.panel{background:var(--paper);border:3px solid var(--key);border-radius:14px;box-shadow:5px 6px 0 rgba(31,42,92,.22);padding:10px 12px}
+.panel h3{margin:0 0 8px;font-weight:900;font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted)}
+.fams{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.fam{border:2.5px solid var(--key);border-radius:11px;background:var(--paper-2);padding:4px 6px 6px;display:grid;grid-template-columns:minmax(0,1fr);text-align:left;position:relative;min-width:0}
+.fam.me{background:#ffe1d6;border-color:var(--red)}
+.fam .pic{aspect-ratio:120/104;overflow:hidden}
+.fam .pic svg{width:100%;height:auto;display:block}
+.fam .line{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
+.fam .nm{font-weight:900;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.fam .ct{font-family:var(--f-zh-bold);font-size:21px;color:var(--red);line-height:1}
+.fam .note{font-size:11px;color:var(--muted);line-height:1.25}
+.fam .house{font-family:var(--f-zh);font-size:14px;color:var(--key)}
+.chips{position:absolute;left:6px;top:6px;display:flex;flex-wrap:wrap;gap:3px;max-width:90%}
+.chip{font-weight:900;font-size:9.5px;letter-spacing:.05em;border-radius:999px;padding:1px 6px;background:var(--key);color:var(--paper)}
+.chip.fine{background:var(--red)}
+.chip.breach{background:#7a1010}
+.netrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{background:var(--gold);border:2.5px solid var(--key);border-radius:999px;padding:7px 14px;font-weight:900;box-shadow:2px 3px 0 var(--key)}
+.btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+.btn.alt{background:var(--paper)}
+.netdesc{font-size:13px;margin:0 0 8px}
+.cool{height:7px;border-radius:999px;background:var(--paper-2);border:2px solid var(--key);overflow:hidden;margin-top:8px}
+.cool i{display:block;height:100%;background:var(--green);width:100%}
+.rulebox{display:flex;gap:10px;align-items:center;font-size:13.5px}
+.rulebox .g{font-family:var(--f-zh);font-size:34px;color:var(--red);line-height:1;width:40px;text-align:center}
+.log{list-style:none;margin:0;padding:0;font-size:12.5px;display:flex;flex-direction:column;gap:3px;max-height:150px;overflow:auto}
+.log li{display:flex;gap:6px}
+.log .y{font-family:var(--f-data);font-size:10.5px;color:var(--muted);flex:none;padding-top:1px}
+.log .hot{color:var(--red);font-weight:800}
+.keys{font-size:11.5px;color:var(--muted);margin:6px 0 0}
+.keys kbd{font-family:var(--f-data);font-size:10.5px;border:1.5px solid var(--muted);border-radius:4px;padding:0 4px}
+/* reactions */
+.react{position:fixed;z-index:20;background:var(--paper);border:3px solid var(--key);border-radius:14px;box-shadow:4px 5px 0 var(--key);padding:8px;display:flex;gap:6px}
+.react button{width:52px;border:2.5px solid var(--key);border-radius:10px;background:var(--paper-2);padding:4px 0 2px;display:grid;justify-items:center;line-height:1.1}
+.react button span{font-family:var(--f-zh);font-size:26px;color:var(--red)}
+.react button small{font-size:10px;font-weight:800}
+/* debrief */
+.debrief{background:var(--paper);border:4px solid var(--key);border-radius:16px;box-shadow:0 0 0 4px var(--paper),0 0 0 8px var(--red);padding:20px clamp(14px,3vw,30px);display:flex;flex-direction:column;gap:16px;margin:8px}
+.verdict{display:grid;grid-template-columns:auto minmax(0,1fr);gap:18px;align-items:center}
+.verdict .stampbig{font-family:var(--f-zh);font-size:46px;line-height:1.05;color:var(--paper);background:var(--red);padding:10px 12px;border-radius:10px;box-shadow:inset 0 0 0 3px var(--paper),0 0 0 3px var(--red);text-align:center;transform:rotate(-4deg)}
+.verdict h2{font-family:var(--f-display);font-weight:900;font-size:clamp(24px,3.4vw,36px);line-height:1.1;margin:0 0 6px;text-wrap:balance}
+.verdict p{margin:0;max-width:62ch}
+.cols{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:18px}
+.chart{width:100%;height:auto;display:block}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:5px 6px;border-bottom:2px solid var(--paper-2)}
+th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+td.num,th.num{text-align:right;font-family:var(--f-data);font-variant-numeric:tabular-nums}
+.villages{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.village{border:2.5px solid var(--key);border-radius:12px;padding:8px 10px;background:var(--paper-2);min-width:0}
+.village.yours{background:#ffe1d6;border-color:var(--red)}
+.village h4{margin:0;font-size:13px;font-weight:900;line-height:1.25}
+.village .zh{font-family:var(--f-zh);color:var(--red);font-size:18px}
+.village svg{width:100%;height:auto;display:block;margin:4px 0}
+.village .nums{font-family:var(--f-data);font-size:11.5px;display:flex;justify-content:space-between;gap:6px;font-variant-numeric:tabular-nums;flex-wrap:wrap}
+.prose{max-width:72ch}
+.prose p{margin:.55em 0}
+.prose h3{font-family:var(--f-display);font-weight:800;font-size:19px;margin:14px 0 4px}
+.sources{font-size:12.5px;color:var(--muted);padding-left:18px;margin:4px 0 0}
+.payoff td,.payoff th{font-size:12.5px}
+.net-story{display:grid;grid-template-columns:120px minmax(0,1fr);gap:16px;align-items:center;border-top:3px solid var(--key);padding-top:14px}
+.net-story svg{width:100%;height:auto}
+@media (max-width:980px){
+  .board{grid-template-columns:minmax(0,1fr)}
+  .stagewrap{max-height:none}
+  .fams{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+  .fam .note{display:none}
+  .fam .nm{font-size:11px}
+  .fam .ct{font-size:16px}
+  .chip{font-size:8px;padding:1px 4px}
+  .clock{margin-left:0}
+  .cols{grid-template-columns:minmax(0,1fr)}
+  .villages{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:560px){
+  .print{grid-template-columns:90px minmax(0,1fr)}
+  .blessing{font-size:32px}
+  .how{grid-template-columns:minmax(0,1fr)}
+  .vote{grid-template-columns:minmax(0,1fr)}
+  .seasons{width:160px}
+  .title-en{font-size:18px}
+  .member svg{width:54px}
+  .net-story{grid-template-columns:minmax(0,1fr)}
+  .banner{top:4px;font-size:11.5px;padding:3px 8px;max-width:94%;border-width:2px;box-shadow:2px 3px 0 var(--key);line-height:1.25}
+  .banner .g{font-size:18px}
+}
+@media (prefers-reduced-motion:reduce){canvas#lake{transition:none}}
+</style>
+
+<div class="app" id="app">
+  <header class="bar">
+    <div class="seal" aria-hidden="true">明年无鱼</div>
+    <div class="titles"><span class="title-en">Next Year, No Fish</span><span class="sub">A fishing game for one table · prototype 3</span></div>
+    <div class="clock">
+      <span class="yearchip">Year <b id="year">1</b>/ 5</span>
+      <div class="seasons" aria-label="Season"><div class="fill" id="seasonfill"></div><span style="--w:14">春</span><span style="--w:26">夏 秋</span><span style="--w:14">冬</span></div>
+      <span class="counts"><span>adults <b id="adults">0</b></span><span>fry <b id="fry">0</b></span></span>
+      <button class="tiny" id="sound" type="button" aria-pressed="false">sound off</button>
+      <button class="tiny" id="speed" type="button">speed ×1</button>
+    </div>
+  </header>
+
+  <main class="board" id="board">
+    <div class="stagewrap" id="stagewrap">
+      <canvas id="lake" tabindex="0" aria-label="The lake. Click or tap the water to throw your net. Arrow keys move your aim, space throws."></canvas>
+      <div class="banner" id="banner" hidden><span class="g" id="banner-g">春</span><span id="banner-t"></span></div>
+
+      <div class="overlay" id="intro">
+        <div class="card">
+          <div class="print">
+            <svg viewBox="0 0 160 200" aria-hidden="true" id="carp-print"></svg>
+            <div>
+              <p class="eyebrow">A New Year print, and a warning</p>
+              <p class="blessing">年年有余</p>
+              <p class="en">“Fish to spare, every year.” The blessing on every New Year print: 余 (to spare) sounds like 鱼 (fish).</p>
+              <p class="quote">竭泽而渔，岂不获得？而明年无鱼。</p>
+              <p class="en">“Drain the lake and of course you catch the fish. But next year there are no fish.” Lüshi Chunqiu, c. 239 BC</p>
+            </div>
+          </div>
+          <div class="how">
+            <div><b>撒网</b>Tap the water to throw your net. Every fish inside the ring is yours.</div>
+            <div><b>春</b>In spring, two fish that meet lay eggs. The fry grow up over winter.</div>
+            <div><b>冬</b>In winter the lake freezes and the village meets to choose a rule.</div>
+          </div>
+          <p style="margin:0 0 12px;font-size:13.5px">Four families share the lake. The other three here are Old Wang, Jin and Mei; in the real game they are the people at your table. Five years, about four minutes.</p>
+          <button class="cta" id="start" type="button">Throw the first net</button>
+        </div>
+      </div>
+
+      <div class="overlay" id="meeting" hidden>
+        <div class="card">
+          <p class="eyebrow" id="meet-eyebrow">Winter · the village meets</p>
+          <h2>Which rule does the village keep next year?</h2>
+          <div class="council" id="council"></div>
+          <div class="vote" id="vote-options">
+            <button type="button" data-v="none" aria-pressed="false"><span class="glyph">无</span><b>No rule</b><small>Everyone fishes as they like.</small></button>
+            <button type="button" data-v="ban" aria-pressed="false"><span class="glyph">禁</span><b>Ban fine-mesh nets</b><small>数罟不入洿池 “Fine nets stay out of the pools.” Mencius</small></button>
+            <button type="button" data-v="spring" aria-pressed="false"><span class="glyph">休</span><b>No fishing in spring</b><small>今鱼方别孕 “The fish are spawning.” Guoyu</small></button>
+            <button type="button" data-v="nursery" aria-pressed="false"><span class="glyph">护</span><b>Keep out of the shallows</b><small>鱼禁鲲鲕 “Spare the roe and the fry.” Guoyu</small></button>
+          </div>
+          <div class="meterline" aria-hidden="true"><i id="meet-left"></i></div>
+          <p class="keys">A rule wins with more votes than any other and at least half the village. Nobody is stopped from breaking it; everyone sees who does.</p>
+        </div>
+      </div>
+
+      <div class="overlay" id="newyear" hidden>
+        <div class="card newyear">
+          <p class="eyebrow" id="ny-eyebrow">New Year</p>
+          <p class="big" id="ny-big">年年有余</p>
+          <h2 id="ny-line"></h2>
+          <p class="en" id="ny-rule"></p>
+        </div>
+      </div>
+    </div>
+
+    <aside class="side">
+      <section class="panel">
+        <h3>The four families · tap one to send a seal</h3>
+        <div class="fams" id="fams"></div>
+      </section>
+      <section class="panel">
+        <h3>Your net</h3>
+        <p class="netdesc" id="netdesc">A coarse net. Fry slip through its mesh.</p>
+        <div class="netrow">
+          <button class="btn" id="buy" type="button">Buy a fine-mesh net · 20 fish</button>
+          <button class="btn alt" id="toggle" type="button" hidden>Use coarse net</button>
+        </div>
+        <div class="cool" aria-hidden="true"><i id="cool"></i></div>
+        <p class="keys"><kbd>←↑↓→</kbd> aim <kbd>Space</kbd> throw <kbd>B</kbd> buy <kbd>F</kbd> switch net</p>
+      </section>
+      <section class="panel">
+        <h3>This year's rule</h3>
+        <div class="rulebox"><span class="g" id="rule-g">无</span><span id="rule-t">No rule in year 1.</span></div>
+      </section>
+      <section class="panel">
+        <h3>The village record</h3>
+        <ul class="log" id="log"></ul>
+      </section>
+    </aside>
+  </main>
+
+  <section class="debrief" id="debrief" hidden aria-live="polite"></section>
+  <div class="react" id="react" hidden role="dialog" aria-label="Send a seal"></div>
+</div>
+
+<script>
+"use strict";
+// =====================================================================
+// THE LAKE (same model as sim3/lakesim.mjs, which proved the dilemma):
+// fish swim and school; in spring two adults that meet may spawn fry;
+// fry keep to the shallows and grow up over winter; coarse nets let fry
+// slip through, fine nets keep everything inside the ring.
+// =====================================================================
+const P = {
+  W: 1000, H: 700, RX: 460, RY: 315, DT: 0.1,
+  YEARS: 5, FISH_S: 40, SPRING_S: 14, MEET_S: 14,
+  CAP_PER_FAMILY: 55, START_FRAC: 0.75,
+  SIGHT: 95, MATE: 30, SEP: 14, V_ADULT: 42, V_FRY: 26,
+  BREED: 0.25, CLUTCH: 2, COOL_S: 6, MAX_AGE: 4, WINTER_DEATH: 0.12,
+  CAST_S: 3.5, SINK_S: 0.6, R_COARSE: 36, R_FINE: 42, FINE_COST: 20, AIM_NOISE: 25, SHALLOW: 0.72,
+};
+function rngFrom(seed) {
+  let a = seed >>> 0;
+  return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+const ell = (x, y) => Math.hypot((x - P.W / 2) / P.RX, (y - P.H / 2) / P.RY);
+const inLake = (x, y, m = 1) => ell(x, y) < m;
+let FISH_ID = 0;
+function spawnFish(L, x, y, age) {
+  const rng = L.rng;
+  if (x === null) { do { x = P.W / 2 + (rng() * 2 - 1) * P.RX; y = P.H / 2 + (rng() * 2 - 1) * P.RY; } while (!inLake(x, y, 0.9)); }
+  return { id: FISH_ID++, x, y, px: x, py: y, h: rng() * Math.PI * 2, age, cool: 0, scare: 0, sx: 0, sy: 0, hue: FISH_ID % 4 };
+}
+function makeLake(families, seed) {
+  const rng = rngFrom(seed), cap = P.CAP_PER_FAMILY * families;
+  const L = { rng, cap, fish: [], t: 0, nets: [], spawnFx: [], start: 0 };
+  const n0 = Math.round(cap * P.START_FRAC);
+  for (let i = 0; i < n0; i++) L.fish.push(spawnFish(L, null, null, 1 + Math.floor(rng() * 3)));
+  L.start = n0;
+  return L;
+}
+const countAdults = L => { let n = 0; for (const f of L.fish) if (f.age >= 1) n++; return n; };
+const countFry = L => L.fish.length - countAdults(L);
+function phaseOf(t) {
+  const yl = P.FISH_S + P.MEET_S, y = Math.floor(t / yl) + 1, into = t - (y - 1) * yl;
+  if (y > P.YEARS || (y === P.YEARS && into >= P.FISH_S)) return { year: P.YEARS, phase: "over", into };
+  return { year: y, phase: into < P.FISH_S ? "fish" : "meet", into, spring: into < P.SPRING_S };
+}
+function makeGrid(L) {
+  const cs = P.SIGHT, g = new Map();
+  L.fish.forEach((f, i) => { const k = ((f.x / cs) | 0) * 1000 + ((f.y / cs) | 0); let c = g.get(k); if (!c) g.set(k, (c = [])); c.push(i); });
+  return (x, y, fn) => { const cx = (x / cs) | 0, cy = (y / cs) | 0; for (let a = cx - 1; a <= cx + 1; a++) for (let b = cy - 1; b <= cy + 1; b++) { const c = g.get(a * 1000 + b); if (c) for (const j of c) fn(j); } };
+}
+function step(L, onWinter) {
+  const rng = L.rng, dt = P.DT, ph = phaseOf(L.t), near = makeGrid(L), N = L.fish.length;
+  const crowd = Math.max(0, 1 - N / L.cap), born = [];
+  for (let i = 0; i < N; i++) {
+    const f = L.fish[i]; f.px = f.x; f.py = f.y;
+    let cx = 0, cy = 0, ax = 0, ay = 0, n = 0, sepx = 0, sepy = 0, mate = -1;
+    near(f.x, f.y, j => {
+      if (j === i) return;
+      const o = L.fish[j], dx = o.x - f.x, dy = o.y - f.y, d2 = dx * dx + dy * dy;
+      if (d2 > P.SIGHT * P.SIGHT) return;
+      if (o.age === 0 && f.age >= 1) return;
+      cx += o.x; cy += o.y; ax += Math.cos(o.h); ay += Math.sin(o.h); n++;
+      if (d2 < P.SEP * P.SEP) { sepx -= dx; sepy -= dy; }
+      if (mate < 0 && f.age >= 1 && o.age >= 1 && d2 < P.MATE * P.MATE && o.cool <= 0) mate = j;
+    });
+    let tx = Math.cos(f.h), ty = Math.sin(f.h);
+    if (n) { tx += 0.012 * (cx / n - f.x) + 0.35 * (ax / n) + 0.05 * sepx; ty += 0.012 * (cy / n - f.y) + 0.35 * (ay / n) + 0.05 * sepy; }
+    if (f.age === 0) {
+      tx = Math.cos(f.h) + 0.08 * sepx; ty = Math.sin(f.h) + 0.08 * sepy;
+      const ex = (f.x - P.W / 2) / P.RX, ey = (f.y - P.H / 2) / P.RY, e = Math.hypot(ex, ey);
+      if (e < P.SHALLOW) { tx += ex / e * 0.6; ty += ey / e * 0.6; }
+    }
+    if (!inLake(f.x, f.y, 0.92)) { tx += (P.W / 2 - f.x) * 0.01; ty += (P.H / 2 - f.y) * 0.01; }
+    if (f.scare > 0) { tx += f.sx * 3; ty += f.sy * 3; f.scare -= dt; }
+    const h = Math.atan2(ty, tx) + (rng() - 0.5) * 0.5; f.h = h;
+    const v = (f.age >= 1 ? P.V_ADULT : P.V_FRY) * (f.scare > 0 ? 2.2 : 1);
+    f.x += Math.cos(h) * v * dt; f.y += Math.sin(h) * v * dt;
+    if (f.cool > 0) f.cool -= dt;
+    if (ph.phase === "fish" && ph.spring && mate >= 0 && f.cool <= 0 && rng() < P.BREED * dt * crowd) {
+      const o = L.fish[mate]; f.cool = o.cool = P.COOL_S;
+      const mx = (f.x + o.x) / 2, my = (f.y + o.y) / 2;
+      for (let c = 0; c < P.CLUTCH; c++) born.push(spawnFish(L, mx + (rng() - 0.5) * 10, my + (rng() - 0.5) * 10, 0));
+      L.spawnFx.push({ x: mx, y: my, t: L.t });
+    }
+  }
+  for (const b of born) L.fish.push(b);
+  const still = [];
+  for (const net of L.nets) {
+    if (net.closeAt > L.t + 1e-9) { still.push(net); continue; }
+    const r = net.fine ? P.R_FINE : P.R_COARSE; let got = 0, gotFry = 0, slipped = 0; const caught = [];
+    L.fish = L.fish.filter(f => {
+      const dx = f.x - net.x, dy = f.y - net.y;
+      if (dx * dx + dy * dy > r * r) return true;
+      if (f.age === 0 && !net.fine) { slipped++; return true; }
+      got++; if (f.age === 0) gotFry++; caught.push(f); return false;
+    });
+    net.got = got; net.gotFry = gotFry; net.slipped = slipped; net.caught = caught;
+    if (net.onHaul) net.onHaul(net);
+  }
+  L.nets = still;
+  const before = phaseOf(L.t);
+  L.t = Math.round((L.t + dt) * 1000) / 1000;
+  const after = phaseOf(L.t);
+  if (before.phase === "fish" && after.phase !== "fish") {
+    L.fish = L.fish.filter(f => { f.age += 1; if (f.age > P.MAX_AGE) return false; return f.age === 1 || rng() >= P.WINTER_DEATH; });
+    if (onWinter && after.phase === "meet") onWinter(before.year);
+  }
+}
+function castNet(L, x, y, fine, onHaul) {
+  const net = { x, y, fine, closeAt: Math.round((L.t + P.SINK_S) * 1000) / 1000, onHaul };
+  L.nets.push(net);
+  const r0 = fine ? P.R_FINE : P.R_COARSE, r = r0 * 1.6;
+  for (const f of L.fish) { const dx = f.x - x, dy = f.y - y, d = Math.hypot(dx, dy); if (d < r && d > r0 * 0.7) { f.scare = 0.5; f.sx = dx / d; f.sy = dy / d; } }
+  return net;
+}
+function bestSpot(L, fine, rng, maxE = 9, tries = 14) {
+  const r = fine ? P.R_FINE : P.R_COARSE, pool = L.fish.filter(f => fine || f.age >= 1);
+  let best = null, bestN = -1;
+  if (!pool.length) return { x: P.W / 2, y: P.H / 2, n: 0 };
+  for (let k = 0; k < tries; k++) {
+    const f = pool[Math.floor(rng() * pool.length)], x = f.x + Math.cos(f.h) * 15, y = f.y + Math.sin(f.h) * 15;
+    if (ell(x, y) > maxE) continue;
+    let n = 0; for (const o of pool) { const dx = o.x - x, dy = o.y - y; if (dx * dx + dy * dy < r * r) n++; }
+    if (n > bestN) { bestN = n; best = { x, y, n }; }
+  }
+  return best || { x: P.W / 2, y: P.H / 2, n: 0 };
+}
+
+// =====================================================================
+// PORTRAITS AND PRINTS
+// =====================================================================
+const SKIN = "#f7d9bd", LINE = "#1f2a5c", CHEEK = "#f0788f";
+function face(mood, beard = "") {
+  const eyes = {
+    happy: `<path d="M44 60 q6 -7 12 0 M64 60 q6 -7 12 0" fill="none" stroke="${LINE}" stroke-width="3" stroke-linecap="round"/>`,
+    worried: `<circle cx="50" cy="61" r="3.2" fill="${LINE}"/><circle cx="70" cy="61" r="3.2" fill="${LINE}"/><path d="M43 52 l12 -3 M77 52 l-12 -3" stroke="${LINE}" stroke-width="2.4" stroke-linecap="round"/>`,
+    sad: `<path d="M44 62 q6 5 12 0 M64 62 q6 5 12 0" fill="none" stroke="${LINE}" stroke-width="3" stroke-linecap="round"/><path d="M45 50 l11 4 M75 50 l-11 4" stroke="${LINE}" stroke-width="2.4" stroke-linecap="round"/><path d="M47 67 q-2 6 1 9 q3 -3 1 -9z M73 67 q-2 6 1 9 q3 -3 1 -9z" fill="#5ab4e6"/>`,
+    angry: `<circle cx="50" cy="62" r="3.2" fill="${LINE}"/><circle cx="70" cy="62" r="3.2" fill="${LINE}"/><path d="M42 50 l13 6 M78 50 l-13 6" stroke="${LINE}" stroke-width="3" stroke-linecap="round"/>`,
+  }[mood];
+  const c = { happy: 9, worried: 0, sad: -7, angry: -5 }[mood], e = c < 0 ? -c : 0;
+  return `<circle cx="60" cy="64" r="29" fill="${SKIN}" stroke="${LINE}" stroke-width="2.4"/><ellipse cx="44" cy="74" rx="7" ry="5" fill="${CHEEK}" opacity=".85"/><ellipse cx="76" cy="74" rx="7" ry="5" fill="${CHEEK}" opacity=".85"/>${eyes}${beard}<path d="M52 ${80 + e} Q60 ${80 + c} 68 ${80 + e}" fill="${c > 0 ? "#c4242b" : "none"}" stroke="${LINE}" stroke-width="2.4" stroke-linecap="round"/>`;
+}
+const bust = (jacket, trim, extra = "") => `<path d="M8 140 Q14 100 60 96 Q106 100 112 140 Z" fill="${jacket}" stroke="${LINE}" stroke-width="2.4"/><path d="M44 98 L60 120 L76 98" fill="none" stroke="${trim}" stroke-width="5" stroke-linejoin="round"/>${extra}`;
+const coin = (x, y) => `<circle cx="${x}" cy="${y}" r="6" fill="none" stroke="#a5480f" stroke-width="2"/><rect x="${x - 2.5}" y="${y - 2.5}" width="5" height="5" fill="none" stroke="#a5480f" stroke-width="1.5"/>`;
+const plum = (x, y) => `<g transform="translate(${x} ${y})">${[0, 72, 144, 216, 288].map(a => `<circle cx="${(Math.cos(a * Math.PI / 180) * 3.4).toFixed(2)}" cy="${(Math.sin(a * Math.PI / 180) * 3.4).toFixed(2)}" r="2.6" fill="#f06b8f"/>`).join("")}<circle r="1.6" fill="#f2b705"/></g>`;
+const ART = {
+  you: m => `${bust("#d7261e", "#f2b705", `<circle cx="28" cy="124" r="4" fill="#f2b705"/><circle cx="92" cy="124" r="4" fill="#f2b705"/>`)}${face(m)}<path d="M33 54 Q36 28 60 30 Q84 28 87 54 Q80 40 60 40 Q40 40 33 54z" fill="${LINE}"/><circle cx="38" cy="30" r="10" fill="${LINE}"/><circle cx="82" cy="30" r="10" fill="${LINE}"/><path d="M30 24 l8 6 l-9 4z M90 24 l-8 6 l9 4z" fill="#d7261e"/>`,
+  wang: m => `${bust("#22327a", "#e8e0c8")}${face(m, `<path d="M44 80 Q60 112 76 80 Q68 92 60 92 Q52 92 44 80z" fill="#fbf7ee" stroke="${LINE}" stroke-width="2"/>`)}<path d="M14 46 L60 14 L106 46 Q60 54 14 46z" fill="#d9a441" stroke="${LINE}" stroke-width="2.4"/><path d="M37 41 L60 18 M60 18 L83 41 M60 18 L60 48" stroke="#9c6b20" stroke-width="1.6"/>`,
+  jin: m => `${bust("#f2b705", "#d7261e", coin(34, 122) + coin(86, 122))}${face(m, `<path d="M48 76 q6 -4 12 0 q6 -4 12 0" fill="none" stroke="${LINE}" stroke-width="2.4" stroke-linecap="round"/>`)}<path d="M30 50 Q32 26 60 25 Q88 26 90 50 Q60 42 30 50z" fill="#1d1d1d" stroke="${LINE}" stroke-width="2"/><circle cx="60" cy="32" r="7" fill="#f2b705" stroke="#a5480f" stroke-width="1.6"/><rect x="57.5" y="29.5" width="5" height="5" fill="#1d1d1d"/>`,
+  mei: m => `${bust("#1f8a5b", "#f6b8c6", `<circle cx="30" cy="126" r="3" fill="#f6b8c6"/><circle cx="90" cy="126" r="3" fill="#f6b8c6"/>`)}${face(m)}<path d="M31 62 Q30 30 60 32 Q90 30 89 62 Q84 44 60 43 Q36 44 31 62z" fill="${LINE}"/><circle cx="34" cy="34" r="12" fill="${LINE}"/><circle cx="86" cy="34" r="12" fill="${LINE}"/>${plum(86, 24)}${plum(94, 34)}${plum(78, 30)}`,
+};
+const portrait = (kind, mood) => `<svg viewBox="0 8 120 132" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${ART[kind](mood)}</svg>`;
+function carpPrint() {
+  const scales = [];
+  for (let r = 0; r < 6; r++) for (let c = 0; c < 4; c++) { const x = 58 + c * 13 + (r % 2) * 6, y = 60 + r * 15; scales.push(`<path d="M${x - 6} ${y} q6 8 12 0" fill="none" stroke="#a51d16" stroke-width="2"/>`); }
+  return `<rect x="4" y="4" width="152" height="192" rx="10" fill="#fbe7bf" stroke="${LINE}" stroke-width="3"/>
+  <g stroke="#7fc6c0" stroke-width="2" fill="none">${[150, 162, 174, 186].map(y => [20, 50, 80, 110, 140].map(x => `<path d="M${x - 15} ${y} a15 15 0 0 1 30 0"/>`).join("")).join("")}</g>
+  <path d="M40 40 C70 10 120 30 116 80 C114 120 100 150 74 168 L62 150 C80 130 84 108 82 88 C80 60 62 52 40 40z" fill="#d7261e" stroke="${LINE}" stroke-width="3"/>${scales.join("")}
+  <path d="M62 150 L40 182 L70 170 L84 188 L74 168z" fill="#f2b705" stroke="${LINE}" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M112 70 L136 58 L126 86z M98 120 L124 126 L104 138z" fill="#f2b705" stroke="${LINE}" stroke-width="2.6" stroke-linejoin="round"/>
+  <circle cx="56" cy="36" r="6" fill="#fff" stroke="${LINE}" stroke-width="2.4"/><circle cx="57" cy="36" r="2.6" fill="${LINE}"/>
+  <path d="M42 44 q-14 2 -22 -6 M46 48 q-10 10 -20 8" stroke="${LINE}" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+  <g fill="#f06b8f" stroke="${LINE}" stroke-width="1.6"><path d="M20 120 q8 -16 16 0 q-8 8 -16 0z"/><path d="M128 150 q8 -14 16 0 q-8 7 -16 0z"/></g>
+  <path d="M18 24 q8 -8 16 0 q8 -8 16 0" stroke="#f2b705" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+}
+// the net Duke Xuan kept, cut by Li Ge
+function cutNetSVG() {
+  const lines = [];
+  for (let i = 0; i <= 8; i++) { lines.push(`<path d="M${10 + i * 12} 10 L${10 + i * 12} ${i === 4 ? 52 : 106}" />`); lines.push(`<path d="M10 ${10 + i * 12} L${i === 5 ? 52 : 106} ${10 + i * 12}" />`); }
+  return `<svg viewBox="0 0 120 130" aria-hidden="true"><g stroke="${LINE}" stroke-width="2" fill="none">${lines.join("")}</g><path d="M58 52 L64 60 L52 66 L66 74" stroke="#d7261e" stroke-width="3.5" fill="none" stroke-linecap="round"/><rect x="74" y="88" width="40" height="36" rx="5" fill="#d7261e"/><text x="94" y="114" font-family="Ma Shan Zheng,KaiTi,serif" font-size="20" fill="#fff6e3" text-anchor="middle">良罟</text></svg>`;
+}
+
+// =====================================================================
+// THE GAME
+// =====================================================================
+const SEED = (Date.now() & 0xffffff) | 1;
+const RULES = {
+  none: { g: "无", name: "No rule", line: "Everyone fishes as they like." },
+  ban: { g: "禁", name: "Fine-mesh nets are banned", line: "A fine net that lands is a breach." },
+  spring: { g: "休", name: "No fishing in spring", line: "A net thrown while the fish spawn is a breach." },
+  nursery: { g: "护", name: "The shallows are protected", line: "A net in the pale shallows, where the fry live, is a breach." },
+};
+const HOUSES = [[0, "茅屋", "a thatched hut"], [25, "瓦房", "a tiled house"], [60, "红门", "a red gate"], [110, "灯笼", "lanterns"], [170, "楼", "a second storey"], [240, "宝塔", "a pagoda"]];
+const tierOf = k => { let t = 0; HOUSES.forEach(([n], i) => { if (k >= n) t = i; }); return t; };
+const fams = [
+  { id: "you", kind: "you", name: "Your family", zh: "你", color: "#d7261e", bot: null, note: "you", side: "bottom" },
+  { id: "wang", kind: "wang", name: "Old Wang", zh: "王", color: "#22327a", bot: "careful", note: "keeps a coarse net; speaks up", side: "left" },
+  { id: "jin", kind: "jin", name: "Jin", zh: "金", color: "#c98a00", bot: "greedy", note: "wants the biggest catch", side: "top" },
+  { id: "mei", kind: "mei", name: "Mei", zh: "梅", color: "#1f8a5b", bot: "follower", note: "does what the others do", side: "right" },
+].map((f, i) => ({ ...f, i, landed: 0, spent: 0, fine: false, useFine: false, breaches: 0, yearBreaches: 0, next: 0, vote: null, sanctioned: 0, bubble: null, lastCast: -99, fryTaken: 0 }));
+const me = fams[0];
+const kept = f => f.landed - f.spent;
+const G = {
+  L: makeLake(fams.length, SEED), phase: "intro", rule: "none", rules: { 1: "none" }, speed: 1, paused: true, acc: 0,
+  aim: { x: P.W / 2, y: P.H / 2 + 120, show: false }, throws: [], floats: [], flyers: [], stamps: [], seen: new Set(),
+  koi: null, koiYear: 0, samples: [], log: [], sound: false, ended: false, aimRng: rngFrom(SEED ^ 0x9e3779b9), meetOpened: 0,
+};
+const $ = id => document.getElementById(id);
+const ZH = () => getComputedStyle(document.body).getPropertyValue("--f-zh");
+
+// ---------- the record ----------
+function logEvent(text, hot = false) {
+  const yr = phaseOf(G.L.t).year;
+  G.log.unshift({ yr, text, hot });
+  $("log").innerHTML = G.log.slice(0, 40).map(e => `<li><span class="y">Y${e.yr}</span><span class="${e.hot ? "hot" : ""}">${e.text}</span></li>`).join("");
+}
+function say(f, text, seal = null, secs = 3.2) { f.bubble = { text, seal, until: G.L.t + secs }; }
+function banner(key, glyph, text) {
+  if (key && G.seen.has(key)) return; if (key) G.seen.add(key);
+  $("banner-g").textContent = glyph; $("banner-t").textContent = text; $("banner").hidden = false;
+  clearTimeout(banner.tm); banner.tm = setTimeout(() => ($("banner").hidden = true), 5600);
+}
+
+// ---------- breaking a rule ----------
+function breachOf(x, y, fine) {
+  const r = G.rule, ph = phaseOf(G.L.t);
+  if (r === "ban" && fine) return true;
+  if (r === "spring" && ph.spring) return true;
+  if (r === "nursery" && ell(x, y) > P.SHALLOW) return true;
+  return false;
+}
+
+// ---------- throwing a net (people and bots alike) ----------
+function throwNet(f, x, y) {
+  const L = G.L, ph = phaseOf(L.t);
+  if (ph.phase !== "fish" || G.paused) return false;
+  if (L.t - f.lastCast < P.CAST_S - 1e-6) return false;
+  if (!inLake(x, y, 0.985)) return false;
+  const fine = f.fine && f.useFine;
+  const breach = breachOf(x, y, fine);
+  f.lastCast = L.t;
+  const th = { f, x, y, fine, breach, t0: L.t, got: null, slipped: 0 };
+  G.throws.push(th);
+  castNet(L, x, y, fine, net => {
+    th.got = net.got; th.slipped = net.slipped; th.tHaul = G.L.t;
+    f.landed += net.got; f.fryTaken += net.gotFry;
+    if (G.koi && !G.koi.caught && Math.hypot(G.koi.x - x, G.koi.y - y) < (fine ? P.R_FINE : P.R_COARSE) + 6) {
+      G.koi.caught = true; f.landed += 8; G.floats.push({ x, y: y - 26, text: "锦鲤 +8", color: "#c98a00", t: G.L.t, big: true });
+      logEvent(`${f.name} netted the golden carp (+8)`, true); sfx.crackle(); burst(x, y);
+      say(f, f.bot === "greedy" ? "Lucky Jin!" : "What luck!", "喜");
+    }
+    net.caught.slice(0, 14).forEach((c, k) => G.flyers.push({ x: c.x, y: c.y, f, t: G.L.t + k * 0.03, age: c.age, hue: c.hue }));
+    G.floats.push({ x, y, text: net.got ? `+${net.got}` : "空", color: f.color, t: G.L.t, big: f === me });
+    if (net.slipped && !fine && f === me) banner("slip", "鲕", `${net.slipped} fry slipped through your coarse mesh. They are next year's fish.`);
+    if (f === me) sfx.haul(net.got);
+    if (net.gotFry >= 3 && f !== me && !G.seen.has("fryhaul-" + f.id)) { G.seen.add("fryhaul-" + f.id); logEvent(`${f.name}'s fine net took ${net.gotFry} fry in one haul`, true); }
+  });
+  if (breach) {
+    f.breaches++; f.yearBreaches++;
+    G.stamps.push({ x, y, t: L.t, f });
+    logEvent(`${f.name} broke the rule (${RULES[G.rule].g})`, true);
+    sfx.stamp();
+    reactToBreach(f);
+  }
+  if (f === me) sfx.splash();
+  return true;
+}
+
+// ---------- bots ----------
+// Old Wang: careful; never buys; speaks up when someone breaks a rule.
+// Jin: greedy; buys a fine net at 20 fish; breaks rules until someone stamps 怒 on him that year.
+// Mei: follower; buys once two others have fine nets; obeys, unless two breaches this year went unanswered.
+function breaking(f) {
+  if (G.rule === "none") return false;
+  const yr = phaseOf(G.L.t).year;
+  if (f.bot === "greedy") return f.sanctioned !== yr;
+  if (f.bot === "follower") return f.sanctioned !== yr && fams.filter(o => o !== f).reduce((a, o) => a + o.yearBreaches, 0) >= 2;
+  return false;
+}
+function botThink(f) {
+  const L = G.L, ph = phaseOf(L.t);
+  if (!f.fine && kept(f) >= P.FINE_COST) {
+    const othersFine = fams.filter(o => o !== f && o.fine).length;
+    const wants = f.bot === "greedy" ? true : f.bot === "follower" ? othersFine >= 2 : false;
+    if (wants && (G.rule !== "ban" || breaking(f))) buyFine(f);
+  }
+  if (L.t + 1e-9 < f.next) return;
+  f.next = L.t + P.CAST_S * (0.95 + G.aimRng() * 0.35);
+  if (G.aimRng() > 0.88) return;
+  const brk = breaking(f);
+  if (G.rule === "spring" && ph.spring && !brk) return;
+  f.useFine = f.fine && (G.rule !== "ban" || brk);
+  const maxE = G.rule === "nursery" && !brk ? P.SHALLOW * 0.95 : 9;
+  const s = bestSpot(L, f.useFine, G.aimRng, maxE);
+  let x = s.x + (G.aimRng() - 0.5) * 2 * P.AIM_NOISE, y = s.y + (G.aimRng() - 0.5) * 2 * P.AIM_NOISE;
+  if (G.koi && !G.koi.caught && f.bot === "greedy" && G.aimRng() < 0.5) { x = G.koi.x + Math.cos(G.koi.h) * 25; y = G.koi.y + Math.sin(G.koi.h) * 25; }
+  if (!inLake(x, y, 0.97)) { x = s.x; y = s.y; }
+  if (G.rule === "nursery" && !brk && ell(x, y) > P.SHALLOW) { x = s.x; y = s.y; }
+  throwNet(f, x, y);
+}
+function botVote(f) {
+  const adults = countAdults(G.L), start = G.L.start;
+  if (f.bot === "greedy") return "none";
+  if (f.bot === "follower") return me.vote || "none";
+  if (fams.some(o => o.fine)) return "ban";
+  if (fams.some(o => o.fryTaken > 6)) return "nursery";
+  return adults < start * 0.6 ? "spring" : "none";
+}
+const VOTE_AT = { careful: 3, greedy: 6, follower: 10 };
+const WANG_LINES = { ban: "Fine nets take the young. Ban them.", nursery: "Leave the shallows to the fry.", spring: "Let them spawn in peace.", none: "The lake is full. No rule yet." };
+function reactToBreach(f) {
+  const wang = fams.find(o => o.bot === "careful");
+  const key = `wangangry-${f.id}-${phaseOf(G.L.t).year}`;
+  if (f !== wang && !G.seen.has(key)) { G.seen.add(key); setTimeout(() => sendSeal(wang, f, "怒"), 700); }
+  if (f.bot === "greedy") banner("jin-breach-hint", "违", "Jin broke the rule. Old Wang objects, but Jin only backs down when two families do. Tap Jin's card and stamp 怒.");
+}
+function sendSeal(from, to, seal) {
+  const words = { 赞: "thanks", 求: "please", 怒: "stop that", 喜: "cheers" };
+  G.flyers.push({ seal, from, to, t: G.L.t });
+  setTimeout(() => {
+    say(to, `${from.zh} → ${words[seal]}`, seal, 2.6);
+    if (from === me) logEvent(`You sent ${to.name} ${seal} (${words[seal]})`);
+    else if (to === me) logEvent(`${from.name} sent you ${seal} (${words[seal]})`, seal === "怒");
+    else logEvent(`${from.name} sent ${to.name} ${seal}`, seal === "怒");
+    answerSeal(from, to, seal);
+  }, 450);
+  if (from === me) sfx.chime(seal === "怒" ? 0 : 3);
+}
+function answerSeal(from, to, seal) {
+  if (!to.bot) return;
+  const yr = phaseOf(G.L.t).year;
+  if (seal === "怒") {
+    if (!to.anger || to.anger.year !== yr) to.anger = { year: yr, from: new Set() };
+    to.anger.from.add(from.id);
+    if (to.bot === "greedy") {
+      if (G.rule === "none") setTimeout(() => say(to, "There's no rule against it!", "喜"), 900);
+      else if (to.anger.from.size >= 2) { if (to.sanctioned !== yr) { to.sanctioned = yr; setTimeout(() => say(to, "All right, all right. I'll keep the rule this year.", "求"), 900); logEvent("Two families stood up to Jin. He keeps the rule for the rest of the year.", true); } }
+      else setTimeout(() => say(to, "Only one of you minds? I'll carry on.", "喜"), 900);
+    } else if (to.bot === "follower") { to.sanctioned = yr; setTimeout(() => say(to, "Sorry! I'll stop.", "求"), 900); }
+    else setTimeout(() => say(to, "Me? I keep a coarse net!", "怒"), 900);
+  } else if (seal === "求" && to.bot === "greedy") {
+    setTimeout(() => say(to, to.fine ? "Everyone would, in my place." : "We'll see.", null), 900);
+  } else if (seal === "赞" || seal === "喜") {
+    setTimeout(() => say(to, to.bot === "greedy" ? "Ha!" : "Thank you!", "喜"), 900);
+  }
+}
+function buyFine(f) {
+  if (f.fine || kept(f) < P.FINE_COST || phaseOf(G.L.t).phase !== "fish" || G.paused) return;
+  f.fine = true; f.useFine = true; f.spent += P.FINE_COST;
+  logEvent(`${f.name} bought a fine-mesh net`, true);
+  if (f.bot === "greedy") { say(f, "A fine net! Every fish is mine.", "喜"); banner("finefirst", "罟", "Jin bought a fine-mesh net. It keeps the fry too, and the fry are next year's fish."); }
+  if (f.bot === "follower") say(f, "Everyone else has one…", "求");
+  const wang = fams.find(o => o.bot === "careful");
+  if (f !== wang) setTimeout(() => { sendSeal(wang, f, "求"); setTimeout(() => say(wang, "Leave the little ones!", "求"), 500); }, 1100);
+  if (f === me) { banner("mefine", "罟", "Your fine net keeps everything in the ring, fry included. Switch nets with F."); sfx.crackle(); }
+}
+
+// ---------- the golden carp ----------
+function maybeKoi(ph) {
+  if (G.koiYear === ph.year || ph.phase !== "fish" || ph.into < 17) return;
+  G.koiYear = ph.year;
+  const a = G.aimRng() * Math.PI * 2;
+  G.koi = { x: P.W / 2 + Math.cos(a) * 200, y: P.H / 2 + Math.sin(a) * 120, h: a + Math.PI, caught: false, until: G.L.t + 12 };
+  banner(null, "锦", "A golden carp! Worth 8 fish to whoever nets it.");
+  sfx.chime(5);
+}
+function moveKoi(dt) {
+  const k = G.koi; if (!k) return;
+  if (k.caught || G.L.t > k.until || phaseOf(G.L.t).phase !== "fish") { G.koi = null; return; }
+  k.h += (G.aimRng() - 0.5) * 0.5;
+  if (!inLake(k.x, k.y, 0.85)) k.h = Math.atan2(P.H / 2 - k.y, P.W / 2 - k.x);
+  k.x += Math.cos(k.h) * 70 * dt; k.y += Math.sin(k.h) * 70 * dt;
+}
+
+// ---------- the clock ----------
+function tick() {
+  const L = G.L, ph = phaseOf(L.t);
+  if (ph.phase === "fish") {
+    fams.forEach(f => f.bot && botThink(f));
+    maybeKoi(ph);
+    if (ph.spring && ph.into > 1 && ph.year === 1) banner("spring1", "春", "Spring. Two fish that meet pair up and lay eggs. Watch for the hearts.");
+    if (ph.into > 7 && ph.year === 1 && countFry(L) > 10 && G.seen.has("spring1")) banner("fry1", "鲕", "Fry! They keep to the pale shallows. A coarse net lets them slip through.");
+    if (ph.spring && ph.into > 8 && countAdults(L) < 30 && countAdults(L) > 0) banner("allee", "孤", "So few fish are left that they can no longer find each other to spawn.");
+    if (ph.spring && G.rule === "spring" && ph.into < 0.15) banner(null, "休", "Spring closure: no nets until summer. Everyone sees who breaks it.");
+  }
+  if (ph.phase === "meet") meetingTick(ph);
+  step(L, year => onWinter(year));
+  moveKoi(P.DT);
+  if (Math.round(L.t * 10) % 10 === 0) G.samples.push({ t: L.t, a: countAdults(L), f: countFry(L) });
+  if (!L.fish.length && !G.ended) { logEvent("The lake is empty.", true); endGame(); }
+  if (phaseOf(L.t).phase === "over" && !G.ended) endGame();
+}
+function onWinter(year) {
+  sfx.gong();
+  banner(year === 1 ? "winter1" : null, "冬", year === 1 ? "Winter. The lake freezes, last spring's fry grow up, and the village meets." : "Winter. The village meets.");
+  fams.forEach(f => (f.vote = null));
+  $("vote-options").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", "false"));
+  $("meet-eyebrow").textContent = `Winter of year ${year} · the village meets`;
+  renderCouncil(); $("meeting").hidden = false; G.meetOpened = performance.now();
+}
+function meetingTick(ph) {
+  const t = ph.into - P.FISH_S;
+  fams.forEach(f => {
+    if (!f.bot || f.vote || t < VOTE_AT[f.bot]) return;
+    f.vote = botVote(f);
+    if (f.bot === "careful") say(f, WANG_LINES[f.vote], RULES[f.vote].g);
+    if (f.bot === "greedy") say(f, "No rules! Plenty for all.", "无");
+    if (f.bot === "follower") say(f, me.vote ? "I'll vote with you." : "Nobody told me… no rule.", RULES[f.vote].g);
+    renderCouncil(); sfx.stamp();
+  });
+  $("meet-left").style.width = `${Math.max(0, 100 - (t / P.MEET_S) * 100)}%`;
+  if (t + P.DT >= P.MEET_S - 1e-6) closeMeeting(ph.year);
+}
+function tally() {
+  const c = { none: 0, ban: 0, spring: 0, nursery: 0 };
+  fams.forEach(f => c[f.vote || "none"]++);
+  let win = "none";
+  for (const k of Object.keys(c)) if (2 * c[k] >= fams.length && Object.keys(c).every(o => o === k || c[k] > c[o])) win = k;
+  return { win, c };
+}
+function closeMeeting(year) {
+  const { win, c } = tally();
+  G.rule = win; G.rules[year + 1] = win;
+  fams.forEach(f => (f.yearBreaches = 0));
+  $("meeting").hidden = true;
+  logEvent(`The village chose: ${RULES[win].name.toLowerCase()} (无${c.none} 禁${c.ban} 休${c.spring} 护${c.nursery})`, win !== "none");
+  $("rule-g").textContent = RULES[win].g; $("rule-t").textContent = `${RULES[win].name}. ${RULES[win].line}`;
+  newYear(year + 1);
+}
+function newYear(year) {
+  const a = countAdults(G.L), start = G.L.start, ratio = a / start;
+  $("ny-eyebrow").textContent = `New Year · year ${year} of ${P.YEARS}`;
+  $("ny-big").textContent = ratio >= 0.6 ? "年年有余" : ratio >= 0.25 ? "鱼少了" : "明年无鱼";
+  $("ny-line").textContent = ratio >= 0.6 ? `${a} grown fish greet the new year.` : `${a} grown fish greet the new year, ${start - a} fewer than the first.`;
+  $("ny-rule").textContent = `This year: ${RULES[G.rule].name.toLowerCase()}.`;
+  $("newyear").hidden = false; G.paused = true; sfx.crackle();
+  setTimeout(() => { $("newyear").hidden = true; if (!G.ended) G.paused = false; }, 2300);
+}
+
+// =====================================================================
+// DRAWING
+// =====================================================================
+const cv = $("lake"), cx = cv.getContext("2d");
+const VW = 1160, VH = 860, OX = 80, OY = 80;
+let scale = 1, offX = 0, offY = 0, DPR = 1, bgCanvas = null;
+const HOMES = { bottom: { x: OX + P.W / 2, y: VH - 44 }, left: { x: 46, y: OY + P.H / 2 + 20 }, top: { x: OX + P.W / 2, y: 46 }, right: { x: VW - 46, y: OY + P.H / 2 + 20 } };
+const SHORE = { bottom: { x: OX + P.W / 2, y: OY + P.H / 2 + P.RY }, left: { x: OX + P.W / 2 - P.RX, y: OY + P.H / 2 }, top: { x: OX + P.W / 2, y: OY + P.H / 2 - P.RY }, right: { x: OX + P.W / 2 + P.RX, y: OY + P.H / 2 } };
+const FISH_COLORS = [["#e8452c", "#f2b705"], ["#f2b705", "#e8452c"], ["#ffffff", "#e8452c"], ["#e8452c", "#ffffff"]];
+function resize() {
+  const r = cv.getBoundingClientRect(); if (!r.width) return;
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = Math.round(r.width * DPR); cv.height = Math.round(r.height * DPR);
+  scale = Math.min(r.width / VW, r.height / VH); offX = (r.width - VW * scale) / 2; offY = (r.height - VH * scale) / 2;
+  bgCanvas = null;
+}
+const toWorld = (px, py) => ({ x: (px - offX) / scale - OX, y: (py - offY) / scale - OY });
+function buildBg() {
+  const b = document.createElement("canvas"); b.width = cv.width; b.height = cv.height;
+  const c = b.getContext("2d"); c.setTransform(DPR * scale, 0, 0, DPR * scale, DPR * offX, DPR * offY);
+  c.fillStyle = "#fbe7bf"; c.fillRect(-OX, -OY, VW + OX * 2, VH + OY * 2);
+  c.strokeStyle = "rgba(31,138,91,.4)"; c.lineWidth = 2;
+  for (let i = 0; i < 180; i++) { const a = i / 180 * Math.PI * 2, rr = 1.05 + (i % 3) * 0.035; const x = OX + P.W / 2 + Math.cos(a) * P.RX * rr, y = OY + P.H / 2 + Math.sin(a) * P.RY * rr; c.beginPath(); c.moveTo(x, y); c.lineTo(x + 3, y - 9); c.stroke(); }
+  c.save(); c.beginPath(); c.ellipse(OX + P.W / 2, OY + P.H / 2, P.RX, P.RY, 0, 0, Math.PI * 2); c.clip();
+  c.fillStyle = "#86cbc2"; c.fillRect(OX, OY, P.W, P.H);
+  c.beginPath(); c.ellipse(OX + P.W / 2, OY + P.H / 2, P.RX * P.SHALLOW, P.RY * P.SHALLOW, 0, 0, Math.PI * 2); c.fillStyle = "#1f7f8c"; c.fill();
+  c.strokeStyle = "rgba(255,255,255,.16)"; c.lineWidth = 2;
+  for (let y = OY - 10; y < OY + P.H + 20; y += 22) for (let x = OX - 20 + ((y / 22) % 2) * 18; x < OX + P.W + 20; x += 36) { c.beginPath(); c.arc(x, y, 16, Math.PI, 0); c.stroke(); }
+  c.restore();
+  c.lineWidth = 7; c.strokeStyle = LINE; c.beginPath(); c.ellipse(OX + P.W / 2, OY + P.H / 2, P.RX, P.RY, 0, 0, Math.PI * 2); c.stroke();
+  c.setLineDash([3, 7]); c.lineWidth = 2; c.strokeStyle = "rgba(255,255,255,.6)"; c.beginPath(); c.ellipse(OX + P.W / 2, OY + P.H / 2, P.RX * P.SHALLOW, P.RY * P.SHALLOW, 0, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
+  [[0.2, 0.18], [0.82, 0.2], [0.1, 0.62], [0.9, 0.7], [0.3, 0.88], [0.68, 0.9]].forEach(([u, v], i) => {
+    if (!inLake(u * P.W, v * P.H, 0.98)) return;
+    const x = OX + u * P.W, y = OY + v * P.H; c.fillStyle = "#2f9a62"; c.strokeStyle = LINE; c.lineWidth = 2;
+    c.beginPath(); c.moveTo(x, y); c.arc(x, y, 15, 0.3 + i, Math.PI * 1.85 + i); c.closePath(); c.fill(); c.stroke();
+  });
+  bgCanvas = b;
+}
+function drawHouse(f, t) {
+  const h = HOMES[f.side], tier = tierOf(kept(f));
+  cx.save(); cx.translate(h.x, h.y); cx.lineWidth = 2.5; cx.strokeStyle = LINE;
+  const w = 46 + tier * 5, hh = 26 + Math.min(tier, 3) * 3;
+  cx.fillStyle = tier >= 2 ? "#fff6e3" : "#f3dfb8"; cx.fillRect(-w / 2, -hh / 2, w, hh); cx.strokeRect(-w / 2, -hh / 2, w, hh);
+  cx.fillStyle = tier >= 2 ? "#d7261e" : "#9c6b20"; cx.fillRect(-7, hh / 2 - 16, 14, 16); cx.strokeRect(-7, hh / 2 - 16, 14, 16);
+  const roof = tier === 0 ? "#b98b3e" : "#3b4a7a";
+  const drawRoof = (y, ww) => { cx.fillStyle = roof; cx.beginPath(); cx.moveTo(-ww / 2 - 10, y); cx.quadraticCurveTo(-ww / 4, y - 6, 0, y - 20); cx.quadraticCurveTo(ww / 4, y - 6, ww / 2 + 10, y); cx.closePath(); cx.fill(); cx.stroke(); };
+  if (tier >= 4) { cx.fillStyle = "#fff6e3"; cx.fillRect(-w / 2 + 6, -hh / 2 - 22, w - 12, 22); cx.strokeRect(-w / 2 + 6, -hh / 2 - 22, w - 12, 22); }
+  if (tier >= 5) { cx.fillStyle = "#fff6e3"; cx.fillRect(-w / 2 + 14, -hh / 2 - 46, w - 28, 18); cx.strokeRect(-w / 2 + 14, -hh / 2 - 46, w - 28, 18); drawRoof(-hh / 2 - 46, w - 28); }
+  if (tier >= 4) drawRoof(-hh / 2 - 22, w - 12);
+  drawRoof(-hh / 2, w);
+  if (tier >= 3) [-w / 2 - 6, w / 2 + 6].forEach(x => { cx.fillStyle = "#d7261e"; cx.beginPath(); cx.ellipse(x, -hh / 2 + 6 + Math.sin(t * 2 + x) * 1.5, 6, 8, 0, 0, Math.PI * 2); cx.fill(); cx.stroke(); cx.fillStyle = "#f2b705"; cx.fillRect(x - 2, -hh / 2 + 13, 4, 4); });
+  cx.fillStyle = f.color; const fx = w / 2 + 18, fy = hh / 2 - 6;
+  cx.beginPath(); cx.roundRect(fx - 14, fy - 30, 28, 28, 5); cx.fill(); cx.stroke();
+  cx.fillStyle = "#fff6e3"; cx.font = `24px ${ZH()}`; cx.textAlign = "center"; cx.textBaseline = "middle"; cx.fillText(f.zh, fx, fy - 15);
+  cx.font = "900 16px Nunito, system-ui, sans-serif"; cx.fillStyle = LINE; cx.fillText(String(kept(f)), -w / 2 - 22, hh / 2 - 8);
+  for (let k = 0; k < Math.min(f.breaches, 6); k++) { cx.fillStyle = "#7a1010"; cx.fillRect(-w / 2 + k * 11, hh / 2 + 4, 9, 9); }
+  if (f === me && phaseOf(G.L.t).phase === "fish" && G.phase === "play") { const p = Math.min(1, (G.L.t - f.lastCast) / P.CAST_S); cx.strokeStyle = p >= 1 ? "#1f8a5b" : "#d7261e"; cx.lineWidth = 4; cx.beginPath(); cx.arc(0, -4, w / 2 + 16, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p); cx.stroke(); }
+  if (f.bubble && G.L.t < f.bubble.until) {
+    const text = f.bubble.text; cx.font = "800 14px Nunito, system-ui, sans-serif";
+    const tw = Math.min(250, cx.measureText(text).width) + (f.bubble.seal ? 34 : 0) + 22;
+    let bx = 0, by = -hh / 2 - (tier >= 5 ? 84 : tier >= 4 ? 62 : 44);
+    if (f.side === "left") bx = tw / 2 - 24; if (f.side === "right") bx = -tw / 2 + 24; if (f.side === "top") by = hh / 2 + 40;
+    cx.fillStyle = "#fff6e3"; cx.lineWidth = 2.5; cx.beginPath(); cx.roundRect(bx - tw / 2, by - 17, tw, 34, 10); cx.fill(); cx.stroke();
+    let tx = bx - tw / 2 + 10;
+    if (f.bubble.seal) { cx.fillStyle = "#d7261e"; cx.beginPath(); cx.roundRect(tx, by - 13, 26, 26, 5); cx.fill(); cx.fillStyle = "#fff6e3"; cx.font = `20px ${ZH()}`; cx.textAlign = "center"; cx.fillText(f.bubble.seal, tx + 13, by + 1); tx += 34; cx.font = "800 14px Nunito, system-ui, sans-serif"; }
+    cx.fillStyle = LINE; cx.textAlign = "left"; cx.fillText(text, tx, by + 1, 250);
+  }
+  cx.restore();
+}
+function drawFish(f, a, t) {
+  const x = OX + f.px + (f.x - f.px) * a, y = OY + f.py + (f.y - f.py) * a;
+  cx.save(); cx.translate(x, y); cx.rotate(f.h);
+  if (f.age === 0) {
+    cx.fillStyle = "rgba(255,240,200,.95)"; cx.beginPath(); cx.ellipse(0, 0, 4.4, 2, 0, 0, Math.PI * 2); cx.fill();
+    cx.fillStyle = LINE; cx.fillRect(2, -0.7, 1.4, 1.4);
+  } else {
+    const [body, spot] = FISH_COLORS[f.hue], wig = Math.sin(t * 9 + f.id) * 0.35;
+    cx.fillStyle = body; cx.strokeStyle = "rgba(31,42,92,.85)"; cx.lineWidth = 1.2;
+    cx.beginPath(); cx.moveTo(-8, 0); cx.lineTo(-14, -5 + wig * 4); cx.lineTo(-13, 0); cx.lineTo(-14, 5 + wig * 4); cx.closePath(); cx.fill(); cx.stroke();
+    cx.beginPath(); cx.ellipse(0, 0, 10, 4.6, 0, 0, Math.PI * 2); cx.fill(); cx.stroke();
+    cx.fillStyle = spot; cx.beginPath(); cx.ellipse(1, -0.5, 3.6, 2.3, 0, 0, Math.PI * 2); cx.fill();
+  }
+  cx.restore();
+}
+function drawNet(x, y, r, fine, color, k, breach) {
+  cx.save(); cx.translate(OX + x, OY + y);
+  cx.save(); cx.beginPath(); cx.arc(0, 0, r * k, 0, Math.PI * 2); cx.clip();
+  cx.strokeStyle = breach ? "#d7261e" : color; cx.globalAlpha = 0.8; cx.lineWidth = fine ? 1 : 1.6;
+  const g = fine ? 5 : 10;
+  for (let d = -2 * r; d <= 2 * r; d += g) { cx.beginPath(); cx.moveTo(d - r, -r); cx.lineTo(d + r, r); cx.stroke(); cx.beginPath(); cx.moveTo(d + r, -r); cx.lineTo(d - r, r); cx.stroke(); }
+  cx.restore();
+  cx.strokeStyle = breach ? "#d7261e" : color; cx.lineWidth = 3; cx.beginPath(); cx.arc(0, 0, r * k, 0, Math.PI * 2); cx.stroke();
+  cx.fillStyle = LINE; for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; cx.beginPath(); cx.arc(Math.cos(a) * r * k, Math.sin(a) * r * k, 2.2, 0, Math.PI * 2); cx.fill(); }
+  cx.restore();
+}
+function sealAt(x, y, ch, size, rot = 0.15, alpha = 1) {
+  cx.save(); cx.globalAlpha = Math.max(0, alpha); cx.translate(x, y); cx.rotate(rot);
+  cx.fillStyle = "#d7261e"; cx.strokeStyle = "#fff6e3"; cx.lineWidth = 2;
+  cx.beginPath(); cx.roundRect(-size / 2, -size / 2, size, size, size * 0.16); cx.fill(); cx.strokeRect(-size / 2 + 3, -size / 2 + 3, size - 6, size - 6);
+  cx.fillStyle = "#fff6e3"; cx.font = `${size * 0.72}px ${ZH()}`; cx.textAlign = "center"; cx.textBaseline = "middle"; cx.fillText(ch, 0, 1);
+  cx.restore();
+}
+const particles = [];
+function burst(x, y) { for (let i = 0; i < 28; i++) { const a = Math.random() * Math.PI * 2, v = 60 + Math.random() * 120; particles.push({ x: OX + x, y: OY + y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1, c: ["#d7261e", "#f2b705", "#f06b8f"][i % 3] }); } }
+let lastFrame = performance.now();
+function render(now) {
+  const real = Math.min(0.05, (now - lastFrame) / 1000); lastFrame = now;
+  if (!G.paused && !G.ended) { G.acc += real * G.speed; let n = 0; while (G.acc >= P.DT && n < 8 && !G.paused) { tick(); G.acc -= P.DT; n++; } }
+  const a = Math.min(1, G.acc / P.DT), L = G.L, t = L.t + G.acc, ph = phaseOf(L.t);
+  if (!bgCanvas) buildBg();
+  cx.setTransform(1, 0, 0, 1, 0, 0); cx.drawImage(bgCanvas, 0, 0);
+  cx.setTransform(DPR * scale, 0, 0, DPR * scale, DPR * offX, DPR * offY);
+  cx.save(); cx.beginPath(); cx.ellipse(OX + P.W / 2, OY + P.H / 2, P.RX, P.RY, 0, 0, Math.PI * 2); cx.clip();
+  if (G.rule === "nursery") { cx.beginPath(); cx.ellipse(OX + P.W / 2, OY + P.H / 2, P.RX, P.RY, 0, 0, Math.PI * 2); cx.ellipse(OX + P.W / 2, OY + P.H / 2, P.RX * P.SHALLOW, P.RY * P.SHALLOW, 0, 0, Math.PI * 2); cx.fillStyle = "rgba(215,38,30,.18)"; cx.fill("evenodd"); }
+  if (ph.phase === "fish" && ph.spring) { cx.fillStyle = "rgba(240,107,143,.08)"; cx.fillRect(OX, OY, P.W, P.H); }
+  cx.restore();
+  L.spawnFx = L.spawnFx.filter(s => t - s.t < 1.6);
+  cx.textAlign = "center";
+  for (const s of L.spawnFx) { const k = (t - s.t) / 1.6; cx.globalAlpha = 1 - k; cx.fillStyle = "#f06b8f"; cx.font = `${15 + k * 6}px sans-serif`; cx.fillText("♥", OX + s.x, OY + s.y - 10 - k * 22); cx.fillStyle = "rgba(255,246,227,.85)"; for (let e = 0; e < 5; e++) { cx.beginPath(); cx.arc(OX + s.x + Math.cos(e * 1.3) * 6 * (1 + k), OY + s.y + Math.sin(e * 1.3) * 5 * (1 + k), 1.8, 0, Math.PI * 2); cx.fill(); } cx.globalAlpha = 1; }
+  for (const f of L.fish) drawFish(f, a, t);
+  if (ph.phase === "meet") { cx.save(); cx.beginPath(); cx.ellipse(OX + P.W / 2, OY + P.H / 2, P.RX, P.RY, 0, 0, Math.PI * 2); cx.clip(); cx.fillStyle = "rgba(232,244,246,.72)"; cx.fillRect(OX, OY, P.W, P.H); cx.strokeStyle = "rgba(31,42,92,.25)"; cx.lineWidth = 1.5; for (let i = 0; i < 10; i++) { cx.beginPath(); cx.moveTo(OX + 80 + i * 95, OY + 40); cx.lineTo(OX + 120 + i * 90, OY + 330); cx.lineTo(OX + 70 + i * 97, OY + 660); cx.stroke(); } cx.restore(); }
+  if (G.koi) { const k = G.koi; cx.save(); cx.translate(OX + k.x, OY + k.y); cx.rotate(k.h); cx.shadowColor = "#f2b705"; cx.shadowBlur = 16; cx.fillStyle = "#f2b705"; cx.strokeStyle = LINE; cx.lineWidth = 1.6; cx.beginPath(); cx.moveTo(-13, 0); cx.lineTo(-22, -8); cx.lineTo(-20, 0); cx.lineTo(-22, 8); cx.closePath(); cx.fill(); cx.stroke(); cx.beginPath(); cx.ellipse(0, 0, 15, 7, 0, 0, Math.PI * 2); cx.fill(); cx.stroke(); cx.restore(); }
+  G.throws = G.throws.filter(th => th.got === null || t - th.tHaul < 0.9);
+  for (const th of G.throws) {
+    const r = th.fine ? P.R_FINE : P.R_COARSE, since = t - th.t0, sh = SHORE[th.f.side];
+    if (since < 0.25) {
+      const k = since / 0.25, x = sh.x + (OX + th.x - sh.x) * k, y = sh.y + (OY + th.y - sh.y) * k - Math.sin(k * Math.PI) * 60;
+      cx.strokeStyle = th.f.color; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(sh.x, sh.y); cx.lineTo(x, y); cx.stroke();
+      cx.fillStyle = th.f.color; cx.beginPath(); cx.arc(x, y, 6 + k * 6, 0, Math.PI * 2); cx.fill();
+    } else if (th.got === null) {
+      const k = 1.15 - 0.15 * Math.min(1, (since - 0.25) / 0.35);
+      cx.strokeStyle = th.f.color; cx.globalAlpha = 0.5; cx.lineWidth = 1.5; cx.beginPath(); cx.moveTo(sh.x, sh.y); cx.lineTo(OX + th.x, OY + th.y); cx.stroke(); cx.globalAlpha = 1;
+      drawNet(th.x, th.y, r, th.fine, th.f.color, k, th.breach);
+    } else {
+      const k = Math.max(0, 1 - (t - th.tHaul) / 0.9); cx.globalAlpha = k; drawNet(th.x, th.y, r * (0.55 + 0.45 * k), th.fine, th.f.color, 1, th.breach); cx.globalAlpha = 1;
+      if (th.slipped && !th.fine) for (let i = 0; i < Math.min(th.slipped, 8); i++) { const ang = i * 0.8 + th.t0; cx.fillStyle = "rgba(255,240,200,.95)"; cx.beginPath(); cx.arc(OX + th.x + Math.cos(ang) * r * (1.6 - k * 0.6), OY + th.y + Math.sin(ang) * r * (1.6 - k * 0.6), 2.2, 0, Math.PI * 2); cx.fill(); }
+    }
+  }
+  G.stamps = G.stamps.filter(s => t - s.t < 2.4);
+  for (const s of G.stamps) { const k = t - s.t; sealAt(OX + s.x + 30, OY + s.y - 30, "违", 34 * (k < 0.15 ? 1.8 - k * 5 : 1), -0.2, Math.min(1, 2.4 - k)); }
+  G.flyers = G.flyers.filter(fl => t - fl.t < 0.85);
+  for (const fl of G.flyers) {
+    const k = Math.max(0, (t - fl.t) / 0.85);
+    if (fl.seal) { const A = HOMES[fl.from.side], B = HOMES[fl.to.side]; sealAt(A.x + (B.x - A.x) * k, A.y + (B.y - A.y) * k - Math.sin(k * Math.PI) * 80, fl.seal, 30, k * 6, 1); continue; }
+    const H = HOMES[fl.f.side], x = OX + fl.x + (H.x - OX - fl.x) * k, y = OY + fl.y + (H.y - OY - fl.y) * k - Math.sin(k * Math.PI) * 50;
+    cx.fillStyle = fl.age === 0 ? "#fff0c8" : FISH_COLORS[fl.hue][0]; cx.strokeStyle = LINE; cx.lineWidth = 1; cx.beginPath(); cx.ellipse(x, y, fl.age === 0 ? 4 : 8, fl.age === 0 ? 2 : 4, k * 8, 0, Math.PI * 2); cx.fill(); cx.stroke();
+  }
+  G.floats = G.floats.filter(fl => t - fl.t < 1.4);
+  for (const fl of G.floats) { const k = (t - fl.t) / 1.4; cx.globalAlpha = 1 - k; cx.font = `900 ${fl.big ? 26 : 18}px Nunito, system-ui, sans-serif`; cx.textAlign = "center"; cx.lineWidth = 4; cx.strokeStyle = "#fff6e3"; cx.strokeText(fl.text, OX + fl.x, OY + fl.y - 30 * k); cx.fillStyle = fl.color; cx.fillText(fl.text, OX + fl.x, OY + fl.y - 30 * k); cx.globalAlpha = 1; }
+  for (const p of particles) { p.x += p.vx * real; p.y += p.vy * real; p.vy += 140 * real; p.life -= real * 1.2; }
+  for (let i = particles.length - 1; i >= 0; i--) if (particles[i].life <= 0) particles.splice(i, 1);
+  for (const p of particles) { cx.globalAlpha = Math.max(0, p.life); cx.fillStyle = p.c; cx.fillRect(p.x - 2, p.y - 2, 4, 4); } cx.globalAlpha = 1;
+  if (G.aim.show && ph.phase === "fish" && !G.paused && G.phase === "play") { const r = me.fine && me.useFine ? P.R_FINE : P.R_COARSE, ready = L.t - me.lastCast >= P.CAST_S; cx.setLineDash([5, 5]); cx.strokeStyle = ready ? "#fff6e3" : "rgba(255,246,227,.4)"; cx.lineWidth = 2.5; cx.beginPath(); cx.arc(OX + G.aim.x, OY + G.aim.y, r, 0, Math.PI * 2); cx.stroke(); cx.setLineDash([]); }
+  fams.forEach(f => drawHouse(f, t));
+  const sg = ph.phase === "meet" ? "冬" : ph.phase === "over" ? "终" : ph.spring ? "春" : ph.into < 27 ? "夏" : "秋";
+  sealAt(OX + 10, OY + 6, sg, 46, -0.08, 1);
+  if (G.rule !== "none") sealAt(VW - OX - 10, OY + 6, RULES[G.rule].g, 46, 0.08, 1);
+  if (ph.phase === "fish" && ph.spring && G.rule === "spring") { cx.save(); cx.strokeStyle = "rgba(215,38,30,.75)"; cx.lineWidth = 10; cx.setLineDash([16, 12]); cx.beginPath(); cx.ellipse(OX + P.W / 2, OY + P.H / 2, P.RX - 6, P.RY - 6, 0, 0, Math.PI * 2); cx.stroke(); cx.restore(); }
+  updateHud(ph);
+  requestAnimationFrame(render);
+}
+
+// =====================================================================
+// THE PANEL
+// =====================================================================
+function moodOf(f) {
+  const r = countAdults(G.L) / G.L.start;
+  if (f.bot === "careful" && f.bubble && f.bubble.seal === "怒" && G.L.t < f.bubble.until) return "angry";
+  if (f.bot === "greedy") return r >= 0.3 ? "happy" : r >= 0.12 ? "worried" : "sad";
+  return r >= 0.6 ? "happy" : r >= 0.25 ? "worried" : "sad";
+}
+let lastFamsKey = "";
+function renderFams() {
+  const key = fams.map(f => [kept(f), f.fine, f.breaches, moodOf(f)].join(",")).join("|");
+  if (key === lastFamsKey) return; lastFamsKey = key;
+  $("fams").innerHTML = fams.map(f => `<button type="button" class="fam ${f === me ? "me" : ""}" data-id="${f.id}" aria-label="${f.name}, ${kept(f)} fish${f === me ? "" : ". Send a seal"}"><div class="chips">${f.fine ? '<span class="chip fine">FINE NET</span>' : ""}${f.breaches ? `<span class="chip breach">违 ${f.breaches}</span>` : ""}</div><div class="pic">${portrait(f.kind, moodOf(f))}</div><div class="line"><span class="nm">${f.name}</span><span class="ct">${kept(f)}</span></div><div class="line"><span class="note">${f.note}</span><span class="house">${HOUSES[tierOf(kept(f))][1]}</span></div></button>`).join("");
+}
+function renderCouncil() {
+  $("council").innerHTML = fams.map(f => `<div class="member">${portrait(f.kind, moodOf(f))}${f.vote ? `<span class="stamp">${RULES[f.vote].g}</span>` : ""}<span>${f.name}</span></div>`).join("");
+}
+function updateHud(ph) {
+  const L = G.L;
+  $("year").textContent = ph.year;
+  const into = ph.phase === "over" ? P.FISH_S + P.MEET_S : ph.into;
+  $("seasonfill").style.width = `${Math.min(100, (into / (P.FISH_S + P.MEET_S)) * 100)}%`;
+  $("adults").textContent = countAdults(L); $("fry").textContent = countFry(L);
+  cv.style.setProperty("--life", Math.max(0, Math.min(1, (countAdults(L) / L.start - 0.1) / 0.6)).toFixed(3));
+  $("cool").style.width = `${Math.min(1, (L.t - me.lastCast) / P.CAST_S) * 100}%`;
+  $("buy").disabled = me.fine || kept(me) < P.FINE_COST || ph.phase !== "fish" || G.phase !== "play";
+  $("buy").textContent = me.fine ? "You own a fine-mesh net" : `Buy a fine-mesh net · ${P.FINE_COST} fish`;
+  $("toggle").hidden = !me.fine;
+  $("toggle").textContent = me.useFine ? "Use coarse net" : "Use fine net";
+  $("netdesc").textContent = me.fine && me.useFine ? "A fine-mesh net. It keeps everything in the ring, fry included." : "A coarse net. Fry slip through its mesh.";
+  renderFams();
+}
+
+// =====================================================================
+// INPUT
+// =====================================================================
+function canvasPoint(e) { const r = cv.getBoundingClientRect(); return toWorld(e.clientX - r.left, e.clientY - r.top); }
+cv.addEventListener("pointerdown", e => { if (G.phase !== "play") return; const w = canvasPoint(e); G.aim = { x: w.x, y: w.y, show: true }; if (!throwNet(me, w.x, w.y) && phaseOf(G.L.t).phase === "fish" && inLake(w.x, w.y)) sfx.tick(); });
+cv.addEventListener("pointermove", e => { if (e.pointerType !== "mouse") return; const w = canvasPoint(e); G.aim = { x: w.x, y: w.y, show: true }; });
+cv.addEventListener("pointerleave", () => (G.aim.show = false));
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") { $("react").hidden = true; return; }
+  if (G.phase !== "play") return;
+  const k = e.key;
+  if (k === "b" || k === "B") { buyFine(me); return; }
+  if (k === "f" || k === "F") { if (me.fine) me.useFine = !me.useFine; return; }
+  if (document.activeElement !== cv) return;
+  const d = 22;
+  if (k.startsWith("Arrow")) { e.preventDefault(); G.aim.show = true; if (k === "ArrowLeft") G.aim.x -= d; if (k === "ArrowRight") G.aim.x += d; if (k === "ArrowUp") G.aim.y -= d; if (k === "ArrowDown") G.aim.y += d; G.aim.x = Math.max(20, Math.min(P.W - 20, G.aim.x)); G.aim.y = Math.max(20, Math.min(P.H - 20, G.aim.y)); }
+  if (k === " " || k === "Enter") { e.preventDefault(); throwNet(me, G.aim.x, G.aim.y); }
+});
+$("start").addEventListener("click", () => { G.phase = "play"; G.paused = false; $("intro").hidden = true; cv.focus(); G.aim.show = true; sfx.enable(); logEvent("Year 1 begins. The lake is full."); fams.forEach((f, i) => (f.next = 1 + i * 0.9)); });
+$("buy").addEventListener("click", () => buyFine(me));
+$("toggle").addEventListener("click", () => { me.useFine = !me.useFine; });
+$("speed").addEventListener("click", () => { G.speed = G.speed === 1 ? 2 : G.speed === 2 ? 4 : 1; $("speed").textContent = `speed ×${G.speed}`; });
+$("sound").addEventListener("click", () => { G.sound = !G.sound; sfx.enable(); $("sound").textContent = G.sound ? "sound on" : "sound off"; $("sound").setAttribute("aria-pressed", String(G.sound)); });
+$("vote-options").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+  if (performance.now() - G.meetOpened < 600) return;
+  me.vote = b.dataset.v; $("vote-options").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); renderCouncil(); sfx.chime(2);
+}));
+$("fams").addEventListener("click", e => {
+  const b = e.target.closest(".fam"); if (!b) return;
+  const to = fams.find(f => f.id === b.dataset.id); if (to === me || G.phase !== "play") return;
+  const r = b.getBoundingClientRect(), box = $("react");
+  box.innerHTML = [["赞", "thanks"], ["求", "please"], ["怒", "stop"], ["喜", "cheers"]].map(([s, w]) => `<button type="button" data-s="${s}" aria-label="${w}"><span>${s}</span><small>${w}</small></button>`).join("");
+  box.hidden = false;
+  const bw = 4 * 58 + 22, left = Math.max(8, Math.min(window.innerWidth - bw - 8, r.left + r.width / 2 - bw / 2));
+  box.style.left = `${left}px`; box.style.top = `${Math.max(8, r.top - 74)}px`;
+  box.querySelectorAll("button").forEach(x => x.addEventListener("click", () => { sendSeal(me, to, x.dataset.s); box.hidden = true; }));
+  box.querySelector("button").focus();
+});
+document.addEventListener("pointerdown", e => { if (!e.target.closest("#react") && !e.target.closest(".fam")) $("react").hidden = true; });
+
+// =====================================================================
+// SOUND (synthesised; off until you turn it on)
+// =====================================================================
+const sfx = (() => {
+  let ac = null;
+  const ok = () => G.sound && ac;
+  const tone = (f, d, type = "sine", g = 0.12, when = 0) => { if (!ok()) return; const o = ac.createOscillator(), v = ac.createGain(); o.type = type; o.frequency.value = f; v.gain.setValueAtTime(g, ac.currentTime + when); v.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + when + d); o.connect(v).connect(ac.destination); o.start(ac.currentTime + when); o.stop(ac.currentTime + when + d + 0.05); };
+  const noise = (d, g = 0.2, freq = 900, when = 0) => { if (!ok()) return; const n = ac.createBufferSource(), b = ac.createBuffer(1, Math.floor(ac.sampleRate * d), ac.sampleRate), ch = b.getChannelData(0); for (let i = 0; i < ch.length; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / ch.length); n.buffer = b; const f = ac.createBiquadFilter(); f.type = "bandpass"; f.frequency.value = freq; const v = ac.createGain(); v.gain.value = g; n.connect(f).connect(v).connect(ac.destination); n.start(ac.currentTime + when); };
+  const PENTA = [523, 587, 659, 784, 880, 1047, 1175];
+  return {
+    enable() { if (!ac && G.sound) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { ac = null; } } },
+    splash() { noise(0.35, 0.25, 700); },
+    haul(n) { for (let i = 0; i < Math.min(n, 6); i++) tone(PENTA[i], 0.25, "triangle", 0.08, i * 0.06); if (!n) tone(196, 0.2, "sine", 0.08); },
+    chime(i) { tone(PENTA[i % PENTA.length], 0.4, "sine", 0.1); },
+    gong() { tone(98, 2.4, "sine", 0.25); tone(147, 1.8, "sine", 0.08); },
+    stamp() { tone(140, 0.15, "square", 0.06); noise(0.08, 0.3, 300); },
+    crackle() { for (let i = 0; i < 9; i++) noise(0.05, 0.25, 2500, i * 0.07 + Math.random() * 0.03); },
+    tick() { tone(330, 0.05, "square", 0.03); },
+  };
+})();
+
+// =====================================================================
+// THE STORY OF THIS LAKE
+// =====================================================================
+function endGame() {
+  if (G.ended) return; G.ended = true; G.paused = true;
+  $("meeting").hidden = true;
+  G.samples.push({ t: G.L.t, a: countAdults(G.L), f: countFry(G.L) });
+  setTimeout(showDebrief, 900);
+}
+function chartSVG(samples, w = 640, h = 220, small = false, rules = G.rules) {
+  const tMax = P.YEARS * (P.FISH_S + P.MEET_S) - P.MEET_S, yMax = Math.max(G.L.cap, ...samples.map(s => s.a + s.f));
+  const X = t => 36 + (t / tMax) * (w - 46), Y = v => h - 24 - (v / yMax) * (h - 40);
+  const path = k => samples.map((s, i) => `${i ? "L" : "M"}${X(s.t).toFixed(1)} ${Y(k(s)).toFixed(1)}`).join(" ");
+  const bands = [];
+  for (let y = 1; y <= P.YEARS; y++) {
+    const t0 = (y - 1) * (P.FISH_S + P.MEET_S);
+    bands.push(`<rect x="${X(t0)}" y="10" width="${X(t0 + P.SPRING_S) - X(t0)}" height="${h - 34}" fill="#f06b8f" opacity=".14"/>`);
+    if (y < P.YEARS) bands.push(`<rect x="${X(t0 + P.FISH_S)}" y="10" width="${X(t0 + P.FISH_S + P.MEET_S) - X(t0 + P.FISH_S)}" height="${h - 34}" fill="#9fc9d1" opacity=".32"/>`);
+    if (!small) bands.push(`<text x="${X(t0 + P.FISH_S / 2)}" y="${h - 6}" font-size="11" text-anchor="middle" fill="#5b628a" font-family="IBM Plex Mono,monospace">Y${y}</text>`);
+  }
+  const marks = small ? "" : Object.entries(rules).filter(([, r]) => r !== "none").map(([y, r]) => `<text x="${X((y - 1) * (P.FISH_S + P.MEET_S) + P.FISH_S / 2)}" y="28" font-size="18" text-anchor="middle" fill="#d7261e" font-family="Ma Shan Zheng,KaiTi,serif">${RULES[r].g}</text>`).join("");
+  const last = samples[samples.length - 1];
+  return `<svg class="chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="Grown fish and fry over five years">
+    ${bands.join("")}
+    ${small ? "" : [0, Math.round(yMax / 2), yMax].map(v => `<line x1="36" x2="${w - 10}" y1="${Y(v)}" y2="${Y(v)}" stroke="#1f2a5c" stroke-opacity=".12"/><text x="30" y="${Y(v) + 4}" font-size="10.5" text-anchor="end" fill="#5b628a" font-family="IBM Plex Mono,monospace">${v}</text>`).join("")}
+    <path d="${path(s => s.a + s.f)} L${X(last.t).toFixed(1)} ${Y(0)} L${X(0)} ${Y(0)}Z" fill="#fff0c8" stroke="#e0c27a" stroke-width="1"/>
+    <path d="${path(s => s.a)} L${X(last.t).toFixed(1)} ${Y(0)} L${X(0)} ${Y(0)}Z" fill="#7cc5bd" stroke="#1f7f8c" stroke-width="2"/>
+    ${marks}
+    <circle cx="${X(last.t)}" cy="${Y(last.a)}" r="4.5" fill="#d7261e" stroke="#1f2a5c" stroke-width="1.5"/>
+  </svg>`;
+}
+// the same lake, played by four plain families under another plan
+function runVillage(nets, ruleFrom2) {
+  const L = makeLake(4, SEED), rng = rngFrom(SEED ^ 0x51ed), caught = [0, 0, 0, 0], next = [0, 1, 2, 3].map(() => rng() * P.CAST_S), samples = [{ t: 0, a: countAdults(L), f: 0 }];
+  for (;;) {
+    const ph = phaseOf(L.t); if (ph.phase === "over" || !L.fish.length) break;
+    if (ph.phase === "fish") [0, 1, 2, 3].sort(() => rng() - 0.5).forEach(i => {
+      if (L.t + 1e-9 < next[i]) return; next[i] += P.CAST_S; if (rng() >= 0.85) return;
+      const rule = ph.year >= 2 ? ruleFrom2 : "none"; if (rule === "spring" && ph.spring) return;
+      const fine = !!nets[i] && rule !== "ban", s = bestSpot(L, fine, rng, rule === "nursery" ? P.SHALLOW * 0.95 : 9);
+      castNet(L, s.x + (rng() - 0.5) * 2 * P.AIM_NOISE, s.y + (rng() - 0.5) * 2 * P.AIM_NOISE, fine, n => (caught[i] += n.got));
+    }); else [0, 1, 2, 3].forEach(i => { if (next[i] < L.t) next[i] = L.t + P.CAST_S * rng(); });
+    step(L);
+    if (Math.round(L.t * 10) % 20 === 0) samples.push({ t: L.t, a: countAdults(L), f: countFry(L) });
+  }
+  samples.push({ t: L.t, a: countAdults(L), f: countFry(L) });
+  return { table: caught.reduce((x, y) => x + y, 0) - nets.filter(Boolean).length * P.FINE_COST, left: countAdults(L), samples };
+}
+function verdictOf(adults, start) { return adults >= start * 0.6 ? ["年年有余", "Fish to spare, next year too."] : adults >= 30 ? ["鱼少了", "The lake survived, thinner."] : ["明年无鱼", adults ? "Too few fish are left to find each other. The lake will not come back." : "Next year, no fish."]; }
+function showDebrief() {
+  const L = G.L, a = countAdults(L), [zh, head] = verdictOf(a, L.start);
+  const table = fams.reduce((s, f) => s + kept(f), 0);
+  const rows = fams.map(f => `<tr><td>${f.zh} ${f.name}</td><td>${f.fine ? "fine mesh" : "coarse"}</td><td class="num">${f.landed}</td><td class="num">${kept(f)}</td><td class="num">${f.fryTaken}</td><td class="num">${f.breaches || ""}</td><td>${HOUSES[tierOf(kept(f))][1]} ${HOUSES[tierOf(kept(f))][2]}</td></tr>`).join("");
+  const chosen = Object.entries(G.rules).filter(([y]) => +y > 1).map(([y, r]) => `${RULES[r].g} in year ${y}`).join(", ");
+  $("board").hidden = true; const d = $("debrief"); d.hidden = false;
+  d.innerHTML = `
+  <div class="verdict"><div class="stampbig">${zh.slice(0, 2)}<br>${zh.slice(2)}</div><div><p class="eyebrow">${L.fish.length ? `Five years · ${a} grown fish left of ${L.start}` : `The lake emptied in year ${phaseOf(L.t).year}`}</p><h2>${head}</h2><p>Your table kept <b>${table}</b> fish. ${chosen ? `The village chose ${chosen}.` : "The village never met."}</p></div></div>
+  <div class="cols">
+    <div>${chartSVG(G.samples)}<p class="keys">Blue: grown fish. Cream: fry. Pink: spring, when fish spawn. Pale blue: winter meetings. Red: the rule in force that year.</p></div>
+    <div style="overflow-x:auto"><table><thead><tr><th>Family</th><th>Net</th><th class="num">Landed</th><th class="num">Kept</th><th class="num">Fry</th><th class="num">违</th><th>House</th></tr></thead><tbody>${rows}</tbody></table></div>
+  </div>
+  <div><p class="eyebrow">Six villages, one lake</p><p style="margin:0 0 8px;max-width:72ch">The same lake and the same first fish, played by four plain families under five other plans. Yours is the first.</p><div class="villages" id="villages"></div><p id="villages-note" style="margin:8px 0 0;max-width:72ch;font-weight:700"></p></div>
+  <div class="prose">
+    <h3>Why the fine net is so hard to refuse</h3>
+    <p>We played this lake 120 times with four families who all aim well (24 seasons for each mix of nets). Whatever the other three do, the family that switches to a fine net catches more, even after paying 20 fish for it:</p>
+    <div style="overflow-x:auto"><table class="payoff"><thead><tr><th>Others with fine nets</th><th class="num">You keep a coarse net</th><th class="num">You switch</th></tr></thead><tbody>
+      <tr><td>none</td><td class="num">125</td><td class="num">178</td></tr><tr><td>one</td><td class="num">90</td><td class="num">112</td></tr><tr><td>two</td><td class="num">68</td><td class="num">84</td></tr><tr><td>three</td><td class="num">52</td><td class="num">59</td></tr></tbody></table></div>
+    <p>So every family switches, and each ends with about 65 fish instead of about 133, and an empty lake. Each choice was right for the family that made it. Together they took the fry, and the fry were next year's fish. Garrett Hardin called this the tragedy of the commons (1968); H. Scott Gordon had shown in 1954 that an open fishery draws in effort until the extra boats earn nothing.</p>
+    <h3>It is not the only ending</h3>
+    <p>Elinor Ostrom studied fisheries, forests and irrigation systems that lasted for centuries because the people who used them made their own rules, watched each other and answered whoever broke them (Ostrom 1990). Your meeting offered three of the oldest rules fishers have: a limit on the gear, a closed season, and a protected nursery. Which of them saves this lake depends on the lake, as the villages above show. A rule nobody answers is not kept: Jin breaks every rule until two families stamp 怒 on him in the same year, and Mei starts breaking them too once two breaches go unanswered.</p>
+  </div>
+  <div class="net-story">${cutNetSVG()}<div class="prose"><p><b>宣公夏滥于泗渊，里革断其罟而弃之。</b> One summer Duke Xuan of Lu cast his nets in the Si while the fish were spawning. His officer Li Ge cut the net and threw it away: the rule of old spares the roe and the fry; to cast nets while the fish are spawning is greed without limit. The duke said: this is a good net, it taught me the rule; keep it, so I do not forget. (Guoyu, Lu Yu I)</p></div></div>
+  <div><button class="cta" id="again" type="button">Play the lake again</button></div>
+  <ol class="sources">
+    <li>Lüshi Chunqiu, “Yi Shang” (c. 239 BC): 竭泽而渔，岂不获得？而明年无鱼。</li>
+    <li>Mencius, “Liang Hui Wang I”: 数罟不入洿池，鱼鳖不可胜食也。</li>
+    <li>Guoyu, “Lu Yu I”: 里革断罟匡君 (鱼禁鲲鲕; 今鱼方别孕).</li>
+    <li>Hardin, G. (1968). The tragedy of the commons. Science 162(3859), 1243–1248.</li>
+    <li>Gordon, H. S. (1954). The economic theory of a common-property resource: the fishery. Journal of Political Economy 62(2), 124–142.</li>
+    <li>Ostrom, E. (1990). Governing the Commons. Cambridge University Press.</li>
+    <li>Courchamp, F., Berec, L. & Gascoigne, J. (2008). Allee Effects in Ecology and Conservation. Oxford University Press.</li>
+  </ol>`;
+  $("again").addEventListener("click", () => location.reload());
+  d.scrollIntoView({ behavior: "smooth", block: "start" });
+  const plans = [
+    ["你们", "Your village", null],
+    ["粗", "Everyone keeps a coarse net", [[0, 0, 0, 0], "none"]],
+    ["细", "Everyone buys a fine net", [[1, 1, 1, 1], "none"]],
+    ["禁", "Fine nets, banned from year 2", [[1, 1, 1, 1], "ban"]],
+    ["休", "Fine nets, spring closed from year 2", [[1, 1, 1, 1], "spring"]],
+    ["护", "Fine nets, shallows kept from year 2", [[1, 1, 1, 1], "nursery"]],
+  ];
+  $("villages").innerHTML = plans.map(([z, name], i) => `<div class="village ${i === 0 ? "yours" : ""}" id="v${i}"><h4><span class="zh">${z}</span> ${name}</h4><div class="vbody"><p class="keys">Playing this lake…</p></div></div>`).join("");
+  const fill = (i, res) => { $(`v${i}`).querySelector(".vbody").innerHTML = `${chartSVG(res.samples, 300, 110, true)}<div class="nums"><span>table ${res.table}</span><span>${res.left} fish left</span><span>${verdictOf(res.left, G.L.start)[0]}</span></div>`; };
+  fill(0, { samples: G.samples, table, left: a });
+  const results = [];
+  const note = () => {
+    const alive = results.filter(r => r.left >= 30).map(r => r.name.toLowerCase()), dead = results.filter(r => r.left < 30).map(r => r.name.toLowerCase());
+    $("villages-note").textContent = `On this lake, these plans left enough fish to come back: ${alive.length ? alive.join("; ") : "none of them"}. These did not: ${dead.length ? dead.join("; ") : "none"}.`;
+  };
+  let i = 1; const next = () => { if (i >= plans.length) { note(); return; } const [, name, [nets, r]] = plans[i]; const res = runVillage(nets, r); results.push({ name, left: res.left }); fill(i, res); i++; setTimeout(next, 30); };
+  setTimeout(next, 250);
+}
+
+// =====================================================================
+// START
+// =====================================================================
+$("carp-print").innerHTML = carpPrint();
+new ResizeObserver(resize).observe(cv);
+resize(); renderFams(); renderCouncil();
+requestAnimationFrame(render);
+</script>

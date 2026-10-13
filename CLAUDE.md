@@ -68,6 +68,8 @@ Scope
   print's decoration (seals, the title, quotations) and always appears with
   its English.
 - Test names are English too.
+- The page never decides an outcome: lake.js draws what the snapshot, rows
+  and frames say, and words for them.
 
 Tests
 - Test first. A first run that fails because a function is "not implemented"
