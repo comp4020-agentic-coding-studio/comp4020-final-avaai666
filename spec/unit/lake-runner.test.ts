@@ -2,9 +2,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { FISH_S, MEET_S, STEP_MS } from "../../src/lib/game-constants.ts";
+import { BOT_VOTE_AT_S, FISH_S, MEET_S, STEP_MS } from "../../src/lib/game-constants.ts";
+import { phase } from "../../src/lib/lake-sim.ts";
 import { openLakeStore, type LakeStore } from "../../src/lib/lake-store.ts";
-import { debugPokeFamily, debugSetRule, rebuild, type Runner } from "../../src/lib/lake-runner.ts";
+import { debugPokeFamily, debugSetRule, debugYears, rebuild, type Runner } from "../../src/lib/lake-runner.ts";
 
 // The lake runner (DESIGN.md v2.2, "Real time" and "The record, and
 // replay"). A fake clock, a fresh database file per test.
@@ -197,6 +198,72 @@ describe("a whole season with bots", () => {
   );
 });
 
+describe("the end row's years", () => {
+  it("holds grown fish at the start of year 1 then each year reached, and a rebuild reproduces it", { timeout: 60_000 }, () => {
+    const ctx = setup(["Ava"], 3);
+    const { runner, lakeId, startedAt } = ctx;
+    const farEnough = atStep(startedAt, 2700);
+    runner.advance(farEnough);
+    expect(runner.isOver()).toBe(true);
+    const endRow = store.allRows(lakeId).find((r) => r.kind === "end")!;
+    const years = (endRow.data as { years: number[] }).years;
+    expect(years.length).toBe(5); // years 1 to 5 reached
+    expect(years[0]).toBeGreaterThan(0);
+
+    const rebuilt = rebuildFrom(ctx, farEnough);
+    expect(debugYears(rebuilt)).toEqual(years);
+  });
+});
+
+describe("every family's vote counts", () => {
+  it("a bot's vote is tallied: with the person, Old Wang and Mei voting ban and Jin none, the rule is ban", () => {
+    const ctx = setup(["Ava"], 3); // seat0 Ava; seat1 Jin (greedy); seat2 Mei (follower); seat3 Old Wang (careful)
+    const { runner, lakeId, startedAt } = ctx;
+    debugPokeFamily(runner, 3, { hasFine: true }); // anyFine true: Old Wang (careful) votes "ban"
+    runner.advance(atStep(startedAt, FISH_S * 10 + 11)); // 1s into year 1's meeting
+    expect(runner.vote(0, "ban")).toEqual({ ok: true });
+    runner.advance(atStep(startedAt, (FISH_S + MEET_S) * 10 + 1)); // past the meeting
+    const rule = store.allRows(lakeId).find((r) => r.kind === "rule")!;
+    expect(rule.data).toMatchObject({ year: 1, rule: "ban" });
+  });
+});
+
+describe("bots vote on time in the meeting", () => {
+  it("Old Wang votes 3s in, Jin 6s in, Mei 10s in and follows a vote already cast", () => {
+    const ctx = setup(["Ava"], 3); // seat0 Ava; seat1 Jin (greedy); seat2 Mei (follower); seat3 Old Wang (careful)
+    const { runner, lakeId, startedAt, familyIdOf } = ctx;
+    runner.advance(atStep(startedAt, FISH_S * 10 + 11)); // 1s into year 1's meeting
+    expect(runner.vote(0, "ban")).toEqual({ ok: true });
+    runner.advance(atStep(startedAt, (FISH_S + MEET_S) * 10 + 1)); // past the meeting
+
+    const votes = store.allRows(lakeId).filter((r) => r.kind === "vote" && r.familyId !== familyIdOf(0));
+    const by = (seat: number) => votes.find((r) => r.familyId === familyIdOf(seat))!;
+    const jin = by(1),
+      mei = by(2),
+      wang = by(3);
+    expect(wang.step).toBe(FISH_S * 10 + BOT_VOTE_AT_S.careful * 10);
+    expect(jin.step).toBe(FISH_S * 10 + BOT_VOTE_AT_S.greedy * 10);
+    expect(mei.step).toBe(FISH_S * 10 + BOT_VOTE_AT_S.follower * 10);
+    expect((mei.data as { rule: string }).rule).toBe("ban");
+  });
+});
+
+describe("bots after a winter", () => {
+  it("every living bot throws again in year 2 and every later year the lake is alive", { timeout: 60_000 }, () => {
+    const ctx = setup([], 3); // Jin, Mei, Old Wang; one more bot fills the fourth seat
+    const { runner, lakeId, startedAt, families } = ctx;
+    runner.advance(atStep(startedAt, 2700)); // the whole season
+    const rows = store.allRows(lakeId);
+    const botIds = new Set(families.filter((f) => f.bot !== null).map((f) => f.familyId));
+    const throwYears = new Set(
+      rows
+        .filter((r) => r.kind === "throw" && r.familyId !== null && botIds.has(r.familyId) && r.step !== null)
+        .map((r) => phase(r.step! * 0.1, 5).year),
+    );
+    expect(throwYears.has(2)).toBe(true);
+  });
+});
+
 describe("a restart", () => {
   it("in year 2: rebuilds and catches up with nobody throwing, then advancing further lets bots resume only from the step it came back at", { timeout: 60_000 }, () => {
     const ctx = setup(["Ava"], 3);
@@ -219,6 +286,10 @@ describe("a restart", () => {
     expect(restarted.isOver()).toBe(true);
     const afterRestart = store.allRows(lakeId).filter((r) => r.step !== null && r.step >= restartStep && r.familyId !== null && botIds.has(r.familyId));
     expect(afterRestart.length).toBeGreaterThan(0);
+    const bootThrows = store
+      .allRows(lakeId)
+      .filter((r) => r.kind === "throw" && r.step !== null && r.step >= restartStep && r.familyId !== null && botIds.has(r.familyId));
+    expect(bootThrows.length).toBeGreaterThan(0);
   });
 });
 

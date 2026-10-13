@@ -13,6 +13,7 @@ import {
   BOT_VOTE_AT_S,
   CAP_PER_FAMILY,
   FINE_COST,
+  FISH_S,
   HOUSE_PARTS,
   JIN_ANGER,
   MEI_BREACHES,
@@ -25,6 +26,7 @@ import {
   WANG_ASKS_AT_S,
 } from "./game-constants.ts";
 import {
+  adults,
   bestSpot,
   castNet,
   dead,
@@ -214,6 +216,7 @@ class RunnerImpl implements Runner {
   private netThrowRow = new Map<number, number>(); // Net.seq -> throw row id
   private netInfo = new Map<number, NetInfo>(); // Net.seq -> seat/x/y/fine at cast time
   private ended = false;
+  private years: number[] = []; // grown fish at the start of year 1, then each year reached after
 
   constructor(init: RunnerInit) {
     this.store = init.store;
@@ -234,6 +237,7 @@ class RunnerImpl implements Runner {
     }));
     for (const f of this.families) this.seatOf.set(f.familyId, f.seat);
     this.L = makeLake(this.families.length, this.secret);
+    this.years = [adults(this.L)];
   }
 
   // Replays history with no writes and no bot decisions: a throw row casts
@@ -259,6 +263,7 @@ class RunnerImpl implements Runner {
         if (r.kind === "rule") {
           this.rule = (r.data as { rule: Rule }).rule;
           this.votes = new Map();
+          this.years.push(adults(this.L));
         }
         if (r.kind === "buy") {
           const fam = this.famBySeat(this.seatOf.get(r.familyId!)!);
@@ -385,13 +390,14 @@ class RunnerImpl implements Runner {
       }
 
       if (before.phase === "meet" && after.phase === "fish") {
-        const votes = this.families.filter((f) => f.bot === null).map((f) => this.votes.get(f.seat) ?? "none");
+        const votes = this.families.map((f) => this.votes.get(f.seat) ?? "none");
         const won = tally(votes, this.families.length);
         this.rule = won;
         const votesByFamily: Record<number, Rule> = {};
         for (const [seat, rule] of this.votes) votesByFamily[seat] = rule;
         write({ kind: "rule", familyId: null, data: { year: before.year, rule: won, votes: votesByFamily } });
         this.votes = new Map();
+        this.years.push(adults(this.L));
       }
 
       if (!this.ended && (dead(this.L) || after.phase === "over")) {
@@ -435,7 +441,15 @@ class RunnerImpl implements Runner {
     write({
       kind: "end",
       familyId: null,
-      data: { secret: this.secret, step: n, kept, parts, grownFish: dead(this.L) ? 0 : this.L.fish.filter((f) => f.age >= 1).length, nextYear: next },
+      data: {
+        secret: this.secret,
+        step: n,
+        kept,
+        parts,
+        grownFish: dead(this.L) ? 0 : this.L.fish.filter((f) => f.age >= 1).length,
+        nextYear: next,
+        years: this.years,
+      },
     });
   }
 
@@ -473,7 +487,7 @@ class RunnerImpl implements Runner {
 
       this.answerPendingAsks(fam, ph, write);
 
-      if (n === fam.nextThrowStep) {
+      if (n >= fam.nextThrowStep) {
         fam.nextThrowStep = n + THROW_COOLDOWN_STEPS;
         if (rand() < BOT_TAKE) {
           const keepsSpring = this.rule === "spring" && !this.botBreaksNow(fam, ph);
@@ -494,7 +508,7 @@ class RunnerImpl implements Runner {
         }
       }
     } else if (ph.phase === "meet") {
-      const atS = ph.into;
+      const atS = ph.into - FISH_S;
       if (atS >= BOT_VOTE_AT_S[kind] && !this.votes.has(fam.seat)) {
         const v = this.botVoteFor(kind, fam, ph);
         this.votes.set(fam.seat, v);
@@ -719,4 +733,10 @@ export function debugPokeFamily(
 // Test-only: sets the rule in force without playing to a meeting's end.
 export function debugSetRule(r: Runner, rule: Rule): void {
   (r as unknown as { rule: Rule }).rule = rule;
+}
+
+// Test-only: reads the years tracked so far (grown fish at the start of year
+// 1, then each year reached after), to compare a runner against a rebuild.
+export function debugYears(r: Runner): number[] {
+  return (r as unknown as { years: number[] }).years;
 }
