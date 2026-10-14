@@ -62,6 +62,19 @@ Scope
 - No free-text input except a name (max 24 characters). No chat. If a feature
   seems to need a message box, stop and ask me.
 - Nothing from "Not building" in DESIGN.md.
+- The four modes in DESIGN.md (Boat Rush, Fishing Party, Who's Poaching,
+  Lake Holdings) and each one's first playable scope are Ava's decisions. No
+  agent may drop, merge, downgrade or postpone one. If one is blocked, stop,
+  give evidence and alternatives, and let Ava decide.
+- A mode gets a Start button in the lobby only when two people can play it
+  from start to results and rematch. Unfinished modes show their date and are
+  never hidden.
+- /play may load one vendored file, src/static/vendor/three.module.js (three
+  0.160.0, MIT, header kept), as an ES module, plus one script per mode and
+  one shared script. Still no framework and no build step.
+- Art is SVG and Three.js code in this repo, written by Claude in chat or in
+  a session, and said so in PROCESS.md. Nothing is generated at run time and
+  no image model is used.
 - No client framework and no build step. The page is server-rendered HTML
   plus one plain script in /static. Node runs src/*.ts directly.
 - Every word on a page that carries meaning is English. Chinese is the
