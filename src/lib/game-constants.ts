@@ -172,3 +172,24 @@ export const RUSH = {
   KOI_STOP: 12, // no golden carp in the last 12 s
   SEATS: { min: 2, max: 4, botFill: 4 },
 } as const;
+
+// ---- Who's Poaching, "poach 1.0" (DESIGN.md "Who's Poaching") ----
+// Distances are in sim units (the lake is 1000 x 700; the 3D lake is a
+// tenth, so "6 units" in DESIGN.md is 60 here).
+export const POACH = {
+  W: 1000, H: 700, RX: 460, RY: 315, DT: 0.05,
+  DAYS: 3, DAY_S: 75, MEETING_S: 90, DUSK_S: 4, // dusk: the day's announcement before the meeting
+  SPEED: 120, ACCEL: 5,
+  NET_R: 36, NET_AHEAD: 36, CAST_CD: 1.2, SINK: 0.5,
+  FINE_R: 48, FINE_CD: 0.6, // the fine net: wider, faster, takes fry
+  FISH: 160, FRY: 120, // grown fish and fry at dawn of day 1 (fry are the lake's health)
+  QUOTA: 60, // village quota of grown fish over three days
+  HEALTH_LINE: 40, // percent of the starting fry; below it the poacher wins
+  INSPECT_R: 60, INSPECT_S: 3, // stay within 60 for 3 s to see a basket
+  PLANT_R: 50, PLANT_S: 2, SPLASH_R: 100, // plant: 2 s alongside; boats within 100 see a splash
+  BUOY_R: 70, // a buoy logs every boat that passes within this
+  POACHERS_AT: 7, WARDEN_AT: 6, // two poachers at 7 seats, a warden at 6
+  V_FISH: 30, V_FRY: 18,
+  SEATS: { min: 4, max: 8, botFill: 5 },
+} as const;
+export const BAYS = ["North Bay", "East Bay", "South Bay", "West Bay"] as const;

@@ -275,3 +275,9 @@ body.play.in-room { overflow: hidden; }
   .room .hud .fac small { display: none; }
   .room .hud .cards { grid-template-columns: repeat(4, 1fr); }
 }
+@media (max-width: 860px) {
+  .goalclock { flex-wrap: nowrap; }
+  .goalclock span { white-space: nowrap; font-size: 15px; }
+  .room .hud .role-card .small, .room .hud .card .small { display: none; }
+  .room .hud { width: min(200px, calc(100% - 20px)); }
+}
