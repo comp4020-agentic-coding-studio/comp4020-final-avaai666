@@ -12,21 +12,32 @@ pushed; every commit is local, for Ava to review.
 | 3 | 53c788b | Boat Rush (rush 1.0), two-jar app test lobby → results → rematch |
 | 4 | 884eb6c | Who's Poaching (poach 1.0), four-jar app test |
 | 5 | 2e0525c | Fishing Party (party 1.0), two-jar app test |
+| 6 | 2fa6f05 | Lake Holdings (holdings 1.0), app test with two people and two bots |
+| 7 | 9cc6e80 | The lobby: four cards with Play, six portraits, per-mode stand-in, phone and desktop screenshots |
+| 8 | (this commit) | docs/checks/2026-10-15-play: two-context runs of all four modes to the results |
 
 Each mode's deliberate break went red and was restored (see the session
 transcript): Rush (Lantern Rush multiplier), Poaching (every role sent to
-every seat), Party (Last Net's school never breaks).
+every seat), Party (Last Net's school never breaks), Holdings (a net's catch
+not taken out of the school).
 
 ## Next
 
-- Step 6, Lake Holdings: see the bottom of this file for where it stands.
-- Step 7, the lobby: /play already shows the four cards with real status
-  (READY in src/lib/modes/index.ts), the six portraits, "Open a room",
-  "Join with a code", and in a room the mode switch and the lake bar. Still
-  to do: Playwright screenshots of the lobby on 390×844 and desktop; a
-  live 3D stand-in per mode on the lobby's lake (it shows circling fish only).
-- Step 8, checks: the per-mode two-context Playwright runs and
-  docs/checks/2026-10-15-play/README.md.
+All eight steps are committed. Nothing is pushed. Before any push, the
+blocker below needs Ava's decision.
+
+## Blocker: a session-12 test now times out sometimes
+
+`spec/unit/boat-hub.test.ts` (written in session 12) plays a whole 120 s
+match and takes about 3 s alone. Under the extra parallel load of the new
+/play unit tests (each plays whole matches), it passed in two of three full
+`pnpm test:unit` runs and timed out at vitest's default 5 s in the third
+(5.7 s and 6.0 s seen). CLAUDE.md forbids editing a test to make it pass,
+so I left it. Two alternatives, Ava's call:
+1. give that one test an explicit timeout (for example 20 s), as the new
+   /play tests that play whole matches already have; or
+2. make the new heavy /play unit tests lighter or run them sequentially
+   (vitest `sequential`), so they stop starving other workers.
 
 ## What I would check first
 
