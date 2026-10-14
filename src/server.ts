@@ -7,6 +7,10 @@ import { join, resolve } from "node:path";
 import { marked } from "marked";
 import { createBoatRoutes } from "./boat-routes.ts";
 import { createBoatHub } from "./lib/boat-hub.ts";
+import { createGameHub } from "./lib/game-hub.ts";
+import { openGameStore } from "./lib/game-store.ts";
+import { MODE_IDS, MODES, READY } from "./lib/modes/index.ts";
+import { createPlayRoutes } from "./play-routes.ts";
 import { openBoatStore } from "./lib/boat-store.ts";
 import { createLakeHub } from "./lib/lake-live.ts";
 import { rebuild as rebuildLakeRunner } from "./lib/lake-runner.ts";
@@ -44,6 +48,10 @@ for (const { lakeId, code } of lakeStore.liveLakes()) {
 const boatStore = openBoatStore(join(DATA_DIR, "pond.db"), now);
 const boatHub = createBoatHub(boatStore, now, (err) => log({ event: "error", where: "boat-tick", message: String(err) }));
 
+// The four games (/play): their own tables in the same file, and a 20 Hz loop.
+const gameStore = openGameStore(join(DATA_DIR, "pond.db"), now);
+const gameHub = createGameHub(gameStore, MODES, now, (err) => log({ event: "error", where: "play-tick", message: String(err) }), READY);
+
 // README.md is rendered once, at startup.
 const readmeHtml = marked.parse(readFileSync(join(ROOT, "README.md"), "utf8"), { async: false });
 
@@ -57,6 +65,7 @@ const handle = createHandler({
   staticDir: join(ROOT, "src", "static"),
   docsDir: join(ROOT, "docs"),
   boat: createBoatRoutes(boatHub, boatStore),
+  play: createPlayRoutes(gameHub, gameStore, join(ROOT, "src", "static"), MODE_IDS),
 });
 
 const server = createServer((req, res) => {
@@ -71,6 +80,7 @@ const server = createServer((req, res) => {
 const timer = setInterval(() => hub.tick(), 1000);
 const lakeTimer = setInterval(() => lakeHub.tick(), 100);
 const boatTimer = setInterval(() => boatHub.tick(), 25);
+const playTimer = setInterval(() => gameHub.tick(), 25);
 
 server.listen(PORT, "0.0.0.0", () => log({ event: "listening", port: PORT, dataDir: DATA_DIR }));
 
@@ -79,13 +89,16 @@ function shutdown(signal: string): void {
   clearInterval(timer);
   clearInterval(lakeTimer);
   clearInterval(boatTimer);
+  clearInterval(playTimer);
   hub.close();
   lakeHub.close();
   boatHub.close();
+  gameHub.close();
   server.close(() => {
     store.close();
     lakeStore.close();
     boatStore.close();
+    gameStore.close();
     process.exit(0);
   });
   server.closeAllConnections();

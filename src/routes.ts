@@ -52,6 +52,7 @@ export interface Deps {
   staticDir: string;
   docsDir: string;
   boat?: (req: IncomingMessage, res: ServerResponse, path: string, method: string) => Promise<boolean>;
+  play?: (req: IncomingMessage, res: ServerResponse, path: string, method: string) => Promise<boolean>;
 }
 
 const refused = (action: string, pond: number | null, net: number | null, reason: string): void =>
@@ -60,7 +61,7 @@ const refused = (action: string, pond: number | null, net: number | null, reason
 const lakeRefused = (action: string, lake: string, seat: number | null, reason: string): void =>
   log({ event: "refused", action, lake, seat, reason });
 
-export function createHandler({ store, hub, lakeStore, lakeHub, now, readmeHtml, staticDir, docsDir, boat }: Deps) {
+export function createHandler({ store, hub, lakeStore, lakeHub, now, readmeHtml, staticDir, docsDir, boat, play }: Deps) {
   // client IP → when it last dug, for the dig limit
   const lastDig = new Map<string, number>();
   // a family's token → posts in the current second, for the lake rate limit
@@ -368,6 +369,7 @@ export function createHandler({ store, hub, lakeStore, lakeHub, now, readmeHtml,
 
     if (req.method === "POST" && !sameOrigin(req)) return crossOrigin(res);
     if (boat && (path === "/b" || path.startsWith("/b/")) && (await boat(req, res, path, method ?? "GET"))) return;
+    if (play && (path === "/play" || path.startsWith("/play/") || path.startsWith("/static/play/") || path.startsWith("/static/vendor/")) && (await play(req, res, path, method ?? "GET"))) return;
 
     if (path === "/" && method === "GET") {
       const rawCode = url.searchParams.get("code");

@@ -677,9 +677,13 @@ Tables: game_rooms (code, mode, lake_fish), game_players, game_matches
 (mode, model, seed, seats, status, summary) and game_inputs (append-only:
 tick, seat, input). A room has at most 8 seats. The hub steps every running
 match 20 times a second and sends frames 10 times a second. The four
-exemptions in "Quick Catch" (a to d) apply to every /play mode, with the
-model name being each mode's `model`; bot decisions use a stream per bot,
-tick and seat seeded with SHA-256(secret | bot | tick | seat).
+exemptions in "Quick Catch" apply to every /play mode, with the model name
+being each mode's `model`: a (the record), b (timer writes) and c
+(restarts) as written. For d (streams), /play is stricter than /b: each
+bot's decisions in one tick come from their own stream, SHA-256(secret | bot
+| tick | seat), and the hub stores bot inputs as applied, so a replay never
+runs a bot (CLAUDE.md's lake rule). A mode's own random draws use named
+streams of the secret ("lake" and so on).
 
 The lake remembers: a match starts with its room's lake_fish (220 for a new
 room) and its results write back what is left. Between matches the lake

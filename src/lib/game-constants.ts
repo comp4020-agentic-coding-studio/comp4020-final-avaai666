@@ -132,3 +132,17 @@ export const BOAT_MAX_CATCHUP = 40; // ticks per timer call
 export const BOAT_MAX_RUNNING = 8; // matches running at once, across all rooms
 export const BOAT_HEARTBEAT_MS = 15000;
 export const BOAT_INPUT_RATE = 25; // POSTs per second per player; a client sends at most ~12
+
+// ---- the /play platform (DESIGN.md "One lake, four games") ----
+export const PLAY_TICK_MS = 50; // 20 ticks a second
+export const PLAY_FRAME_EVERY = 2; // ticks: 10 frames a second
+export const PLAY_MAX_CATCHUP = 40; // ticks per timer call
+export const PLAY_MAX_RUNNING = 12; // matches running at once, across all rooms
+export const PLAY_MAX_SEATS = 8;
+export const PLAY_HEARTBEAT_MS = 15000;
+export const PLAY_INPUT_RATE = 30; // POSTs per second per player
+export const PLAY_COUNTDOWN_MS = 3000; // 3-2-1, everyone sees it
+export const LAKE_FULL = 220; // a new room's lake
+export const LAKE_REGROW = 0.15; // between matches, this share of the gap to full grows back
+export const LAKE_DEAD = 40; // below this, the lake has died
+export const PLAY_CHARACTERS = ["mei", "wang", "jin", "lu", "lian", "shitou"] as const;
