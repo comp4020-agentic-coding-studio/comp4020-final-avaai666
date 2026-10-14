@@ -15,7 +15,7 @@
   --brush: "Ma Shan Zheng", "KaiTi", "STKaiti", serif;
   color-scheme: dark;
 }
-html, body { height: 100%; }
+html, body { height: 100%; margin: 0; }
 [hidden] { display: none !important; }
 body { background: var(--ink); color: var(--paper); font-family: var(--body); font-size: 15px; line-height: 1.5; overflow: hidden; }
 * { box-sizing: border-box; }

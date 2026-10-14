@@ -16,8 +16,11 @@ world.onFrame((dt, t) => {
   }), t);
 });
 
+// a stand-in per mode: its camera and light (drawing only)
+const STAND = { rush: [[0, 50, 62], [0, 0, 4], 0], poach: [[-34, 30, 50], [0, 0, 0], .8], party: [[0, 40, 56], [0, 0, 2], .3], hold: [[0, 78, 30], [0, 0, 1], 0] };
 function show() {
   const mode = $('input[name="mode"]:checked')?.value;
+  const st = STAND[mode]; if (st) { world.setCamera(st[0], st[1]); world.setNight(st[2]); }
   const me = $('input[name="character"]:checked')?.value;
   document.querySelectorAll(".mode-info").forEach((el) => { el.hidden = el.dataset.mode !== mode; });
   document.querySelectorAll(".hero").forEach((el) => { el.hidden = el.dataset.me !== me; });
