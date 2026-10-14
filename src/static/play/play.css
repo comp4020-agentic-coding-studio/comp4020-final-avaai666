@@ -268,3 +268,10 @@ body.play.in-room { overflow: hidden; }
   .icons3 .ic { font-size: 24px; }
   .conn { display: none; }
 }
+@media (max-width: 860px) {
+  .room .hud .pads.dock { position: fixed; left: max(10px, env(safe-area-inset-left, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); bottom: max(10px, env(safe-area-inset-bottom, 0px)); z-index: 6; }
+  .room .hud .pads.dock .pad { padding: 14px 6px; font-size: 18px; }
+  .room .hud .card.mine .small { display: none; }
+  .room .hud .fac small { display: none; }
+  .room .hud .cards { grid-template-columns: repeat(4, 1fr); }
+}

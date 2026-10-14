@@ -93,7 +93,7 @@ export function createGameHub(store: GameStore, modes: Record<string, AnyMode>, 
     const left = Math.max(0, Math.round(res.lakeLeft));
     const summary: Summary = {
       mode: m.mode.id, model: m.mode.model, durationS: Math.round(m.tick * PLAY_TICK_MS / 100) / 10, lakeBefore: m.lakeBefore, lakeAfter: left,
-      rematchBy: m.rematchBy, highlights: res.highlights,
+      rematchBy: m.rematchBy, highlights: res.highlights.map((h) => ({ ...h, text: h.text.replaceAll("{name}", m.seats.find((x) => x.seat === h.seat)?.name ?? "someone") })),
       seats: m.seats.map((st) => {
         const r = res.seats.find((x) => x.seat === st.seat)!;
         return { seat: st.seat, name: st.name, bot: st.bot !== null, character: st.character, inputs: m.counts[st.seat], firstScoreS: r.firstScoreS, score: r.score, place: r.place };

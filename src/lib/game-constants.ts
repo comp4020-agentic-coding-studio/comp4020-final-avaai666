@@ -146,3 +146,29 @@ export const LAKE_FULL = 220; // a new room's lake
 export const LAKE_REGROW = 0.15; // between matches, this share of the gap to full grows back
 export const LAKE_DEAD = 40; // below this, the lake has died
 export const PLAY_CHARACTERS = ["mei", "wang", "jin", "lu", "lian", "shitou"] as const;
+
+// ---- Boat Rush, "rush 1.0" (DESIGN.md "Boat Rush") ----
+// boat-sim 0.1's numbers (BOAT above) plus the new rules; start points for
+// playtests, not findings.
+export const RUSH = {
+  ...BOAT,
+  SECONDS: 150, // two and a half minutes
+  MAX_CHARGE: 0.6, // a full charge widens the net by this much (to 1.6 times)
+  CHARGE_SINK: 0.3, // and it sinks this much slower
+  SCATTER_R: 2.2, // a closing net scares fish within this many net radii
+  REEDS: [{ x: 210, y: 300, r: 70 }, { x: 790, y: 410, r: 70 }], // the reed shallows
+  REED_SLOW: 0.5, // boats in the reeds sail at half speed
+  REED_SHARE: 0.22, // share of the starting fish placed in the reeds
+  CROWN_DROP: 1, // a ram on the leader spills one more
+  LANTERN_S: 30, // the last 30 s: Lantern Rush
+  LANTERN_MULT: 2, // fish banked then count double
+  MAX_UPGRADES: 2,
+  UPGRADES: {
+    bigHold: { cost: 8, hold: 5, name: "Big Hold", text: "+5 hold" },
+    fastHull: { cost: 6, speed: 1.2, name: "Fast Hull", text: "20% faster" },
+    wideNet: { cost: 6, net: 1.25, name: "Wide Net", text: "25% wider net" },
+    ironBow: { cost: 6, dealt: 1, taken: 1, name: "Iron Bow", text: "+1 spill dealt, −1 taken" },
+  } as Record<string, { cost: number; name: string; text: string; hold?: number; speed?: number; net?: number; dealt?: number; taken?: number }>,
+  KOI_STOP: 12, // no golden carp in the last 12 s
+  SEATS: { min: 2, max: 4, botFill: 4 },
+} as const;
