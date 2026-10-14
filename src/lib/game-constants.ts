@@ -102,3 +102,23 @@ export const JIN_KEEPS = 0.5; // Jin keeps a promise when his draw is at least t
 export const WANG_ASKS_AT_S = 18; // into fishing, once a year
 export const THROW_COOLDOWN_STEPS = 35; // CAST_S / DT: a family may throw this often
 export const RIVAL_REACH = 84; // an empty net blames a rival's haul within this many units, in the 6 steps before
+
+// ---- the boat game (docs/boats/RULES.md) ----
+export const BOAT_MODEL = "boat-sim 0.1";
+// the numbers (start points for playtests, not findings)
+export const BOAT = {
+  W: 1000, H: 700, RX: 460, RY: 315, // the lake: an ellipse in world units
+  DT: 0.05, // a tick, seconds (20 a second)
+  SECONDS: 120, // a Quick Catch match
+  HOLD: 10, // fish a hold carries
+  SPEED: 150, LOAD_SLOW: 0.35, ACCEL: 6, // units/s; a full hold is 35% slower
+  NET_R: 38, NET_AHEAD: 40, SINK: 0.6, CAST_CD: 0.9, // the net lands ahead of the bow
+  DASH_S: 0.4, DASH_MULT: 2.6, DASH_CD: 4,
+  RAM_R: 34, RAM_DROP: 3, STUN: 0.6, SHIELD: 3, // a ram spills at most 3 fish
+  DOCK_R: 60, SAFE_R: 95, UNLOAD_EVERY: 0.12, // no ram lands this close to any dock
+  LOOSE_S: 8, PICK_R: 26, // spilled fish float, then swim off as fish again
+  KOI_FIRST: 20, KOI_EVERY: 30, KOI_FOR: 10, KOI_VALUE: 5, KOI_SPEED: 95,
+  FISH_PER_BOAT: 50, FISH_BASE: 20, CAP_MULT: 1.3, // start = 50 per boat + 20
+  SIGHT: 95, MATE: 30, SEP: 14, V_ADULT: 42, V_FRY: 26, BREED: 0.02, COOL: 6, MATURE_S: 20, SHALLOW: 0.72,
+  TIERS: [0, 10, 25, 45, 70, 100], // banked fish for each house part
+} as const;
