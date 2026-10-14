@@ -10,7 +10,7 @@
     "check": "pnpm typecheck && pnpm test",
     "check:evidence": "node scripts/check-evidence.ts",
     "test": "vitest run",
-    "test:unit": "vitest run --project unit"
+    "test:unit": "vitest run --project unit --project unit-play"
   },
   "devDependencies": {
     "@types/jsdom": "^30.0.0",
