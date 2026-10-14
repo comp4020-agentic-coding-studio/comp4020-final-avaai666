@@ -284,3 +284,64 @@ it("bays are the four quarters of the lake", () => {
   expect(bayOf(500, 60)).toBe("North Bay");
   expect(bayOf(500, 650)).toBe("South Bay");
 });
+
+describe("v3.1: the last meeting, the cost of no exile, and the quota", () => {
+  const toMeeting = (s: PoachSim, day: number) => until(s, () => s.phase === "meeting" && s.day === day, 100000);
+
+  it("day 3 ends with a last meeting that has no Skip: a skip is refused there", () => {
+    const s = make(5, "v31-noskip");
+    toMeeting(s, 1);
+    expect(poach.input(s, 0, { k: "vote", target: null })).toEqual({ k: "vote", target: null });
+    step(s, [0, 1, 2, 3, 4].map((v) => ({ seat: v, i: { k: "vote", target: null } as PoachInput })));
+    toMeeting(s, 2);
+    step(s, [0, 1, 2, 3, 4].map((v) => ({ seat: v, i: { k: "vote", target: null } as PoachInput })));
+    toMeeting(s, 3);
+    expect(poach.input(s, 0, { k: "vote", target: null })).toBeNull();
+    expect((poach.frameFor(s, 0) as { canSkip: boolean }).canSkip).toBe(false);
+  });
+
+  it("skip, skip, then the forced vote ends with an exile", { timeout: 60000 }, () => {
+    const s = make(5, "v31-forced");
+    for (const day of [1, 2]) { toMeeting(s, day); step(s, [0, 1, 2, 3, 4].map((v) => ({ seat: v, i: { k: "vote", target: null } as PoachInput }))); }
+    toMeeting(s, 3);
+    const alive = [0, 1, 2, 3, 4].filter((v) => !s.out[v]);
+    // a split vote: two for one seat, the rest each for someone different; the most votes go
+    const target = alive[0];
+    const ev = step(s, alive.map((v, k) => ({ seat: v, i: { k: "vote", target: k < 2 ? (v === target ? alive[1] : target) : alive[(k + 1) % alive.length] } as PoachInput })));
+    ev.push(...until(s, () => poach.over(s)));
+    expect(ev.find((e) => e.k === "exiled")).toBeDefined();
+    expect(ev.find((e) => e.k === "noexile")).toBeUndefined();
+  });
+
+  it("a tie in the last meeting still exiles one of the tied, drawn by the server", { timeout: 60000 }, () => {
+    const s = make(4, "v31-tie");
+    for (const day of [1, 2]) { toMeeting(s, day); step(s, [0, 1, 2, 3].map((v) => ({ seat: v, i: { k: "vote", target: null } as PoachInput }))); }
+    toMeeting(s, 3);
+    const ev = step(s, [{ seat: 0, i: { k: "vote", target: 1 } }, { seat: 1, i: { k: "vote", target: 0 } }, { seat: 2, i: { k: "vote", target: 1 } }, { seat: 3, i: { k: "vote", target: 0 } }]);
+    ev.push(...until(s, () => poach.over(s)));
+    const ex = ev.find((e) => e.k === "exiled") as { seat: number } | undefined;
+    expect([0, 1]).toContain(ex?.seat);
+  });
+
+  it("a meeting that exiles nobody costs the lake 5 points of health, and the announcement says so", () => {
+    const s = make(5, "v31-cost");
+    toMeeting(s, 1);
+    const h = s.health;
+    const ev = step(s, [0, 1, 2, 3, 4].map((v) => ({ seat: v, i: { k: "vote", target: null } as PoachInput })));
+    ev.push(...until(s, () => s.phase === "day"));
+    expect(s.health).toBeCloseTo(h - POACH.NO_EXILE_COST, 5);
+    const no = ev.find((e) => e.k === "noexile") as unknown as { cost: number; reason: string };
+    expect(no.cost).toBe(POACH.NO_EXILE_COST);
+    expect(no.reason).toBe("unwatched"); // poach.js words it: "the poacher worked the night unwatched"
+  });
+
+  it("results show each fisher's contribution to the quota", { timeout: 60000 }, () => {
+    const s = make(4, "v31-quota");
+    for (let i = 0; i < 300; i++) step(s, i % 10 === 0 ? [0, 1, 2, 3].map((v) => ({ seat: v, i: { k: "cast" } as PoachInput })) : []);
+    until(s, () => poach.over(s), 100000);
+    const r = poach.results(s);
+    const quota = r.seats.map((x) => x.quota as number);
+    expect(quota.reduce((a, b) => a + b, 0)).toBe(s.quota);
+    expect(r.seats.every((x) => typeof x.quota === "number")).toBe(true);
+  });
+});

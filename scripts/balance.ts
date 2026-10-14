@@ -94,7 +94,7 @@ const TABLES: Table[] = ["always skip", "accused most", "buoy evidence"];
 function poachVote(s: PoachSim, seat: number, table: Table, r: () => number): PoachInput | null {
   if (s.phase !== "meeting" || s.out[seat] || s.votes[seat] !== undefined || s.phaseT < 6 + seat) return null;
   const alive = s.boats.filter((b) => !s.out[b.seat] && b.seat !== seat).map((b) => b.seat);
-  if (table === "always skip") return { k: "vote", target: null };
+  if (table === "always skip") return s.day < 3 ? { k: "vote", target: null } : null; // no Skip at the last meeting: they abstain
   if (s.roles[seat] === "poacher") return { k: "vote", target: alive.filter((x) => s.roles[x] !== "poacher")[Math.floor(r() * alive.length)] ?? null };
   if (table === "accused most") {
     const n = new Map<number, number>();

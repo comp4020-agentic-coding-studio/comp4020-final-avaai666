@@ -1,4 +1,4 @@
-# Next Year, No Fish (明年无鱼): design v3.0
+# Next Year, No Fish (明年无鱼): design v3.1
 
 ## What it is
 
@@ -609,11 +609,16 @@ the top).
   splash).
 - Each day ends with an announcement of the fry lost in each bay.
 
-Meeting (90 s): portraits round a table. Set phrases only: "I was in
+Meeting (90 s; every day ends in one, so there are three): portraits round a table. Set phrases only: "I was in
 [bay]", "I inspected [X]: [clean / N fry]" (true or not), "I suspect [X]",
 "I vouch for [X]", "Skip". No free text and no chat; people talk face to
-face. Then a vote; ties and skips exile nobody. An exiled player's role is
-revealed. Lake health is always shown.
+face. Then a vote; ties and skips exile nobody, and a meeting that exiles
+nobody costs the lake 5 points of health ("the poacher worked the night
+unwatched"). The last meeting, after day 3, has no Skip: if anyone votes,
+the most votes go and a tie is drawn by the server; only if nobody votes at
+all does nobody go (and the poacher has survived day 3). An exiled player's
+role is revealed. Lake health is always shown. At the results, each
+player's contribution to the quota is shown.
 
 First playable: 4 to 6 people, one poacher, three days, inspect, buoy, fine
 net, dump, plant, set phrases, vote, the reveal; the Warden at 6 or more.
@@ -762,6 +767,11 @@ decides.
 
 ## Changelog
 
+- v3.1 (15 Oct): Who's Poaching after the balance harness (bots only): a
+  meeting after day 3 with no Skip; a meeting that exiles nobody costs the
+  lake 5; the results show each player's quota. The fine net's cooldown is
+  1.5 s (was 0.6), because the bot poacher sank the lake below 40% on day 1
+  in 39 of 40 seeded games, before any meeting.
 - v3.0 (15 Oct): one lake, four games at /play (Boat Rush, Fishing Party,
   Who's Poaching, Lake Holdings), per-seat frames, the lake that remembers,
   clarity and depth rules; Three.js vendored; the art rule replaces

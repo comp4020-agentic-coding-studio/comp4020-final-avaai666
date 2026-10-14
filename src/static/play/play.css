@@ -281,3 +281,6 @@ body.play.in-room { overflow: hidden; }
   .room .hud .role-card .small, .room .hud .card .small { display: none; }
   .room .hud { width: min(200px, calc(100% - 20px)); }
 }
+.sheet .roles { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 14px; }
+.sheet .roles span { white-space: nowrap; }
+.sheet .roles b { text-transform: capitalize; color: var(--gold); }

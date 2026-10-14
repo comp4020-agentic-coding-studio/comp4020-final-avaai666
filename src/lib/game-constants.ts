@@ -181,7 +181,7 @@ export const POACH = {
   DAYS: 3, DAY_S: 75, MEETING_S: 90, DUSK_S: 4, // dusk: the day's announcement before the meeting
   SPEED: 120, ACCEL: 5,
   NET_R: 36, NET_AHEAD: 36, CAST_CD: 1.2, SINK: 0.5,
-  FINE_R: 48, FINE_CD: 0.6, // the fine net: wider, faster, takes fry
+  FINE_R: 48, FINE_CD: 1.5, // the fine net: wider, faster, takes fry
   FISH: 160, FRY: 120, // grown fish and fry at dawn of day 1 (fry are the lake's health)
   QUOTA: 60, // village quota of grown fish over three days
   HEALTH_LINE: 40, // percent of the starting fry; below it the poacher wins
@@ -189,6 +189,7 @@ export const POACH = {
   PLANT_R: 50, PLANT_S: 2, SPLASH_R: 100, // plant: 2 s alongside; boats within 100 see a splash
   BUOY_R: 70, // a buoy logs every boat that passes within this
   POACHERS_AT: 7, WARDEN_AT: 6, // two poachers at 7 seats, a warden at 6
+  NO_EXILE_COST: 5, // a meeting that exiles nobody costs the lake this much health
   V_FISH: 30, V_FRY: 18,
   SEATS: { min: 4, max: 8, botFill: 5 },
 } as const;

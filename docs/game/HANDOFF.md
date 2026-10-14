@@ -1,4 +1,4 @@
-# Handoff: session 13 (four games on /play)
+# Handoff: sessions 13 and 14 (four games on /play)
 
 Written by Claude during session 13, 15 October 2026. Nothing here was
 pushed; every commit is local, for Ava to review.
@@ -26,7 +26,22 @@ not taken out of the school).
 All eight steps are committed. Nothing is pushed. Before any push, the
 blocker below needs Ava's decision.
 
-## Blocker: a session-12 test now times out sometimes
+## Session 14 blocker: the session-13 Poaching app test and the v3.1 last meeting
+
+spec/play-poach-app.test.ts (session 13) has four players skip both
+meetings, then waits 100 s after day 2's dawn for the end. Under DESIGN
+v3.1 (Ava's session-14 rule) day 3 ends in a last meeting with no Skip; the
+test's players cast no vote there, so the meeting runs its full 90 s and
+the end comes about 170 s after that dawn. The test times out at
+line 43. It cannot pass without being edited, and tests are not edited to
+pass. Two alternatives, Ava's call:
+1. allow that one wait to become 200 s (no assertion changes); or
+2. end the last meeting as soon as everyone still in has voted, and change
+   the test's players to vote there (an edit to the test either way).
+Until this is decided, `pnpm check` has this one red test and session 14
+does not push.
+
+## Session 13 blocker (fixed in session 14, 6eea5d6): a session-12 test timed out sometimes
 
 `spec/unit/boat-hub.test.ts` (written in session 12) plays a whole 120 s
 match and takes about 3 s alone. Under the extra parallel load of the new

@@ -102,7 +102,7 @@ function resultsHtml() {
   const title = r.mode === "poach" ? (r.extra?.winner === "fishers" ? "The fishers win" : "The poacher wins") : mine ? (mine.place === 1 ? "You win!" : `You came ${["", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th"][mine.place]}`) : "Results";
   return `<section class="sheet" id="results">
     <h2>${esc(title)}</h2>
-    ${r.mode === "poach" && r.extra?.roles ? `<p class="goal">${seats.map((s) => `${esc(s.name)}: <b>${esc(r.extra.roles[s.seat])}</b>`).join(" · ")}</p>` : ""}
+    ${r.mode === "poach" && r.extra?.roles ? `<p class="roles">${seats.map((s) => `<span>${esc(s.name)}: <b>${esc(r.extra.roles[s.seat])}</b>${s.detail?.quota !== undefined ? ` · ${s.detail.quota} for the quota` : ""}</span>`).join("")}</p>` : ""}
     <div class="podium">${seats.map((s) => `<div class="pl ${s.place === 1 ? "first" : ""}">${portrait(s.character, s.name)}<span class="place">${s.place === 1 ? "1st" : s.place === 2 ? "2nd" : s.place === 3 ? "3rd" : s.place + "th"}</span><b>${esc(s.name)}${s.seat === view.mySeat ? " (you)" : ""}</b>${unit || r.mode !== "poach" ? `<span class="sc">${s.score}</span> <small>${unit}</small>` : `<small>${s.score ? "won" : "lost"}</small>`}</div>`).join("")}</div>
     <div class="highs">${r.highlights.map((h) => `<div><b>${esc(h.title)}</b>${esc(h.text)}</div>`).join("")}</div>
     <div class="lakebar"><span>The lake: ${r.lakeBefore} fish before, ${r.lakeAfter} left.</span></div>

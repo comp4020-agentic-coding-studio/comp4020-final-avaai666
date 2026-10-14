@@ -50,7 +50,7 @@ const nameKey = (name: string): string => name.normalize("NFKC").toLowerCase();
 // "(bot)" marks a bot; no person may take a name that looks like one.
 const looksLikeBot = (key: string): boolean => /\(\s*bot\s*\)|\bbot$/.test(key);
 
-export interface SeatSummary { seat: number; name: string; bot: boolean; character: Character; inputs: Record<string, number>; firstScoreS: number | null; score: number; place: number }
+export interface SeatSummary { seat: number; name: string; bot: boolean; character: Character; inputs: Record<string, number>; firstScoreS: number | null; score: number; place: number; detail?: Record<string, unknown> }
 export interface Summary { mode: string; model: string; durationS: number; lakeBefore: number; lakeAfter: number; rematchBy: string | null; seats: SeatSummary[]; highlights: Results["highlights"]; extra?: Record<string, unknown> }
 export interface MatchRow { id: number; roomId: number; mode: string; model: string; seed: string; seats: Seat[]; lakeBefore: number; startedAt: number; rematchBy: string | null; endedAt: number | null; status: string; summary: Summary | null }
 export type GameJoin = { ok: true; seat: number; token: string } | { ok: false; reason: "bad_name" | "name_taken" | "bot_name" | "bad_character" | "full" | "no_room" };

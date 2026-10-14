@@ -87,7 +87,7 @@ export function mount({ world, sound, ui, send, view }) {
       </div><div class="chips" style="margin-top:6px">
         <button class="chipbtn" data-say="suspect">I suspect ${ui.esc(nameOf(phrase.target ?? others[0]))}</button><button class="chipbtn" data-say="vouch">I vouch for ${ui.esc(nameOf(phrase.target ?? others[0]))}</button><button class="chipbtn" data-say="skip">Skip</button>
       </div></div>
-      <div class="card"><h4>Vote ${myVote ? "· your vote is in" : "· a tie or skips exile nobody"}</h4><div class="chips">${others.map((o) => `<button class="chipbtn vote" data-vote="${o}" ${myVote ? "disabled" : ""}>Exile ${ui.esc(nameOf(o))}</button>`).join("")}<button class="chipbtn" data-vote="skip" ${myVote ? "disabled" : ""}>Skip</button></div></div>`;
+      <div class="card"><h4>Vote ${myVote ? "· your vote is in" : f.canSkip ? "· a tie or skips exile nobody, and cost the lake 5" : "· the most votes go; a tie is drawn"}</h4><div class="chips">${others.map((o) => `<button class="chipbtn vote" data-vote="${o}" ${myVote ? "disabled" : ""}>Exile ${ui.esc(nameOf(o))}</button>`).join("")}${f.canSkip ? `<button class="chipbtn" data-vote="skip" ${myVote ? "disabled" : ""}>Skip</button>` : `<small>Last meeting: no Skip. The village must choose.</small>`}</div></div>`;
     const dusk = f.phase === "dusk" ? `<p class="verdict">Evening, day ${f.day}. ${ui.esc(lastDusk ?? "")}</p>` : "";
     meetingEl.innerHTML = `<div class="meeting-in"><header><h3>Village meeting, day ${f.day}<span lang="zh">村会</span></h3><b>${Math.ceil(f.left)} s</b></header>
       ${dusk}
@@ -124,7 +124,7 @@ export function mount({ world, sound, ui, send, view }) {
       if (e.k === "meeting") { ui.banner("The village meets", "set phrases, then a vote"); }
       if (e.k === "said") sound.tick();
       if (e.k === "exiled") { ui.banner(`${nameOf(e.seat)} is exiled`, `they were a ${e.role}`, 4000); sound.big(); world.shake(); }
-      if (e.k === "noexile") ui.banner("Nobody is exiled", "a tie, or too many skips", 3000);
+      if (e.k === "noexile") ui.banner("Nobody is exiled", `the poacher worked the night unwatched: the lake lost ${e.cost} points of health`, 4000);
       if (e.k === "dawn") { ui.banner(`Day ${e.day}`, "back on the water"); target = null; }
       if (e.k === "end") { sound.horn(); ui.banner(e.winner === "fishers" ? "The fishers win" : "The poacher wins", "", 3000); }
     }

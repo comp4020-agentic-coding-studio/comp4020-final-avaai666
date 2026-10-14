@@ -96,7 +96,8 @@ export function createGameHub(store: GameStore, modes: Record<string, AnyMode>, 
       rematchBy: m.rematchBy, highlights: res.highlights.map((h) => ({ ...h, text: h.text.replaceAll("{name}", m.seats.find((x) => x.seat === h.seat)?.name ?? "someone") })),
       seats: m.seats.map((st) => {
         const r = res.seats.find((x) => x.seat === st.seat)!;
-        return { seat: st.seat, name: st.name, bot: st.bot !== null, character: st.character, inputs: m.counts[st.seat], firstScoreS: r.firstScoreS, score: r.score, place: r.place };
+        const { seat: _a, score: _b, place: _c, firstScoreS: _d, ...detail } = r;
+        return { seat: st.seat, name: st.name, bot: st.bot !== null, character: st.character, inputs: m.counts[st.seat], firstScoreS: r.firstScoreS, score: r.score, place: r.place, detail };
       }),
     };
     const { seats: _s, lakeLeft: _l, highlights: _h, ...extra } = res;

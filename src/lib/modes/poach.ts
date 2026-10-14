@@ -87,7 +87,7 @@ function input(s: PoachSim, seat: number, raw: unknown): PoachInput | null {
     case "inspect": return day && seatOk(s, o.target) && o.target !== seat ? { k: "inspect", target: o.target } : null;
     case "plant": return day && isPoacher(s, seat) && seatOk(s, o.target) && o.target !== seat ? { k: "plant", target: o.target } : null;
     case "patrol": return day && s.roles[seat] === "warden" && seatOk(s, o.target) && o.target !== seat ? { k: "patrol", target: o.target } : null;
-    case "vote": return meet && (o.target === null || (seatOk(s, o.target) && alive(s, o.target))) ? { k: "vote", target: o.target as number | null } : null;
+    case "vote": return meet && ((o.target === null && s.day < Q.DAYS) || (seatOk(s, o.target) && alive(s, o.target))) ? { k: "vote", target: o.target as number | null } : null;
     case "say": {
       if (!meet) return null;
       if (o.p === "was" && (BAYS as readonly string[]).includes(o.bay as string)) return { k: "say", p: "was", bay: o.bay as Bay };
@@ -199,12 +199,15 @@ function settleVote(s: PoachSim, ev: GameEvent[]): void {
   s.votes.forEach((v, seat) => { if (s.out[seat]) return; if (v === null || v === undefined) skips++; else tally.set(v, (tally.get(v) ?? 0) + 1); });
   const top = Math.max(0, ...tally.values());
   const leaders = [...tally].filter(([, n]) => n === top).map(([t]) => t);
-  if (top === 0 || leaders.length > 1 || skips >= top) {
+  const last = s.day >= Q.DAYS;
+  // the last meeting has no Skip: if anyone voted, the most votes go, and a tie is drawn by the server
+  if (top === 0 || (!last && (leaders.length > 1 || skips >= top))) {
     s.history.push({ day: s.day, exiled: null, role: null });
-    ev.push({ k: "noexile", tally: Object.fromEntries(tally), skips });
+    s.health = Math.round(Math.max(0, s.health - Q.NO_EXILE_COST) * 10) / 10;
+    ev.push({ k: "noexile", tally: Object.fromEntries(tally), skips, cost: Q.NO_EXILE_COST, health: s.health, reason: "unwatched" }); // the page says: the poacher worked the night unwatched
     return;
   }
-  const x = leaders[0];
+  const x = leaders.length > 1 ? leaders[Math.floor(s.rng() * leaders.length)] : leaders[0];
   s.out[x] = true;
   if (!isPoacher(s, x)) s.exiledInnocents++;
   s.history.push({ day: s.day, exiled: x, role: s.roles[x] });
@@ -239,8 +242,7 @@ function step(s: PoachSim, inputs: { seat: number; i: PoachInput }[]): GameEvent
       ev.push({ k: "dusk", day: s.day, bays: { ...s.bayLoss }, health: s.health, quota: s.quota });
       s.bayLoss = { "North Bay": 0, "East Bay": 0, "South Bay": 0, "West Bay": 0 };
       for (const b of s.boats) { b.inspect = null; b.plant = null; }
-      if (s.day >= Q.DAYS) checkWin(s, ev, true);
-      else { s.phase = "dusk"; s.phaseT = 0; }
+      s.phase = "dusk"; s.phaseT = 0; // every day ends in a meeting; day 3's is the last, and has no Skip
     }
   } else if (s.phase === "dusk") {
     if (s.phaseT >= Q.DUSK_S - 1e-9) { s.phase = "meeting"; s.phaseT = 0; s.votes = s.boats.map(() => undefined); for (const b of s.boats) { b.mind.said = false; b.mind.voted = false; } ev.push({ k: "meeting", day: s.day }); }
@@ -248,7 +250,7 @@ function step(s: PoachSim, inputs: { seat: number; i: PoachInput }[]): GameEvent
     const everyone = s.boats.every((b) => s.out[b.seat] || s.votes[b.seat] !== undefined);
     if (s.phaseT >= Q.MEETING_S - 1e-9 || (everyone && s.phaseT > 3)) {
       settleVote(s, ev);
-      checkWin(s, ev, false);
+      checkWin(s, ev, s.day >= Q.DAYS);
       if (!s.winner) { s.day++; s.phase = "day"; s.phaseT = 0; for (const b of s.boats) { b.patrolled = false; b.fish = 0; } ev.push({ k: "dawn", day: s.day }); }
     }
   }
@@ -297,7 +299,7 @@ function frameFor(s: PoachSim, seat: number) {
     f: s.phase === "day" ? s.fish.map((f) => [Math.round(f.x), Math.round(f.y), Math.round(f.h * 100), f.adult ? 1 : 0]) : [],
     buoys: s.buoys.filter((u) => u.day === s.day).map((u) => ({ seat: u.seat, x: u.x, y: u.y, passed: s.phase === "day" ? [] : u.passed })),
     said: s.said.filter((x) => x.day === s.day),
-    voted: s.phase === "meeting" ? s.votes.map((v) => v !== undefined) : [],
+    voted: s.phase === "meeting" ? s.votes.map((v) => v !== undefined) : [], canSkip: s.day < Q.DAYS,
     history: s.history,
   };
 }
@@ -306,7 +308,7 @@ function results(s: PoachSim): Results {
   const fishersWin = s.winner === "fishers";
   const seats = s.boats.map((b) => {
     const won = isPoacher(s, b.seat) ? !fishersWin : fishersWin;
-    return { seat: b.seat, score: won ? 1 : 0, place: won ? 1 : 2, firstScoreS: b.firstScoreAt, role: s.roles[b.seat], caught: b.caught };
+    return { seat: b.seat, score: won ? 1 : 0, place: won ? 1 : 2, firstScoreS: b.firstScoreAt, role: s.roles[b.seat], caught: b.caught, quota: b.caught };
   });
   const p = s.boats.filter((b) => isPoacher(s, b.seat));
   const sharp = [...s.boats].sort((a, b) => b.inspections - a.inspections)[0];
