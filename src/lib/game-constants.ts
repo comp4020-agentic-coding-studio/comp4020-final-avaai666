@@ -193,3 +193,34 @@ export const POACH = {
   SEATS: { min: 4, max: 8, botFill: 5 },
 } as const;
 export const BAYS = ["North Bay", "East Bay", "South Bay", "West Bay"] as const;
+
+// ---- Fishing Party, "party 1.0" (DESIGN.md "Fishing Party") ----
+export const PARTY = {
+  W: 1000, H: 700, RX: 460, RY: 315, DT: 0.05,
+  INTRO_S: 3, ROUND_S: 35, STANDINGS_S: 4, SHOP_S: 8,
+  GAMES: ["shoal", "koi", "tug", "night"] as const, // rounds 1 to 4, in a seeded order; Last Net is round 5
+  // Shoal Scramble
+  SHOAL_EVERY_S: 2, SHOAL_UP_S: 1.5, SHOAL_MAX: 6, TAP_R: 55, BIG_NET: 1.5,
+  // Koi Chase
+  SPEED: 160, FAST: 1.35, GATE_R: 40, GATES: 6, KOI_R: 30, KOI_COINS: 5, KOI_SPEED: 120,
+  // Tug of Line
+  NEEDLE_HZ: 0.7, GREEN: 0.36, GREEN_SOLO: 0.24, REEL_GAP_S: 0.25, PULL: 1, SLIP: 0.6, ROPE_WIN: 10, TUG_COINS: 6,
+  // Lantern Night
+  LANTERN_R: 140, DROP_R: 120, DROP_S: 10, NIGHT_NET_R: 40, NIGHT_CD: 0.9, MUDDY: 0.55, BAIT_PULL: 14,
+  // Last Net
+  NETS: [3, 6, 10] as const, SCHOOL_SHARE: 0.25, LAST_MULT: 2,
+  SHOP: {
+    bigNet: { cost: 3, name: "Big Net", text: "bigger catch next round" },
+    fastBoat: { cost: 3, name: "Fast Boat", text: "faster next round" },
+    bait: { cost: 3, name: "Bait", text: "schools swim to you first next round" },
+    muddy: { cost: 4, name: "Muddy Water", text: "the leader sees less next round (only if you are behind)" },
+  } as Record<string, { cost: number; name: string; text: string }>,
+  VARIANTS: {
+    shoal: ["One school at a time", "Two small schools at once"],
+    koi: ["Wide gates", "Narrow gates, more pay"],
+    tug: ["In pairs", "Each alone against the fish (narrower green)"],
+    night: ["One lantern drop each", "Three lantern drops each, smaller"],
+    last: ["One pick", "One pick"],
+  } as Record<string, [string, string]>,
+  SEATS: { min: 2, max: 4, botFill: 4 },
+} as const;
