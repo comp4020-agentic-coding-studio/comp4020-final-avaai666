@@ -224,3 +224,16 @@ export const PARTY = {
   } as Record<string, [string, string]>,
   SEATS: { min: 2, max: 4, botFill: 4 },
 } as const;
+
+// ---- Lake Holdings, "holdings 1.0" (DESIGN.md "Lake Holdings") ----
+export const HOLD = {
+  W: 1000, H: 700, RX: 460, RY: 315, DT: 0.05,
+  HEX: 37, IN_LAKE: 0.84, // hex size in sim units (prototype v7's 3.7); tiles whose centre is inside this share of the lake
+  TIDE_S: 15, TIDES: 12, // a tide every 15 s, twelve in three minutes
+  HAND: 3, START_TILES: 3, SCHOOLS: 8,
+  NET_TAKE: 3, // a net takes up to 3 from each school on or next to it
+  POND_BREED: 2, CORMORANT: 2, CORMORANT_RANGE: 2, LANTERN_RANGE: 3, LANTERN_TIDES: 2,
+  THIN_AFTER: 2, // a tile netted this many tides running is marked thinned: schools passing lose a fish
+  DECK: ["net", "net", "net", "pond", "pond", "fence", "fence", "cormorant", "lantern", "claim", "claim", "claim"] as const,
+  SEATS: { min: 2, max: 4, botFill: 4 },
+} as const;
