@@ -1,4 +1,4 @@
-# Next Year, No Fish (明年无鱼): design v2.3
+# Next Year, No Fish (明年无鱼): design v2.4
 
 ## What it is
 
@@ -419,8 +419,53 @@ Server changes this needs: the end row gains `years` (grown fish at the start
 of each year reached, the same after a rebuild); `/l/CODE/events` works before
 the start; `GET /?code=abcd` answers 303 to `/l/ABCD`.
 
+## Quick Catch (experimental, /b)
+
+What it is. A second, separate game at /b. Its rules are docs/boats/RULES.md
+and its plan is docs/boats/PLAN.md. It has its own tables: boat_rooms,
+boat_players, boat_matches and boat_inputs. Its model name is BOAT_MODEL =
+"boat-sim 0.1". It changes nothing at /l or /p.
+
+The rules that apply to /b exactly as to the lake:
+- The server decides every catch, ram, pick-up and score. A browser sends
+  only steer, cast and dash.
+- Model and game constants live only in src/lib/constants.ts and
+  src/lib/game-constants.ts.
+- Each match has a 256-bit secret. It appears in no event, frame, page or log.
+- Every random stream is sfc32 seeded from SHA-256(secret | name).
+- No Math.random() in src/lib or the server. boat.js uses it only for
+  particles and screen shake, which are drawing, not state.
+- The Origin check, the cookie identity per room, and the name rules.
+- Nothing from "Not building". Never edit a test to make it pass.
+
+The four lake rules /b does not follow, and why:
+
+a. The record. A boat match's ledger is its boat_matches row (secret, seats,
+   model, start time) plus boat_inputs, which is append-only, each input
+   stamped with the tick that applied it. Boats, nets and holds change 20
+   times a second with no row of their own; the state at any tick is
+   replay(secret, seats, inputs up to that tick). The status, results and end
+   time on boat_matches are a summary written once when the match ends. They
+   can be recomputed by replay, so they are not ledger rows, and that one
+   UPDATE is the only one allowed.
+b. Writes on the timer. The boat timer writes the inputs it applies (with
+   their tick) and the match's end. An input only becomes a fact when a tick
+   applies it (a steer is "latest wins" in its tick; a cast or dash counts
+   once per tick), so the request handler cannot know its row.
+   POST /b/CODE/in answers "queued", never "caught".
+c. Restarts. A running boat match is marked interrupted and its room goes
+   back to the lobby. A two-minute live race cannot go on without its
+   players, and stepping it on to the present would sail boats nobody steers.
+   Nothing carries across matches, so only that race is lost.
+d. Streams. boat-sim has two streams: "lake" (fish, breeding and the golden
+   carp) and "bots" (every bot decision in tick order). Replaying a boat match
+   re-runs the bots. That is why a replay needs the same BOAT_MODEL, and any
+   change to bots, rules or stream use needs a new one.
+
 ## Changelog
 
+- v2.4 (15 Oct): Quick Catch, an experimental second game at /b (boats,
+  docs/boats/RULES.md), and the four lake rules it does not follow.
 - v2.3 (13 Oct): the page; the end row's years; a lobby stream; three runner
   bugs found by playing (bots stopped throwing after the first winter, bots
   voted at the meeting's first step, the tally ignored bots' votes).

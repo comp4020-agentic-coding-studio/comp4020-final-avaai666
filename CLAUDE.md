@@ -70,6 +70,15 @@ Scope
 - Test names are English too.
 - The page never decides an outcome: lake.js draws what the snapshot, rows
   and frames say, and words for them.
+- The boat game (/b, docs/boats/RULES.md) is experimental and separate:
+  work on it never changes /l or /p, their tables, or their tests.
+- In the boat game the server decides every catch, ram, pick-up and score; a
+  browser sends only steer, cast and dash, and draws what it is sent.
+- A boat match is its seed plus the inputs applied at each tick; changing
+  how a stored match replays needs a new model name (BOAT_MODEL).
+- DESIGN.md 'Quick Catch' lists the four lake rules the boat game does not
+  follow (the record, timer writes, restarts, streams) and why. Every other
+  rule in this file applies to /b.
 
 Tests
 - Test first. A first run that fails because a function is "not implemented"
