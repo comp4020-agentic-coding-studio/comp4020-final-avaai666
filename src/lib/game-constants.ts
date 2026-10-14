@@ -2,6 +2,7 @@
 // DEFAULTS, unchanged; the steering weights are the literals in its step();
 // the golden carp's are KOI in sim/season.mjs.
 // They live only here and in constants.ts.
+import type { BotKind as BoatBotKind } from "./boat-sim.ts";
 import type { BotKind } from "./rules.ts";
 
 // ---- the lake (sim/lakesim.mjs DEFAULTS) ----
@@ -122,3 +123,12 @@ export const BOAT = {
   SIGHT: 95, MATE: 30, SEP: 14, V_ADULT: 42, V_FRY: 26, BREED: 0.02, COOL: 6, MATURE_S: 20, SHALLOW: 0.72,
   TIERS: [0, 10, 25, 45, 70, 100], // banked fish for each house part
 } as const;
+// rooms and the run-time loop (boat-hub.ts, boat-routes.ts)
+export const BOAT_MAX_PLAYERS = 4;
+export const BOAT_BOT_NAMES: Record<BoatBotKind, string> = { steady: "Old Wang", pirate: "Jin", scavenger: "Mei" };
+export const BOAT_BOT_ORDER: readonly BoatBotKind[] = ["pirate", "steady", "scavenger"]; // which bots fill empty boats, in order
+export const BOAT_FRAME_EVERY = 2; // ticks: 10 frames a second
+export const BOAT_MAX_CATCHUP = 40; // ticks per timer call
+export const BOAT_MAX_RUNNING = 8; // matches running at once, across all rooms
+export const BOAT_HEARTBEAT_MS = 15000;
+export const BOAT_INPUT_RATE = 25; // POSTs per second per player; a client sends at most ~12

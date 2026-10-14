@@ -135,6 +135,7 @@ export function lakeHomePage(pastLakes: { code: string; openedAt: number }[]): s
         </div>
       </section>
       <section class="card past">${table}</section>
+      <p class="foot"><a class="newgame" href="/b">New and experimental: <b>Quick Catch</b>, boats on a shared lake →</a></p>
       <p class="foot"><a href="/readme/">About this game, and how it was made</a></p>
     </main>`,
     "page-home",

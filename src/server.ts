@@ -5,6 +5,9 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join, resolve } from "node:path";
 import { marked } from "marked";
+import { createBoatRoutes } from "./boat-routes.ts";
+import { createBoatHub } from "./lib/boat-hub.ts";
+import { openBoatStore } from "./lib/boat-store.ts";
 import { createLakeHub } from "./lib/lake-live.ts";
 import { rebuild as rebuildLakeRunner } from "./lib/lake-runner.ts";
 import { openLakeStore } from "./lib/lake-store.ts";
@@ -36,6 +39,11 @@ for (const { lakeId, code } of lakeStore.liveLakes()) {
   lakeHub.register(runner);
 }
 
+// The boat game (/b, experimental): its own tables in the same file, and a
+// 20 Hz loop. A match that was running when the server stopped is interrupted.
+const boatStore = openBoatStore(join(DATA_DIR, "pond.db"), now);
+const boatHub = createBoatHub(boatStore, now, (err) => log({ event: "error", where: "boat-tick", message: String(err) }));
+
 // README.md is rendered once, at startup.
 const readmeHtml = marked.parse(readFileSync(join(ROOT, "README.md"), "utf8"), { async: false });
 
@@ -48,6 +56,7 @@ const handle = createHandler({
   readmeHtml,
   staticDir: join(ROOT, "src", "static"),
   docsDir: join(ROOT, "docs"),
+  boat: createBoatRoutes(boatHub, boatStore),
 });
 
 const server = createServer((req, res) => {
@@ -61,6 +70,7 @@ const server = createServer((req, res) => {
 
 const timer = setInterval(() => hub.tick(), 1000);
 const lakeTimer = setInterval(() => lakeHub.tick(), 100);
+const boatTimer = setInterval(() => boatHub.tick(), 25);
 
 server.listen(PORT, "0.0.0.0", () => log({ event: "listening", port: PORT, dataDir: DATA_DIR }));
 
@@ -68,11 +78,14 @@ function shutdown(signal: string): void {
   log({ event: "shutdown", signal });
   clearInterval(timer);
   clearInterval(lakeTimer);
+  clearInterval(boatTimer);
   hub.close();
   lakeHub.close();
+  boatHub.close();
   server.close(() => {
     store.close();
     lakeStore.close();
+    boatStore.close();
     process.exit(0);
   });
   server.closeAllConnections();
