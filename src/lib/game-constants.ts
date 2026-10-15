@@ -234,8 +234,9 @@ export const HOLD = {
   HEX: 37, IN_LAKE: 0.84, // hex size in sim units (prototype v7's 3.7); tiles whose centre is inside this share of the lake
   TIDE_S: 15, TIDES: 12, // a tide every 15 s, twelve in three minutes
   HAND: 3, START_TILES: 3, SCHOOLS: 8,
-  NET_TAKE: 3, // a net takes up to 3 from each school on or next to it
-  POND_BREED: 2, CORMORANT: 2, CORMORANT_RANGE: 2, LANTERN_RANGE: 3, LANTERN_TIDES: 2,
+  NET_TAKE: 2, // a net takes 2 from each school on or next to it
+  DRY_FISH: 3, // a school smaller than this dies out, and its tile runs dry (grey) until a pond beside it brings it back
+  POND_BREED: 3, CORMORANT: 2, CORMORANT_RANGE: 2, LANTERN_RANGE: 3, LANTERN_TIDES: 2,
   THIN_AFTER: 2, // a tile netted this many tides running is marked thinned: schools passing lose a fish
   DECK: ["net", "net", "net", "pond", "pond", "fence", "fence", "cormorant", "lantern", "claim", "claim", "claim"] as const,
   SEATS: { min: 2, max: 4, botFill: 4 },

@@ -12,6 +12,9 @@ const HOW = {
   last: "Pick a net in secret. If all nets together are more than the school, everyone gets 1. Coins ×2.",
 };
 
+// replace a panel's markup only when it changed, so a tap is never lost to a rebuild
+const setHtml = (el, html) => { if (el.dataset.html !== html) { el.dataset.html = html; el.innerHTML = html; } };
+
 export function mount({ world, sound, ui, send, view }) {
   let prev = null, cur = null, curAt = 0, seats = null;
   const me = () => view().mySeat;
@@ -48,28 +51,28 @@ export function mount({ world, sound, ui, send, view }) {
   });
 
   function panel(f) {
-    const el = $("y-panel"); if (me() === null) { el.innerHTML = ""; return; }
+    const el = $("y-panel"); if (me() === null) { setHtml(el, ""); return; }
     if (f.phase === "shop") {
-      el.innerHTML = `<h4>Shop · ${Math.ceil(f.left)} s · you have ${f.coins[me()]} coins</h4><div class="cards">${Object.entries(SHOP).map(([id, [n, c, t]]) => `<button class="fac" type="button" data-a="buy" data-item="${id}" ${f.coins[me()] < c || f.perks.includes(id) || (id === "muddy" && !f.behind) ? "disabled" : ""}><b>${n}</b>${c} coins<small>${t}</small></button>`).join("")}</div>
+      setHtml(el, `<h4>Shop · ${Math.ceil(f.left)} s · you have ${f.coins[me()]} coins</h4><div class="cards">${Object.entries(SHOP).map(([id, [n, c, t]]) => `<button class="fac" type="button" data-a="buy" data-item="${id}" ${f.coins[me()] < c || f.perks.includes(id) || (id === "muddy" && !f.behind) ? "disabled" : ""}><b>${n}</b>${c} coins<small>${t}</small></button>`).join("")}</div>
         ${f.perks.length ? `<p class="small">Next round you have: ${f.perks.map((p) => SHOP[p][0]).join(", ")}</p>` : ""}
         <h4 style="margin-top:8px">Next: ${ui.esc(f.name)} · ${f.picker === me() ? "you are last, so you pick" : `${ui.esc(nameOf(f.picker))} picks`}</h4>
-        <div class="chips">${f.variants.map((v, i) => `<button class="chipbtn" type="button" data-a="variant" data-v="${i}" aria-pressed="${f.variant === v}" ${f.picker === me() ? "" : "disabled"}>${ui.esc(v)}</button>`).join("")}</div>`;
+        <div class="chips">${f.variants.map((v, i) => `<button class="chipbtn" type="button" data-a="variant" data-v="${i}" aria-pressed="${f.variant === v}" ${f.picker === me() ? "" : "disabled"}>${ui.esc(v)}</button>`).join("")}</div>`);
       return;
     }
-    if (f.phase === "standings") { el.innerHTML = `<h4>Standings after round ${f.round - 1}</h4><div class="podium">${[...f.coins.keys()].sort((a, b) => f.coins[b] - f.coins[a]).map((s, i) => `<div class="pl ${i === 0 ? "first" : ""}">${ui.portrait(seats?.[s]?.character ?? "mei", "")}<b>${ui.esc(nameOf(s))}</b><span class="sc">${f.coins[s]}</span></div>`).join("")}</div>`; return; }
-    if (f.phase !== "round") { el.innerHTML = `<p class="small">Get ready…</p>`; return; }
-    if (f.game === "shoal") el.innerHTML = `<h4>Shoal Scramble</h4><p class="small" style="margin:0">Tap a school the moment it flashes up.${f.perks.includes("bigNet") ? " Big Net: your tap reaches further." : ""}</p>`;
-    if (f.game === "koi") el.innerHTML = `<h4>Koi Chase</h4><p class="small" style="margin:0">Steer through the glowing gate, then the next. Touch the golden carp for 5.</p>`;
+    if (f.phase === "standings") { setHtml(el, `<h4>Standings after round ${f.round - 1}</h4><div class="podium">${[...f.coins.keys()].sort((a, b) => f.coins[b] - f.coins[a]).map((s, i) => `<div class="pl ${i === 0 ? "first" : ""}">${ui.portrait(seats?.[s]?.character ?? "mei", "")}<b>${ui.esc(nameOf(s))}</b><span class="sc">${f.coins[s]}</span></div>`).join("")}</div>`); return; }
+    if (f.phase !== "round") { setHtml(el, `<p class="small">Get ready…</p>`); return; }
+    if (f.game === "shoal") setHtml(el, `<h4>Shoal Scramble</h4><p class="small" style="margin:0">Tap a school the moment it flashes up.${f.perks.includes("bigNet") ? " Big Net: your tap reaches further." : ""}</p>`);
+    if (f.game === "koi") setHtml(el, `<h4>Koi Chase</h4><p class="small" style="margin:0">Steer through the glowing gate, then the next. Touch the golden carp for 5.</p>`);
     if (f.game === "tug") {
       const rope = f.ropes.find((r) => r.seats.includes(me())), dir = rope?.seats[0] === me() ? 1 : -1, pos = rope ? rope.pos * dir : 0;
       const vs = rope?.seats.length === 2 ? `against ${ui.esc(nameOf(rope.seats.find((x) => x !== me())))}` : "against the fish";
-      el.innerHTML = `<h4>Tug of Line · ${vs}</h4><div class="meter" style="--g:${f.green}"><i style="left:${50 + f.needle * 50}%"></i></div>
+      setHtml(el, `<h4>Tug of Line · ${vs}</h4><div class="meter" style="--g:${f.green}"><i style="left:${50 + f.needle * 50}%"></i></div>
         <div class="bar" style="margin-top:8px"><i style="width:${50 + pos * 5}%;background:${pos >= 0 ? "#45a48c" : "#cf3b2e"}"></i></div><p class="small">${pos > 0 ? "You are winning the line" : pos < 0 ? "The line is slipping away" : "Even"} · pull to 10 to land it</p>
-        <div class="pads"><button class="pad red" type="button" data-a="reel">REEL</button></div>`;
+        <div class="pads"><button class="pad red" type="button" data-a="reel">REEL</button></div>`);
     }
-    if (f.game === "night") el.innerHTML = `<h4>Lantern Night</h4><p class="small" style="margin:0">Lantern ${f.view < 140 ? `<b>shrunk to ${f.view} (muddy water)</b>` : f.view}. Drops left: ${f.dropsLeft}.</p><div class="pads"><button class="pad" type="button" data-a="cast">CAST</button><button class="pad red" type="button" data-a="drop" ${f.dropsLeft ? "" : "disabled"}>DROP LANTERN</button></div>`;
-    if (f.game === "last") el.innerHTML = `<h4>Last Net · the school holds ${f.school}</h4><p class="small" style="margin:0">${f.lakeStart - f.lake > 0 ? `You started with ${f.lakeStart} fish in the lake; ${f.lake} are left. ` : ""}Pick in secret. ${f.picked.filter(Boolean).length} of ${f.picked.length} have picked.</p>
-      <div class="picks">${[3, 6, 10].map((n) => `<button class="pad ${n === 10 ? "red" : ""}" type="button" data-a="pick" data-size="${n}" ${f.myPick !== null ? "disabled" : ""} aria-pressed="${f.myPick === n}">${n === 3 ? "Small" : n === 6 ? "Medium" : "Huge"} ${n}</button>`).join("")}</div>`;
+    if (f.game === "night") setHtml(el, `<h4>Lantern Night</h4><p class="small" style="margin:0">Lantern ${f.view < 140 ? `<b>shrunk to ${f.view} (muddy water)</b>` : f.view}. Drops left: ${f.dropsLeft}.</p><div class="pads"><button class="pad" type="button" data-a="cast">CAST</button><button class="pad red" type="button" data-a="drop" ${f.dropsLeft ? "" : "disabled"}>DROP LANTERN</button></div>`);
+    if (f.game === "last") setHtml(el, `<h4>Last Net · the school holds ${f.school}</h4><p class="small" style="margin:0">${f.lakeStart - f.lake > 0 ? `You started with ${f.lakeStart} fish in the lake; ${f.lake} are left. ` : ""}Pick in secret. ${f.picked.filter(Boolean).length} of ${f.picked.length} have picked.</p>
+      <div class="picks">${[3, 6, 10].map((n) => `<button class="pad ${n === 10 ? "red" : ""}" type="button" data-a="pick" data-size="${n}" ${f.myPick !== null ? "disabled" : ""} aria-pressed="${f.myPick === n}">${n === 3 ? "Small" : n === 6 ? "Medium" : "Huge"} ${n}</button>`).join("")}</div>`);
   }
 
   function events(ev) {

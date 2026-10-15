@@ -197,3 +197,56 @@ describe("score and the lake", () => {
     expect(s.harvest[1] + s.harvest[2]).toBeGreaterThan(0);
   }, 20000);
 });
+
+describe("v3.1: nets take 2 from every school, dry lanes, and previews", () => {
+  it("a net takes 2 from each school that passes, and each school stays smaller", () => {
+    const s = make(2, "v31-net");
+    const t = mine(s, 0)[0];
+    t.building = "net"; t.by = 0;
+    s.tiles.forEach((x) => { x.dir = -1; });
+    const near = neighbours(s, t.id);
+    s.schools = [{ id: 901, tile: t.id, fish: 10 }, { id: 902, tile: near[0], fish: 10 }, { id: 903, tile: near[1], fish: 10 }];
+    toTide(s);
+    expect(HOLD.NET_TAKE).toBe(2);
+    expect(s.harvest[0]).toBe(6);
+    expect(s.schools.map((x) => x.fish)).toEqual([8, 8, 8]);
+  });
+
+  it("all nets on one lane dry it within 12 tides; a dry tile is marked on the board", () => {
+    const s = make(2, "v31-dry");
+    s.tiles.forEach((x) => { x.dir = -1; });
+    const lane = [mine(s, 0)[0].id, ...neighbours(s, mine(s, 0)[0].id)].slice(0, 4);
+    for (const id of lane) { const t = s.tiles[id]; t.owner = 0; t.building = "net"; t.by = 0; }
+    s.schools = [{ id: 950, tile: lane[0], fish: 30 }];
+    for (let i = 0; i < 12 && !hold.over(s); i++) toTide(s);
+    expect(s.tiles[lane[0]].dry).toBe(true);
+    expect(s.schools.filter((x) => x.tile === lane[0]).length).toBe(0);
+    const f = hold.frameFor(s, 1) as { tiles: number[][] };
+    expect(f.tiles[lane[0]][9]).toBe(1);
+  });
+
+  it("only a pond brings a dry tile back", () => {
+    const s = make(2, "v31-pond");
+    s.tiles.forEach((x) => { x.dir = -1; });
+    const t = mine(s, 0)[0], nb = neighbours(s, t.id)[0];
+    s.tiles[nb].dry = true; s.schools = [];
+    toTide(s);
+    expect(s.tiles[nb].dry).toBe(true); // nothing else revives it
+    t.building = "pond"; t.by = 0;
+    toTide(s);
+    expect(s.tiles[nb].dry).toBe(false);
+  });
+
+  it("every built tile shows what it paid last tide, and every tile what a net would have paid", () => {
+    const s = make(2, "v31-paid");
+    const t = mine(s, 0)[0];
+    t.building = "net"; t.by = 0;
+    s.tiles.forEach((x) => { x.dir = -1; });
+    s.schools = [{ id: 960, tile: t.id, fish: 10 }];
+    toTide(s);
+    const f = hold.frameFor(s, 0) as { tiles: number[][] };
+    expect(f.tiles[t.id][7]).toBe(2); // paid
+    const other = neighbours(s, t.id)[0];
+    expect(f.tiles[other][7]).toBe(2); // a net here would also have reached that school
+  });
+});

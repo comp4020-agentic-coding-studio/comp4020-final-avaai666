@@ -17,7 +17,7 @@ type Building = Exclude<Card, "claim">;
 const CARDS: Card[] = ["net", "pond", "fence", "cormorant", "lantern", "claim"];
 export type HoldInput = { k: "play"; card: Card; tile: number; dir?: number };
 
-interface Tile { id: number; q: number; r: number; x: number; y: number; owner: number; building: Building | null; by: number; dir: number; until: number; netted: number; paid: number; pays: number }
+interface Tile { id: number; q: number; r: number; x: number; y: number; owner: number; building: Building | null; by: number; dir: number; until: number; netted: number; paid: number; pays: number; dry: boolean }
 export interface HoldSim {
   tick: number; t: number; n: number; rng: () => number; tides: number;
   tiles: Tile[]; at: Map<string, number>; schools: { id: number; tile: number; fish: number }[]; nextId: number;
@@ -50,7 +50,7 @@ function make(seed: string, seats: Seat[], lake: { fish: number }): HoldSim {
   const tiles: Tile[] = [], at = new Map<string, number>();
   for (let q = -16; q <= 16; q++) for (let r = -12; r <= 12; r++) {
     const x = Q.W / 2 + Q.HEX * Math.sqrt(3) * (q + r / 2), y = Q.H / 2 + Q.HEX * 1.5 * r;
-    if (ell(x, y) < Q.IN_LAKE) { at.set(`${q},${r}`, tiles.length); tiles.push({ id: tiles.length, q, r, x, y, owner: -1, building: null, by: -1, dir: 0, until: 0, netted: 0, paid: 0, pays: 0 }); }
+    if (ell(x, y) < Q.IN_LAKE) { at.set(`${q},${r}`, tiles.length); tiles.push({ id: tiles.length, q, r, x, y, owner: -1, building: null, by: -1, dir: 0, until: 0, netted: 0, paid: 0, pays: 0, dry: false }); }
   }
   // the current: a seeded swirl, each tile pointing to one neighbour
   const spin = rng() < 0.5 ? 1 : -1, wob = rng() * 6.28;
@@ -127,18 +127,21 @@ function tide(s: HoldSim, ev: GameEvent[]): void {
     if (lan) next = neighbours(s, t.id).sort((a, b) => hexDist(s.tiles[a], lan) - hexDist(s.tiles[b], lan))[0];
     else if (t.dir >= 0) next = s.at.get(`${t.q + DIRS[t.dir][0]},${t.r + DIRS[t.dir][1]}`);
     if (next !== undefined) sc.tile = next;
+    // a dry tile has nothing to feed a school: it loses a fish each tide it spends there
+    if (s.tiles[sc.tile].dry && sc.fish > 0) sc.fish--;
     // a thinned tile costs a passing school a fish
     if (s.tiles[sc.tile].netted >= Q.THIN_AFTER && sc.fish > 0) { sc.fish--; ev.push({ k: "thin", tile: sc.tile }); }
   }
   // what every tile would have paid a net this tide (shown before you place)
   for (const t of s.tiles) { const near = new Set([t.id, ...neighbours(s, t.id)]); t.pays = s.schools.filter((sc) => near.has(sc.tile)).reduce((n, sc) => n + Math.min(Q.NET_TAKE, sc.fish), 0); }
+  // (what a net here would have taken this tide; built nets also keep what they paid)
   // 2. nets take from each school on or next to them
   const thisTide: number[] = s.harvest.map(() => 0), byNet = new Map<number, number>();
   for (const t of s.tiles) {
     if (t.building !== "net") { t.netted = 0; continue; }
     const near = new Set([t.id, ...neighbours(s, t.id)]);
     let got = 0;
-    for (const sc of s.schools) if (near.has(sc.tile)) { const n = Math.min(Q.NET_TAKE - got, sc.fish); sc.fish -= n; got += n; if (got >= Q.NET_TAKE) break; }
+    for (const sc of s.schools) if (near.has(sc.tile)) { const n = Math.min(Q.NET_TAKE, sc.fish); sc.fish -= n; got += n; }
     t.paid = got; t.netted = got ? t.netted + 1 : 0;
     if (got) { s.harvest[t.by] += got; thisTide[t.by] += got; byNet.set(t.id, got); s.firstScoreAt[t.by] ??= s.t; }
     ev.push(got ? { k: "net", seat: t.by, tile: t.id, n: got } : { k: "dry", seat: t.by, tile: t.id });
@@ -146,6 +149,7 @@ function tide(s: HoldSim, ev: GameEvent[]): void {
   // 3. ponds breed fish into the tiles beside them (neighbours benefit too)
   for (const t of s.tiles) if (t.building === "pond") {
     const nb = neighbours(s, t.id);
+    for (const n of nb) if (s.tiles[n].dry) { s.tiles[n].dry = false; ev.push({ k: "revived", seat: t.by, tile: n }); }
     const into = s.schools.find((sc) => nb.includes(sc.tile));
     if (into) into.fish += Q.POND_BREED; else s.schools.push({ id: s.nextId++, tile: nb[Math.floor(s.rng() * nb.length)] ?? t.id, fish: Q.POND_BREED });
     ev.push({ k: "bred", seat: t.by, tile: t.id, n: Q.POND_BREED });
@@ -161,6 +165,11 @@ function tide(s: HoldSim, ev: GameEvent[]): void {
   }
   // 5. lanterns burn out; empty schools are gone; hands refill
   for (const t of s.tiles) if (t.building === "lantern" && s.tides >= t.until) { t.building = null; t.by = -1; ev.push({ k: "lanternOut", tile: t.id }); }
+  for (const sc of s.schools) if (sc.fish < Q.DRY_FISH) {
+    const t = s.tiles[sc.tile];
+    if (!t.dry) { t.dry = true; ev.push({ k: "dry-lane", tile: t.id }); }
+    sc.fish = 0;
+  }
   s.schools = s.schools.filter((sc) => sc.fish > 0);
   thisTide.forEach((n, seat) => { if (n > 0 && (!s.bestTide || n > s.bestTide.n)) s.bestTide = { seat, n }; });
   for (let p = 0; p < s.n; p++) draw(s, p);
@@ -196,8 +205,8 @@ function bot(s: HoldSim, seat: number, r: () => number): HoldInput[] {
 function frameFor(s: HoldSim, seat: number) {
   return {
     t: s.t, tide: s.tides, tides: Q.TIDES, next: Math.max(0, (s.tides + 1) * Q.TIDE_S - s.t), left: Math.max(0, Q.TIDES * Q.TIDE_S - s.t),
-    // id, x, y, owner, building index (-1 none), dir, thinned, paid-or-would-pay, lantern tides left
-    tiles: s.tiles.map((t) => [t.id, Math.round(t.x), Math.round(t.y), t.owner, t.building ? CARDS.indexOf(t.building) : -1, t.dir, t.netted >= Q.THIN_AFTER ? 1 : 0, t.building === "net" ? t.paid : t.pays, t.building === "lantern" ? t.until - s.tides : 0]),
+    // id, x, y, owner, building index (-1 none), dir, thinned, paid-or-would-pay, lantern tides left, dry
+    tiles: s.tiles.map((t) => [t.id, Math.round(t.x), Math.round(t.y), t.owner, t.building ? CARDS.indexOf(t.building) : -1, t.dir, t.netted >= Q.THIN_AFTER ? 1 : 0, t.building === "net" ? t.paid : t.pays, t.building === "lantern" ? t.until - s.tides : 0, t.dry ? 1 : 0]),
     schools: s.schools.map((sc) => [sc.id, sc.tile, sc.fish]),
     harvest: s.harvest, held: s.harvest.map((_, p) => s.tiles.filter((t) => t.owner === p).length),
     hand: seat >= 0 && seat < s.n ? s.hands[seat] : [], hands: s.hands.map((h) => h.length),

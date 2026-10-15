@@ -640,15 +640,21 @@ it. Each player holds 3 cards and draws back to 3 after each tide: Net,
 Pond, Fence, Cormorant, Lantern and Claim.
 
 At each tide:
-- nets take from the schools passing them;
-- ponds breed fish into the tiles next to them (neighbours benefit too);
+- nets take 2 from every school on or beside them, and each school stays
+  smaller;
+- a school smaller than 3 dies out and its water runs dry (grey on the
+  board); a school on dry water loses a fish a tide; only a pond beside it
+  brings dry water back;
+- ponds breed 3 fish into the tiles next to them (neighbours benefit too);
 - fences turn the current on their tile;
 - a cormorant steals 2 from an enemy net within 2 tiles, once per tide;
 - lanterns pull schools within 3 tiles, for two tides;
 - over-netted lanes thin, and the board shows it.
 
 Claim takes empty water next to yours; taking an enemy tile costs 2 cards.
-Before you place a card, the tile shows what it would have paid last tide.
+Every net shows what it paid last tide, all game. While a card is selected,
+every tile it could go on shows what a net there would have paid last tide,
+and the best three are marked.
 First playable: the hex board, the current, all five buildings and Claim,
 a tide every 15 s, 3 minutes, standings.
 
@@ -770,7 +776,8 @@ decides.
 
 ## Changelog
 
-- v3.1 (15 Oct): Boat Rush upgrades cost 3 then 7, shown on the start card,
+- v3.1 (15 Oct): Lake Holdings nets take 2 from every school; dry water,
+  revived only by ponds; paid labels and card previews. Boat Rush upgrades cost 3 then 7, shown on the start card,
   with a dock glow and a coach mark (balance numbers in
   docs/checks/balance-2026-10-15.md). Who's Poaching after the balance
   harness (bots only): a

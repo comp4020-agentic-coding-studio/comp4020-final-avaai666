@@ -201,6 +201,18 @@ export function createWorld(canvas, stage, opts = {}) {
   function sweepProps() { for (const [id, p] of props) { if (!p.userData.seen) { scene.remove(p); props.delete(id); } p.userData.seen = false; } }
   function clearProps() { for (const p of props.values()) scene.remove(p); props.clear(); }
 
+  // small labels pinned to points on the water (sim units), drawn each frame
+  const labels = new Map();
+  function setLabels(list) { // [id, x, y, text, cls]
+    const seen = new Set();
+    for (const [id, x, y, text, cls] of list) {
+      let el = labels.get(id);
+      if (!el) { el = document.createElement("div"); el.className = "pin"; tagsEl?.appendChild(el); labels.set(id, el); }
+      el.textContent = text; el.className = `pin ${cls ?? ""}`; el.dataset.x = x; el.dataset.y = y; seen.add(id);
+    }
+    for (const [id, el] of labels) if (!seen.has(id)) { el.remove(); labels.delete(id); }
+  }
+
   // effects
   const fx = [];
   function ripple(x, y, color = "#f5ead6", size = 4, life = 1.2) {
@@ -284,6 +296,10 @@ export function createWorld(canvas, stage, opts = {}) {
       b.tag.style.display = vis ? "block" : "none";
       if (vis) b.tag.style.transform = `translate(${(pv.x * .5 + .5) * W}px, ${(-pv.y * .5 + .5) * H}px) translate(-50%, -100%)`;
     }
+    for (const el of labels.values()) {
+      const [wx, wz] = toWorld(+el.dataset.x, +el.dataset.y); pv.set(wx, .6, wz).project(camera);
+      el.style.transform = `translate(${(pv.x * .5 + .5) * W}px, ${(-pv.y * .5 + .5) * H}px) translate(-50%, -50%)`;
+    }
     const sway = reduced ? 0 : Math.sin(t * .08) * 4;
     const want = cam.p.clone(); want.x += sway;
     if (camera.aspect < 1.1) { const far = 1 + (1.1 - camera.aspect) * 1.25; want.sub(cam.l).multiplyScalar(far).add(cam.l); }
@@ -313,7 +329,7 @@ export function createWorld(canvas, stage, opts = {}) {
     THREE, scene, camera, toon, makeLantern, glowSprite, R,
     setNight: (v) => { nightTarget = v; }, setLanterns: (l) => { lanterns = l; },
     setDocks, boat, drawBoat, clearBoats, boats, setFish, setKoi, prop, sweepProps, clearProps,
-    ripple, netDrop, floatText, setCamera, screenToSim, onFrame: (f) => { onFrame = f; },
+    ripple, netDrop, floatText, setLabels, setCamera, screenToSim, onFrame: (f) => { onFrame = f; },
     shake() { stage.classList.remove("shake"); void stage.offsetWidth; stage.classList.add("shake"); },
   };
 }

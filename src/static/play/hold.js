@@ -6,7 +6,7 @@ import { FAC } from "./art.js";
 
 const COLORS = { mei: "#d6473a", wang: "#4a7d9c", jin: "#e0a93a", lu: "#2f9a8f", lian: "#d9668a", shitou: "#62a344" };
 const CARDS = ["net", "pond", "fence", "cormorant", "lantern", "claim"];
-const TEXT = { net: "takes up to 3 from schools on or beside it each tide", pond: "breeds 2 fish beside it each tide (neighbours too)", fence: "turns the current on its tile", cormorant: "steals 2 from an enemy net within 2 tiles", lantern: "pulls schools within 3 tiles, for two tides", claim: "takes empty water next to yours (an enemy tile costs 2 cards)" };
+const TEXT = { net: "takes 2 from every school on or beside it each tide", pond: "breeds 3 fish beside it each tide, and brings dry water back (neighbours too)", fence: "turns the current on its tile", cormorant: "steals 2 from an enemy net within 2 tiles", lantern: "pulls schools within 3 tiles, for two tides", claim: "takes empty water next to yours (an enemy tile costs 2 cards)" };
 const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
 const dirAngle = (d) => { const [dq, dr] = DIRS[d]; return Math.atan2(1.5 * dr, Math.sqrt(3) * (dq + dr / 2)); };
 
@@ -31,11 +31,11 @@ export function mount({ world, sound, ui, send, view }) {
     if (!card) { ui.banner("Pick a card first", "your hand is in the panel"); return; }
     send({ k: "play", card, tile: t[0], ...(card === "fence" ? { dir: fenceDir } : {}) });
     ui.did("place"); if (card === "claim") ui.did("claim");
-    card = null; renderHand();
+    card = null; renderHand(); labels();
   };
   canvas.addEventListener("pointerdown", onDown);
   $("h-hand").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-card]"); if (b) { card = card === b.dataset.card ? null : b.dataset.card; ui.did("pick"); renderHand(); help(); }
+    const b = e.target.closest("[data-card]"); if (b) { card = card === b.dataset.card ? null : b.dataset.card; ui.did("pick"); renderHand(); help(); labels(); }
     const r = e.target.closest("[data-rot]"); if (r) { fenceDir = (fenceDir + 1) % 6; renderHand(); }
   });
   function help() {
@@ -43,8 +43,12 @@ export function mount({ world, sound, ui, send, view }) {
     const owner = t ? (t[3] === -1 ? "open water" : t[3] === me() ? "your water" : `${nameOf(t[3])}'s water`) : "";
     $("h-help").textContent = card ? `${card[0].toUpperCase() + card.slice(1)}: ${TEXT[card]}.${t ? ` This tile (${owner}) ${t[4] === 0 ? "paid" : "would have paid"} ${t[7]} last tide.` : " Tap a hex."}` : t ? `This tile: ${owner}; ${t[7]} fish passed it last tide.` : "Pick a card, then tap a hex.";
   }
+  let handKey = "";
   function renderHand() {
     const hand = cur?.hand ?? [];
+    const key = `${hand.join()}|${card}|${fenceDir}`;
+    if (key === handKey) return; // only when it changes, so a tap never lands on a button that was just replaced
+    handKey = key;
     $("h-hand").innerHTML = hand.map((c, i) => { const f = FAC.find((x) => x.id === c); return `<button class="fac" type="button" data-card="${c}" aria-pressed="${card === c}">${f?.svg ?? ""}${f?.name ?? c}</button>`; }).join("") + (card === "fence" ? `<button class="fac" type="button" data-rot="1">↻ turn<small>current points ${["E", "NE", "NW", "W", "SW", "SE"][fenceDir]}</small></button>` : "");
   }
 
@@ -55,6 +59,8 @@ export function mount({ world, sound, ui, send, view }) {
       if (e.k === "dry") { const x = t(e.tile); if (x && e.seat === me()) world.floatText(x[1], x[2], "dry", "#b9b0c6"); }
       if (e.k === "bred") { const x = t(e.tile); if (x) { world.ripple(x[1], x[2], "#7ccf8e", 4); world.floatText(x[1], x[2], `+${e.n} born`, "#7ccf8e"); } }
       if (e.k === "cormorant") { const x = t(e.tile); if (x) world.floatText(x[1], x[2], `Cormorant −${e.n}`, "#ff7a6a", 4); if (e.from === me()) { ui.banner(`${nameOf(e.seat)}'s cormorant`, `stole ${e.n} from your net`); sound.hit(); world.shake(); } if (e.seat === me()) sound.coin(); }
+      if (e.k === "dry-lane") { const x = t(e.tile); if (x) world.floatText(x[1], x[2], "this water ran dry", "#b9b0c6", 4); }
+      if (e.k === "revived") { const x = t(e.tile); if (x) { world.ripple(x[1], x[2], "#7ccf8e", 5); world.floatText(x[1], x[2], "a pond brought it back", "#7ccf8e", 4); } }
       if (e.k === "thin") { const x = t(e.tile); if (x) world.ripple(x[1], x[2], "#8a7f6a", 3); }
       if (e.k === "claimed" || e.k === "taken") { const x = t(e.tile); if (x) world.ripple(x[1], x[2], colorOf(e.seat), 4); if (e.k === "taken" && e.from === me()) { ui.banner(`${nameOf(e.seat)} took your water`, "two cards spent"); sound.hit(); } }
       if (e.k === "built") { const x = t(e.tile); if (x) world.ripple(x[1], x[2], "#e8b84d", 4); if (e.seat === me()) sound.coin(); }
@@ -70,7 +76,27 @@ export function mount({ world, sound, ui, send, view }) {
     const rows = f.harvest.map((h, p) => [p, f.held[p] + h, f.held[p], h]).sort((a, b) => b[1] - a[1] || b[3] - a[3]);
     $("h-board").innerHTML = rows.map(([p, sc, tl, h], i) => `<div><span><span class="swatch" style="background:${colorOf(p)}"></span>${i === 0 ? "👑 " : ""}${ui.esc(nameOf(p))}</span><b>${sc} <small>(${tl} tiles + ${h})</small></b></div>`).join("");
     ui.goalEl.textContent = `Tiles + fish harvested · ${rows[0] ? `${nameOf(rows[0][0])} leads` : ""}`;
-    renderHand(); help();
+    renderHand(); help(); labels();
+  }
+  // where the selected card could go, with what a net there would have paid last tide; the best three are marked
+  const preview = { best: [] };
+  function placeable(c, tl) {
+    if (me() === null) return false;
+    if (c === "claim") return tl[3] !== me() && cur.tiles.some((o) => o[3] === me() && Math.hypot(o[1] - tl[1], o[2] - tl[2]) < 37 * 1.9);
+    return tl[3] === me() && tl[4] < 0;
+  }
+  function labels() {
+    if (!cur) return;
+    const list = [];
+    for (const tl of cur.tiles) if (tl[4] === 0) list.push([`p${tl[0]}`, tl[1], tl[2], `paid ${tl[7]}`, tl[7] ? "paid" : "paid zero"]);
+    preview.best = [];
+    if (card) {
+      const spots = cur.tiles.filter((tl) => placeable(card, tl) && tl[4] !== 0);
+      preview.best = [...spots].sort((a, b) => b[7] - a[7]).slice(0, 3).filter((tl) => tl[7] > 0).map((tl) => tl[0]);
+      for (const tl of spots) list.push([`v${tl[0]}`, tl[1], tl[2], `${tl[7]}`, preview.best.includes(tl[0]) ? "best" : "could"]);
+    }
+    for (const tl of cur.tiles) if (tl[9] === 1) list.push([`d${tl[0]}`, tl[1], tl[2], "dry", "dry"]);
+    world.setLabels(list);
   }
 
   function coach() {
@@ -110,8 +136,9 @@ export function mount({ world, sound, ui, send, view }) {
     if (!cur || !arrows) return;
     cur.tiles.forEach((tl, i) => {
       const fill = fills[i]; if (!fill) return;
-      fill.material.color.set(tl[3] >= 0 ? colorOf(tl[3]) : tl[6] ? "#6f5a3a" : "#ffffff");
-      fill.material.opacity = tl[3] >= 0 ? (i === hover ? .5 : .3) : tl[6] ? .25 : i === hover ? .15 : 0;
+      const dry = tl[9] === 1, best = card && preview.best.includes(tl[0]);
+      fill.material.color.set(dry ? "#7b7b7b" : best ? "#e8b84d" : tl[3] >= 0 ? colorOf(tl[3]) : tl[6] ? "#6f5a3a" : "#ffffff");
+      fill.material.opacity = dry ? .55 : best ? .55 : tl[3] >= 0 ? (i === hover ? .5 : .3) : tl[6] ? .25 : i === hover ? .15 : 0;
       const a = tl[5] >= 0 ? dirAngle(tl[5]) : 0, k = (t * .45 + i * .13) % 1, s = tl[5] >= 0 ? Math.sin(k * Math.PI) : 0;
       dummy.position.set((tl[1] - 500) / 10 + Math.cos(a) * (k - .5) * 2.6, .2, (tl[2] - 350) / 10 + Math.sin(a) * (k - .5) * 2.6); dummy.rotation.set(0, -a, 0); dummy.scale.setScalar(.85 * s); dummy.updateMatrix(); arrows.setMatrixAt(i, dummy.matrix);
       const key = tl[4] >= 0 ? `${CARDS[tl[4]]}:${tl[3]}:${tl[5]}` : null, had = built.get(tl[0]);
@@ -129,6 +156,6 @@ export function mount({ world, sound, ui, send, view }) {
     room(v) { seats = v.seats; },
     start(frame, v) { seats = v.seats; cur = frame; world.setDocks([]); buildBoard(frame); world.onFrame(draw); hudFrom(frame); },
     frame(f, ev) { seats = view().seats ?? seats; if (!cur || cur.tiles.length !== f.tiles.length) buildBoard(f); cur = f; events(ev); hudFrom(f); coach(); },
-    end() { canvas.removeEventListener("pointerdown", onDown); for (const m of fills) world.scene.remove(m); if (arrows) world.scene.remove(arrows); if (lines) world.scene.remove(lines); for (const b of built.values()) world.scene.remove(b.m); },
+    end() { world.setLabels([]); canvas.removeEventListener("pointerdown", onDown); for (const m of fills) world.scene.remove(m); if (arrows) world.scene.remove(arrows); if (lines) world.scene.remove(lines); for (const b of built.values()) world.scene.remove(b.m); },
   };
 }

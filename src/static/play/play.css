@@ -284,3 +284,9 @@ body.play.in-room { overflow: hidden; }
 .sheet .roles { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 14px; }
 .sheet .roles span { white-space: nowrap; }
 .sheet .roles b { text-transform: capitalize; color: var(--gold); }
+.pin { position: absolute; left: 0; top: 0; pointer-events: none; font-family: var(--display); font-weight: 800; font-size: 11px; padding: 0 5px; border-radius: 6px; background: rgba(18,14,24,.7); color: var(--paper); white-space: nowrap; }
+.pin.paid { color: #8fe0c9; }
+.pin.zero { color: var(--mist); }
+.pin.could { background: rgba(232,184,77,.18); color: var(--gold); }
+.pin.best { background: var(--gold); color: var(--ink); font-size: 13px; }
+.pin.dry { background: rgba(120,120,120,.6); color: #eee; }

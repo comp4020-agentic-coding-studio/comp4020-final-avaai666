@@ -5,6 +5,9 @@ const UPS = { bigHold: ["Big Hold", "+5 hold"], fastHull: ["Fast Hull", "12% fas
 const COLORS = { mei: "#d6473a", wang: "#4a7d9c", jin: "#e0a93a", lu: "#2f9a8f", lian: "#d9668a", shitou: "#62a344" };
 const NET_AHEAD = 40;
 
+// replace a panel's markup only when it changed, so a tap is never lost to a rebuild
+const setHtml = (el, html) => { if (el.dataset.html !== html) { el.dataset.html = html; el.innerHTML = html; } };
+
 export function mount({ world, sound, ui, send, view }) {
   let prev = null, cur = null, curAt = 0, seats = null, canAfford = false, banked = 0, unloaded = false;
   const me = () => view().mySeat;
@@ -94,7 +97,7 @@ export function mount({ world, sound, ui, send, view }) {
       const docked = (mine[6] & 8) !== 0;
       const price = mine[13], afford = price !== null && mine[7] >= price;
       $("r-shop").hidden = !docked || !afford;
-      if (docked && afford) $("r-ups").innerHTML = Object.entries(UPS).map(([id, [n, t]]) => `<button class="fac" type="button" data-up="${id}" ${mine[10].includes(id) ? "disabled" : ""}><b>${n}</b>${price} fish<small>${t}</small></button>`).join("");
+      if (docked && afford) setHtml($("r-ups"), Object.entries(UPS).map(([id, [n, t]]) => `<button class="fac" type="button" data-up="${id}" ${mine[10].includes(id) ? "disabled" : ""}><b>${n}</b>${price} fish<small>${t}</small></button>`).join(""));
       canAfford = afford; banked = mine[7];
       $("r-tip").textContent = mine[6] & 32 ? "The reeds: thick with fish, but you sail at half speed." : mine[10].length ? `Upgrades: ${mine[10].map((u) => UPS[u][0]).join(", ")}` : "Fish aboard are not yours until they are home.";
       $("r-cast").disabled = mine[8] > 0; $("r-dash").disabled = mine[9] > 0;
