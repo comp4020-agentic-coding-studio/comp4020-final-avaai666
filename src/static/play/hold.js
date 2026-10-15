@@ -19,7 +19,7 @@ export function mount({ world, sound, ui, send, view }) {
   world.setCamera([0, 78, 30], [0, 0, 1]);
   ui.hud.innerHTML = `
     <div class="card"><div class="row"><div><h4>Next tide</h4><div class="big" id="h-next">0:15</div></div><div style="text-align:right"><h4>Tide</h4><div class="big" id="h-tide">0 / 12</div></div></div></div>
-    <div class="card"><h4>Your hand</h4><div class="cards" id="h-hand"></div><p class="small" id="h-help">Pick a card, then tap a hex.</p></div>
+    <div class="card keep"><h4>Your hand</h4><div class="cards" id="h-hand"></div><p class="small" id="h-help">Pick a card, then tap a hex.</p></div>
     <div class="card hide-sm"><h4>Tiles + harvest</h4><div class="board" id="h-board"></div><p class="small">A tie goes to more fish harvested.</p></div>`;
   const { THREE } = world;
   const canvas = document.getElementById("gl");

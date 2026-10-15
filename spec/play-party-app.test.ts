@@ -54,5 +54,7 @@ it("party 1. two people play Fishing Party from the lobby to the results and a r
 
   expect((await post(baseUrl, code, "start", b, { bots: false })).status).toBe(200);
   await sb.next((e) => e.event === "go");
+  // clean up: the room's first player stops the rematch, so it does not keep running on the server
+  expect((await post(baseUrl, code, "stop", a, {})).status).toBe(200);
   await sa.close(); await sb.close();
 });

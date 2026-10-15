@@ -55,5 +55,7 @@ it("rush 1. two people play Boat Rush from the lobby to the results and a rematc
   expect(lakeNow).toBeLessThanOrEqual(220); // between matches the lake never holds more than full
   expect(JSON.stringify(summary)).not.toContain(a.split("=")[1]); // no tokens
   expect(summary.matches[1].summary).toBeNull();
+  // clean up: the room's first player stops the rematch, so it does not keep running on the server
+  expect((await post(baseUrl, code, "stop", a, {})).status).toBe(200);
   await sa.close(); await sb.close();
 });

@@ -38,6 +38,7 @@ export interface GameHub {
   setMode(code: string, seat: number, mode: string): { ok: true } | { ok: false; reason: string };
   start(code: string, seat: number, opts: { bots: boolean }): { ok: true } | { ok: false; reason: string };
   input(code: string, seat: number, raw: unknown): { ok: true } | { ok: false; reason: string };
+  stop(code: string, seat: number): { ok: true } | { ok: false; reason: string }; // the room's first player ends a match: interrupted, no results
   open(code: string, res: ServerResponse, seat: number | null): boolean;
   summaries(code: string): unknown[] | null;
   readyModes(): string[];
@@ -182,6 +183,17 @@ export function createGameHub(store: GameStore, modes: Record<string, AnyMode>, 
       // one input of a kind per seat per tick: the latest wins
       m.queue = m.queue.filter((q) => !(q.seat === seat && q.kind === kind));
       m.queue.push({ seat, i, kind });
+      return { ok: true };
+    },
+    stop(code, seat) {
+      const room = load(code);
+      if (!room) return { ok: false, reason: "no_room" };
+      if (!room.match || room.state !== "play") return { ok: false, reason: "not_playing" };
+      if (store.players(room.id)[0]?.seat !== seat) return { ok: false, reason: "not_first" };
+      store.endMatch(room.match.id, now(), "interrupted", null, null);
+      room.match = null; room.state = "lobby"; room.last = null;
+      room.note = "The match was stopped. Nothing was scored, and the lake is as it was.";
+      broadcastRoom(room);
       return { ok: true };
     },
     open(code, res, seat) {

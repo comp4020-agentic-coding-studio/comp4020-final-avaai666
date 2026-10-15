@@ -125,7 +125,8 @@ export function roomPage(view: RoomView, error?: string): string {
     </form>` : "";
   return page(`Room ${view.code} · ${card.name}`, `<div class="app room" id="app" data-room="${esc(view.code)}">
   <div class="stage" id="stage"><canvas id="gl" tabindex="0" aria-label="The lake, drawn in 3D"></canvas><div class="tags" id="tags"></div><div class="floats" id="floats"></div>
-    <div class="topbar" id="topbar"><a class="seal mini" href="/play" aria-label="Lobby">${seal}</a><div class="goalclock"><b id="goal">${esc(card.hud)}</b><span id="clock"></span></div><span class="conn" id="conn">connecting…</span><button class="tiny" id="sound" type="button">sound off</button></div>
+    <div class="topbar" id="topbar"><a class="seal mini" href="/play" aria-label="Lobby">${seal}</a><div class="goalclock"><b id="goal">${esc(card.hud)}</b><span id="clock"></span></div><span class="conn" id="conn">connecting…</span><button class="tiny" id="stopbtn" type="button" hidden>Stop match</button><button class="tiny" id="sound" type="button">sound off</button></div>
+    <button class="hudtoggle" id="hudtoggle" type="button" aria-expanded="false" aria-controls="hud">Details ▾</button>
     <div class="hud" id="hud"></div>
     <p class="coach" id="coach" hidden></p>
     <div class="banner" id="banner" hidden role="status"></div>

@@ -40,5 +40,7 @@ it("hold 1. two people and two bots play Lake Holdings from the lobby to the res
 
   expect((await post(baseUrl, code, "start", b, { bots: true })).status).toBe(200);
   await sb.next((e) => e.event === "go");
+  // clean up: the room's first player stops the rematch, so it does not keep running on the server
+  expect((await post(baseUrl, code, "stop", a, {})).status).toBe(200);
   await sa.close(); await sb.close();
 });

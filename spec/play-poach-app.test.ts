@@ -61,5 +61,7 @@ it("poach 1. four people play Who's Poaching from the lobby to the results and a
   const summary = await (await fetch(new URL(`/play/${code}/summary.json`, baseUrl))).json();
   expect(summary.matches[0].summary.rematchBy).toBeNull();
   expect(summary.matches[1].seed).toBeNull();
+  // clean up: the room's first player stops the rematch, so it does not keep running on the server
+  expect((await post(baseUrl, code, "stop", jars[0], {})).status).toBe(200);
   for (const s of streams) await s.close();
 });

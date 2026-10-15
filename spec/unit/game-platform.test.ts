@@ -216,3 +216,22 @@ describe("rooms, seats and names", () => {
     expect(m1.summary!.durationS).toBeGreaterThan(0);
   });
 });
+
+describe("stop match", () => {
+  it("the room's first player can stop a match: it is marked interrupted, with no results, and the room returns to its lobby", () => {
+    const { code } = hub.createRoom("fake");
+    const a = hub.join(code, "Ava", "mei"), b = hub.join(code, "Bo", "jin");
+    if (!a.ok || !b.ok) throw new Error("join failed");
+    hub.start(code, a.seat, { bots: false });
+    clock = hub.view(code, a.seat)!.startedAt! + 10;
+    for (let i = 0; i < 10; i++) { clock += 25; hub.tick(); }
+    expect(hub.stop(code, b.seat)).toEqual({ ok: false, reason: "not_first" });
+    expect(hub.stop(code, a.seat)).toEqual({ ok: true });
+    const m = store.lastMatch(store.roomByCode(code)!.id)!;
+    expect(m.status).toBe("interrupted");
+    expect(m.summary).toBeNull();
+    expect(hub.view(code, a.seat)!.state).toBe("lobby");
+    expect(store.roomByCode(code)!.lakeFish).toBe(220); // a stopped match writes no lake back
+    expect(hub.stop(code, a.seat)).toEqual({ ok: false, reason: "not_playing" });
+  });
+});

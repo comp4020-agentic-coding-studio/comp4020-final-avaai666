@@ -49,6 +49,14 @@ const did = (id) => coachState.done.add(id);
 const rearm = (ms = 8000) => { coachState.until = Math.max(coachState.until, performance.now() + ms); };
 const ui = { hud, banner, setClock, coach, did, rearm, esc, crewOf, portrait, overlay, stage, goalEl, sound };
 
+// ---- phones: the HUD folds to one line; a tap opens it ----
+const toggle = $("hudtoggle");
+toggle.addEventListener("click", () => { const open = !document.body.classList.contains("hud-open"); document.body.classList.toggle("hud-open", open); toggle.setAttribute("aria-expanded", String(open)); toggle.textContent = open ? "Close ▴" : "Details ▾"; });
+// ---- stop match: only the room's first player, only during a match ----
+const stopBtn = $("stopbtn");
+stopBtn.addEventListener("click", async () => { if (confirm("Stop this match for everyone? Nothing will be scored.")) { const r = await post("stop", {}); if (!r.ok) banner("Could not stop", r.reason); } });
+const isFirst = () => view.me !== null && view.players[0]?.seat === view.me;
+
 // ---- the mode script ----
 let mode = null, modeId = null, modeApi = null;
 async function loadMode(id) {
@@ -130,6 +138,7 @@ function bindOverlay() {
 let countdownT = 0;
 function showRoom() {
   goalEl.textContent = cardOf(view.mode).hud;
+  stopBtn.hidden = !(view.state === "play" && isFirst());
   if (view.me === null && document.querySelector(".joinform")) { overlay.innerHTML = ""; return; }
   if (view.state === "lobby") { overlay.innerHTML = cardHtml(); bindOverlay(); setClock(0); clockEl.textContent = ""; }
   if (view.state === "end" && view.results) { overlay.innerHTML = resultsHtml(); bindOverlay(); }

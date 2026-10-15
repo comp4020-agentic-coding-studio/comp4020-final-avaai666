@@ -24,7 +24,7 @@ export function mount({ world, sound, ui, send, view }) {
   world.setCamera([0, 44, 56], [0, 0, 2]);
   ui.hud.innerHTML = `
     <div class="card"><h4 id="y-title">Round 1 of 5</h4><p class="small" id="y-how" style="margin-top:0"></p><div class="rounds" id="y-rounds"></div></div>
-    <div class="card" id="y-panel"></div>
+    <div class="card keep" id="y-panel"></div>
     <div class="card hide-sm"><h4>Coins</h4><div class="board" id="y-board"></div><p class="small" id="y-lake"></p></div>`;
   // Tug of Line's needle: a full-width bar at the bottom with REEL (on every screen), and a meter over the fish on the lake
   const tugBar = document.createElement("div"); tugBar.className = "tugbar"; tugBar.hidden = true;

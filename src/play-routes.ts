@@ -12,7 +12,7 @@ import { PLAY_INPUT_RATE } from "./lib/game-constants.ts";
 import { log } from "./log.ts";
 import { lobbyPage, noRoomPage, roomPage } from "./play-pages.ts";
 
-const CODE = /^\/play\/([BCDFGHJKLMNPQRSTVWXZ]{4})(\/join|\/start|\/mode|\/in|\/events|\/summary\.json)?$/;
+const CODE = /^\/play\/([BCDFGHJKLMNPQRSTVWXZ]{4})(\/join|\/start|\/stop|\/mode|\/in|\/events|\/summary\.json)?$/;
 const COOKIE_MAX_AGE_S = 365 * 24 * 60 * 60;
 // the files /play may load: one per mode, the shared ones, and three
 const FILES: Record<string, string> = {
@@ -107,11 +107,12 @@ export function createPlayRoutes(hub: GameHub, store: GameStore, staticDir: stri
       if (!hub.open(code, res, who?.seat ?? null)) sendJson(res, 404, { ok: false, reason: "no_room" });
       return true;
     }
-    if ((sub === "/start" || sub === "/mode" || sub === "/in") && method === "POST") {
+    if ((sub === "/start" || sub === "/stop" || sub === "/mode" || sub === "/in") && method === "POST") {
       if (!who) { sendJson(res, 403, { ok: false, reason: "not_in_room" }); return true; }
       if (sub === "/in" && !within(who.token, Date.now())) { sendJson(res, 429, { ok: false, reason: "rate_limited" }); return true; }
       const body = await readJson(req);
       const r = sub === "/start" ? hub.start(code, who.seat, { bots: body.bots === true })
+        : sub === "/stop" ? hub.stop(code, who.seat)
         : sub === "/mode" ? hub.setMode(code, who.seat, String(body.mode ?? ""))
         : hub.input(code, who.seat, body);
       if (!r.ok && sub !== "/in") log({ event: "refused", action: `play${sub.replace("/", "_")}`, room: code, seat: who.seat, reason: r.reason });
