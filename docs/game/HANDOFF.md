@@ -26,6 +26,19 @@ not taken out of the school).
 All eight steps are committed. Nothing is pushed. Before any push, the
 blocker below needs Ava's decision.
 
+## Session 14: where it stopped
+
+Steps 0-8 are committed (6eea5d6 to ded90af). Step 9 stopped before the
+push: on a fresh local app, `pnpm check` had one red test (the blocker
+below), and CLAUDE.md lets a push happen only when `pnpm check` passes.
+Nothing from session 13 or 14 is pushed. Everything else in Step 9 passed:
+typecheck, `pnpm test:unit` (18 files, 335 tests), check:evidence.
+
+Also fixed in session 14 (worth knowing): the hand in Holdings, Rush's
+upgrade buttons and Party's panel were rebuilt ten times a second, so taps
+could land on a button that had just been replaced; they now change only
+when their contents do.
+
 ## Session 14 blocker: the session-13 Poaching app test and the v3.1 last meeting
 
 spec/play-poach-app.test.ts (session 13) has four players skip both
