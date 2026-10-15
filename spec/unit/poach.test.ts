@@ -345,3 +345,46 @@ describe("v3.1: the last meeting, the cost of no exile, and the quota", () => {
     expect(r.seats.every((x) => typeof x.quota === "number")).toBe(true);
   });
 });
+
+describe("v3.2: a meeting ends when everyone has voted", () => {
+  const toMeeting = (s: PoachSim, day: number) => until(s, () => s.phase === "meeting" && s.day === day, 100000);
+  const allVote = (s: PoachSim, target: (v: number) => number | null) => [0, 1, 2, 3, 4].filter((v) => !s.out[v]).map((v) => ({ seat: v, i: { k: "vote", target: target(v) } as PoachInput }));
+
+  it("as soon as every player still in has voted or skipped, the vote is counted and the day goes on", () => {
+    const s = make(5, "v32-early");
+    toMeeting(s, 1);
+    const ev = [...step(s, allVote(s, () => null)), ...step(s)]; // counted within one tick of the last vote
+    expect(ev.some((e) => e.k === "noexile")).toBe(true);
+    expect(s.phase).toBe("day");
+  });
+
+  it("the reveal follows at once when everyone has voted for someone", () => {
+    const s = make(5, "v32-reveal");
+    toMeeting(s, 1);
+    const p = s.roles.indexOf("poacher");
+    const ev = [...step(s, allVote(s, (v) => (v === p ? (p + 1) % 5 : p))), ...step(s)];
+    expect(ev.find((e) => e.k === "exiled")).toMatchObject({ seat: p, role: "poacher" });
+  });
+
+  it("a meeting where someone has not voted still runs its full 90 s", () => {
+    const s = make(5, "v32-wait");
+    toMeeting(s, 1);
+    const t0 = s.t;
+    step(s, allVote(s, () => null).slice(0, 4)); // one player never votes
+    until(s, () => s.phase !== "meeting");
+    expect(s.t - t0).toBeCloseTo(POACH.MEETING_S, 0);
+  });
+
+  it("at the last meeting a non-voter abstains: a tie among the votes then exiles nobody, and the poacher has survived day 3", { timeout: 60000 }, () => {
+    const s = make(5, "v32-abstain");
+    for (const day of [1, 2]) { toMeeting(s, day); step(s, allVote(s, () => null)); }
+    toMeeting(s, 3);
+    const p = s.roles.indexOf("poacher");
+    const inn = [0, 1, 2, 3, 4].filter((v) => v !== p);
+    // two votes for one innocent, two for another, one player abstains
+    const ev = step(s, [{ seat: inn[0], i: { k: "vote", target: inn[1] } }, { seat: inn[1], i: { k: "vote", target: inn[0] } }, { seat: inn[2], i: { k: "vote", target: inn[1] } }, { seat: inn[3], i: { k: "vote", target: inn[0] } }]);
+    ev.push(...until(s, () => poach.over(s)));
+    expect(ev.find((e) => e.k === "exiled")).toBeUndefined();
+    expect(s.winner).toBe("poacher");
+  });
+});

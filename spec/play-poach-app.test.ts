@@ -40,6 +40,11 @@ it("poach 1. four people play Who's Poaching from the lobby to the results and a
     expect(day).toBeGreaterThan(0);
   }
 
+  // the last meeting has no Skip (DESIGN v3.2): everyone votes, for an innocent, so the poacher survives day 3
+  await streams[0].next((e) => e.event === "frame" && JSON.parse(e.data).ev.some((x: { k: string }) => x.k === "meeting"), 100_000);
+  const innocent = (p + 1) % 4;
+  for (let i = 0; i < 4; i++) await post(baseUrl, code, "in", jars[i], { k: "vote", target: i === innocent ? (p + 2) % 4 : innocent });
+
   const end = JSON.parse((await streams[0].next((e) => e.event === "room" && JSON.parse(e.data).state === "end", 100_000)).data);
   expect(end.results.extra.winner).toBe("poacher");
   expect(end.results.extra.roles[p]).toBe("poacher");

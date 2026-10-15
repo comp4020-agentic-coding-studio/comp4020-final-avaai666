@@ -1,4 +1,4 @@
-# Next Year, No Fish (明年无鱼): design v3.1
+# Next Year, No Fish (明年无鱼): design v3.2
 
 ## What it is
 
@@ -620,9 +620,13 @@ Meeting (90 s; every day ends in one, so there are three): portraits round a tab
 "I vouch for [X]", "Skip". No free text and no chat; people talk face to
 face. Then a vote; ties and skips exile nobody, and a meeting that exiles
 nobody costs the lake 5 points of health ("the poacher worked the night
-unwatched"). The last meeting, after day 3, has no Skip: if anyone votes,
-the most votes go and a tie is drawn by the server; only if nobody votes at
-all does nobody go (and the poacher has survived day 3). An exiled player's
+unwatched"). A meeting ends as soon as everyone still in has voted (or
+skipped, where Skip exists): the vote is counted within a tick and the reveal
+follows. A meeting where someone has not voted ends at 90 s. The last
+meeting, after day 3, has no Skip, and the most votes go. A tie there is
+drawn by the server when everyone voted; if anyone did not vote by 90 s they
+abstained, and a tie then exiles nobody, so the poacher has survived day 3
+and wins. If nobody votes at all, nobody goes. An exiled player's
 role is revealed. Lake health is always shown. At the results, each
 player's contribution to the quota is shown.
 
@@ -779,6 +783,9 @@ decides.
 
 ## Changelog
 
+- v3.2 (15 Oct): a Who's Poaching meeting ends as soon as everyone still in
+  has voted (no 90 s wait); at the last meeting a non-voter abstains, and a
+  tie with an abstention exiles nobody.
 - v3.1 (15 Oct): Fishing Party's variant pick is its own screen, bait has a
   range and a time, the Tug needle is on the lake. Lake Holdings nets take 2 from every school; dry water,
   revived only by ponds; paid labels and card previews. Boat Rush upgrades cost 3 then 7, shown on the start card,

@@ -200,8 +200,10 @@ function settleVote(s: PoachSim, ev: GameEvent[]): void {
   const top = Math.max(0, ...tally.values());
   const leaders = [...tally].filter(([, n]) => n === top).map(([t]) => t);
   const last = s.day >= Q.DAYS;
-  // the last meeting has no Skip: if anyone voted, the most votes go, and a tie is drawn by the server
-  if (top === 0 || (!last && (leaders.length > 1 || skips >= top))) {
+  // the last meeting has no Skip: the most votes go. A tie is drawn by the server when
+  // everyone voted; if anyone abstained (did not vote by 90 s), a tie exiles nobody
+  const abstained = s.votes.some((v, seat) => !s.out[seat] && v === undefined);
+  if (top === 0 || (!last && (leaders.length > 1 || skips >= top)) || (last && leaders.length > 1 && abstained)) {
     s.history.push({ day: s.day, exiled: null, role: null });
     s.health = Math.round(Math.max(0, s.health - Q.NO_EXILE_COST) * 10) / 10;
     ev.push({ k: "noexile", tally: Object.fromEntries(tally), skips, cost: Q.NO_EXILE_COST, health: s.health, reason: "unwatched" }); // the page says: the poacher worked the night unwatched
@@ -247,8 +249,10 @@ function step(s: PoachSim, inputs: { seat: number; i: PoachInput }[]): GameEvent
   } else if (s.phase === "dusk") {
     if (s.phaseT >= Q.DUSK_S - 1e-9) { s.phase = "meeting"; s.phaseT = 0; s.votes = s.boats.map(() => undefined); for (const b of s.boats) { b.mind.said = false; b.mind.voted = false; } ev.push({ k: "meeting", day: s.day }); }
   } else if (s.phase === "meeting") {
-    const everyone = s.boats.every((b) => s.out[b.seat] || s.votes[b.seat] !== undefined);
-    if (s.phaseT >= Q.MEETING_S - 1e-9 || (everyone && s.phaseT > 3)) {
+    // a meeting ends at the first tick after everyone still in has voted (votes
+    // cast in this tick are counted next tick, 50 ms later), or at 90 s
+    const everyone = s.boats.every((b) => s.out[b.seat] || s.votes[b.seat] !== undefined) && !inputs.some((x) => x.i.k === "vote");
+    if (s.phaseT >= Q.MEETING_S - 1e-9 || everyone) {
       settleVote(s, ev);
       checkWin(s, ev, s.day >= Q.DAYS);
       if (!s.winner) { s.day++; s.phase = "day"; s.phaseT = 0; for (const b of s.boats) { b.patrolled = false; b.fish = 0; } ev.push({ k: "dawn", day: s.day }); }
