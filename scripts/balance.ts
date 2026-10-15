@@ -211,9 +211,13 @@ if (!isMainThread) {
   const file = "docs/checks/balance-2026-10-15.md";
   const old = existsSync(file) ? readFileSync(file, "utf8") : "";
   const head = `# Balance, 2026-10-15 (bots only)\n\nWritten by \`node scripts/balance.ts\`. Every match here is bots against bots, with the strategies in scripts/balance.ts, on the seeds \`balance-<mode>-1\` to \`-${N}\`. These are claims about these bots, strategies and seeds, not about how people play. A fair share in a four-seat match is 25%; the target is that no strategy wins more than 40%. 95% intervals are Wilson intervals.\n\n`;
-  const keep = old.split(/^## /m).slice(1).map((x) => "## " + x).filter((x) => !modes.some((m) => x.startsWith(({ rush: "## Boat Rush", party: "## Fishing Party", hold: "## Lake Holdings", poach: "## Who's Poaching" } as Record<string, string>)[m])) && !x.startsWith("## Changes"));
-  const changes = old.match(/^## Changes[\s\S]*$/m)?.[0] ?? "";
-  writeFileSync(file, head + [...keep, ...modes.map((m) => sections[m])].join("\n") + (changes ? "\n" + changes : ""));
+  // the file is: the head, then one section per mode in a fixed order (kept from the old
+  // file for modes not run now), then "Changes" (the notes on which numbers moved, kept)
+  const TITLES: Record<string, string> = { rush: "## Boat Rush", party: "## Fishing Party", hold: "## Lake Holdings", poach: "## Who's Poaching" };
+  const oldParts = old.split(/^(?=## )/m).filter((x) => x.startsWith("## "));
+  const part = (m: string) => sections[m] ?? oldParts.find((x) => x.startsWith(TITLES[m])) ?? "";
+  const notes = oldParts.filter((x) => x.startsWith("## Before") || x.startsWith("## Changes")).map((x) => x.trimEnd() + "\n");
+  writeFileSync(file, head + ["rush", "party", "hold", "poach"].map(part).filter(Boolean).map((x) => x.trimEnd() + "\n").join("\n") + (notes.length ? "\n" + notes.join("\n") : ""));
   for (const m of modes) console.log(sections[m]);
   console.log(`(${jobs.length} matches in ${Math.round((performance.now() - t0) / 1000)} s on ${W} workers)`);
 }
