@@ -8,7 +8,7 @@ import { CREW, ICONS, portrait } from "./static/play/art.js";
 
 export interface ModeCard {
   id: string; name: string; zh: string; tag: string; players: string; len: string; due: string;
-  goal: string; hud: string; choice: string; actions: [string, string][]; flow: string[];
+  goal: string; hud: string; choice: string; actions: [string, string][]; flow: string[]; extra?: string;
 }
 export const MODE_CARDS: ModeCard[] = [
   {
@@ -17,7 +17,8 @@ export const MODE_CARDS: ModeCard[] = [
     hud: "Most fish home wins",
     choice: "One more cast, or home now? The last 30 seconds, Lantern Rush, bank double.",
     actions: [["Tap the water", "Sail there"], ["CAST · hold to widen", "Net the fish at your bow"], ["DASH", "Ram a full boat: up to 3 fish spill"]],
-    flow: ["Sail out and cast at the bow. Fish go into your hold; a full hold is slow.", "Unload at your dock, then spend banked fish on an upgrade (two at most).", "The leader wears a crown: ramming them spills one more.", "Lantern Rush: the last 30 seconds bank double."],
+    extra: "Upgrades at your dock: Big Hold (+5 hold), Fast Hull (12% faster), Wide Net (12% wider), Iron Bow (+1 spill dealt, −1 taken). The first costs 3 banked fish, the second 7.",
+    flow: ["Sail out and cast at the bow. Fish go into your hold; a full hold is slow.", "Unload at your dock, then spend banked fish on an upgrade: the first costs 3, the second 7.", "The leader wears a crown: ramming them spills one more.", "Lantern Rush: the last 30 seconds bank double."],
   },
   {
     id: "poach", name: "Who's Poaching", zh: "谁在偷鱼", tag: "Someone is netting the fry. Find them before the lake dies.", players: "4–8 players", len: "about 8 min", due: "10/27",

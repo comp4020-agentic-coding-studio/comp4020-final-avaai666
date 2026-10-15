@@ -6,8 +6,9 @@
 //
 // A strategy shapes the mode's own bot: it keeps the bot's sailing and
 // fishing and decides the choice the strategy is about (which upgrade, which
-// shop item, which card, how the table votes). Strategies rotate across
-// seats from seed to seed, so no seat position favours one.
+// shop item, which card, how the table votes). Each match draws its four
+// strategies and their seats by a seeded shuffle, so no strategy always
+// meets the same rivals or sits in the same seat.
 //
 //   node scripts/balance.ts            all four modes, 300 seeds each
 //   node scripts/balance.ts rush 60    one mode, fewer seeds (a quick look)
@@ -119,9 +120,17 @@ function poachSay(s: PoachSim, seat: number, r: () => number): PoachInput | null
 // ---- running matches ----
 const seatsOf = (n: number): Seat[] => Array.from({ length: n }, (_, i) => ({ seat: i, name: `B${i} (bot)`, bot: `bot${i}`, character: "mei" }));
 
-function playRotating(mode: any, strats: Strat[], seed: number, n: number): { winners: string[] } {
-  const offset = seed % strats.length;
-  const seatStrat = Array.from({ length: n }, (_, i) => strats[(i + offset) % strats.length]);
+// which strategies sit in a match, and where: a seeded shuffle, so every
+// strategy meets every other equally often and sits in every seat
+export function lineup(nStrats: number, seed: number, n: number): number[] {
+  const order = Array.from({ length: nStrats }, (_, i) => i);
+  let x = (seed * 2654435761) >>> 0;
+  const r = () => { x = (x ^ (x << 13)) >>> 0; x = (x ^ (x >>> 17)) >>> 0; x = (x ^ (x << 5)) >>> 0; return x / 4294967296; };
+  for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+  return order.slice(0, n);
+}
+function playRotating(mode: any, strats: Strat[], seed: number, n: number): { winners: string[]; sat: string[] } {
+  const seatStrat = lineup(strats.length, seed, n).map((i) => strats[i]);
   const seats = seatsOf(n), secret = `balance-${mode.id}-${seed}`;
   const s = mode.make(secret, seats, { fish: 220 });
   for (let tick = 0; !mode.over(s) && tick < 20000; tick++) {
@@ -134,7 +143,7 @@ function playRotating(mode: any, strats: Strat[], seed: number, n: number): { wi
     mode.step(s, applied);
   }
   const res = mode.results(s);
-  return { winners: res.seats.filter((x: any) => x.place === 1).map((x: any) => seatStrat[x.seat].name) };
+  return { winners: res.seats.filter((x: any) => x.place === 1).map((x: any) => seatStrat[x.seat].name), sat: seatStrat.map((x) => x.name) };
 }
 
 function playPoach(table: Table, seed: number): boolean {
@@ -191,14 +200,13 @@ if (!isMainThread) {
       continue;
     }
     const strats = (m === "rush" ? RUSH_STRATS : m === "party" ? PARTY_STRATS : HOLD_STRATS).map((x) => x.name);
-    // a strategy sat in a match when it was one of the four rotated seats
-    const lines = strats.map((name, si) => {
-      const played = rows.filter((x) => { const off = x.job.seed % strats.length; return [0, 1, 2, 3].some((i) => (i + off) % strats.length === si); });
+    const lines = strats.map((name) => {
+      const played = rows.filter((x) => x.r.sat.includes(name));
       const won = played.filter((x) => x.r.winners.includes(name)).length, [lo, hi] = wilson(won, played.length);
       return { name, n: played.length, won, rate: won / played.length, line: `| ${name} | ${played.length} | ${won} | ${pct(won / played.length)} | ${pct(lo)}–${pct(hi)} |` };
     });
     const over = lines.filter((l) => l.rate > 0.4).map((l) => l.name);
-    sections[m] = `## ${m === "rush" ? "Boat Rush" : m === "party" ? "Fishing Party" : "Lake Holdings"} (4 bots per match; ${strats.length} strategies rotated across seats)\n\n| Strategy | Matches it sat in | Won (incl. shared first) | Rate | 95% interval |\n|---|---|---|---|---|\n${lines.map((l) => l.line).join("\n")}\n\n${over.length ? `Over the 40% target: ${over.join(", ")}.` : "No strategy over the 40% target."}\n`;
+    sections[m] = `## ${m === "rush" ? "Boat Rush" : m === "party" ? "Fishing Party" : "Lake Holdings"} (4 bots per match; ${strats.length} strategies drawn by a seeded shuffle each match)\n\n| Strategy | Matches it sat in | Won (incl. shared first) | Rate | 95% interval |\n|---|---|---|---|---|\n${lines.map((l) => l.line).join("\n")}\n\n${over.length ? `Over the 40% target: ${over.join(", ")}.` : "No strategy over the 40% target."}\n`;
   }
   const file = "docs/checks/balance-2026-10-15.md";
   const old = existsSync(file) ? readFileSync(file, "utf8") : "";

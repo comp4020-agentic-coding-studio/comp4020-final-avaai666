@@ -1,12 +1,12 @@
 // Boat Rush on /play: draws the frames the server sends (boats, fish, nets,
 // spills, the golden carp, the crown, Lantern Rush) and sends only steer,
 // cast (with how long it was held), dash and buy. It decides nothing.
-const UPS = { bigHold: ["Big Hold", 8, "+5 hold"], fastHull: ["Fast Hull", 6, "20% faster"], wideNet: ["Wide Net", 6, "25% wider net"], ironBow: ["Iron Bow", 6, "+1 spill dealt, −1 taken"] };
+const UPS = { bigHold: ["Big Hold", "+5 hold"], fastHull: ["Fast Hull", "12% faster"], wideNet: ["Wide Net", "12% wider net"], ironBow: ["Iron Bow", "+1 spill dealt, −1 taken"] };
 const COLORS = { mei: "#d6473a", wang: "#4a7d9c", jin: "#e0a93a", lu: "#2f9a8f", lian: "#d9668a", shitou: "#62a344" };
 const NET_AHEAD = 40;
 
 export function mount({ world, sound, ui, send, view }) {
-  let prev = null, cur = null, curAt = 0, seats = null;
+  let prev = null, cur = null, curAt = 0, seats = null, canAfford = false, banked = 0, unloaded = false;
   const me = () => view().mySeat;
   const colorOf = (seat) => COLORS[seats?.[seat]?.character] ?? "#f5ead6";
   const nameOf = (seat) => (seat === me() ? "You" : seats?.[seat]?.name ?? `Boat ${seat + 1}`);
@@ -67,6 +67,7 @@ export function mount({ world, sound, ui, send, view }) {
         else if (e.n || e.koi) { world.floatText(e.x, e.y, `+${e.n + (e.koi ? 5 : 0)}${e.koi ? " golden carp!" : ""}`, colorOf(e.seat)); if (e.seat === me()) sound.catch(e.n); world.ripple(e.x, e.y, colorOf(e.seat), 4); }
         else { world.floatText(e.x, e.y, e.fry ? `${e.fry} fry slipped through` : "empty", "#b9b0c6"); if (e.seat === me()) sound.miss(); }
       }
+      if (e.k === "bank" && e.seat === me() && !unloaded) { unloaded = true; ui.rearm(); }
       if (e.k === "bank" && cur) { const b = cur.b[e.seat]; world.floatText(b[1], b[2], `+${e.v} home${e.x2 ? " ×2" : ""}`, "#ffd34d", 6); if (e.seat === me()) sound.bank(); if (e.tier > 0 && e.seat === me()) ui.banner("Your house grows", `${e.banked} fish banked`); }
       if (e.k === "ram") {
         world.floatText(e.x, e.y, `RAM! ${e.n} spilled`, "#ff7a5a", 5); world.ripple(e.x, e.y, "#ff7a5a", 7);
@@ -76,7 +77,7 @@ export function mount({ world, sound, ui, send, view }) {
       }
       if (e.k === "pick") { world.floatText(e.x, e.y, `scooped +${e.v}`, colorOf(e.seat)); if (e.seat === me()) sound.coin(); }
       if (e.k === "koi") { world.ripple(e.x, e.y, "#ffd34d", 9, 2); ui.banner("The golden carp!", "worth 5 once it is home"); sound.big(); }
-      if (e.k === "buy") { if (e.seat === me()) { ui.banner(`${UPS[e.up][0]} bought`, UPS[e.up][2]); sound.big(); } else if (cur) world.floatText(cur.b[e.seat][1], cur.b[e.seat][2], UPS[e.up][0], colorOf(e.seat), 6); }
+      if (e.k === "buy") { if (e.seat === me()) { ui.banner(`${UPS[e.up][0]} bought`, `${UPS[e.up][1]} · ${e.cost} fish`); sound.big(); ui.did("buy"); } else if (cur) world.floatText(cur.b[e.seat][1], cur.b[e.seat][2], UPS[e.up][0], colorOf(e.seat), 6); }
       if (e.k === "crown" && e.seat !== null) { ui.banner(e.seat === me() ? "You wear the crown" : `${nameOf(e.seat)} leads`, e.seat === me() ? "a ram on you spills one more" : "ram the crown: one more fish spills"); }
       if (e.k === "lantern") { ui.banner("Lantern Rush!", "30 seconds: fish banked now count double", 3000); world.setNight(.85); sound.big(); }
       if (e.k === "end") { sound.horn(); ui.banner("The horn!", "fish still aboard count for nothing", 2500); }
@@ -91,9 +92,10 @@ export function mount({ world, sound, ui, send, view }) {
       $("r-hold").textContent = `${mine[4]} / ${mine[5]}`; $("r-bank").textContent = mine[7];
       $("r-holdbar").style.width = `${(mine[4] / mine[5]) * 100}%`; $("r-holdbar").style.background = mine[4] >= mine[5] ? "#ff7a5a" : "";
       const docked = (mine[6] & 8) !== 0;
-      const afford = Object.entries(UPS).some(([id, [, c]]) => !mine[10].includes(id) && mine[7] >= c);
-      $("r-shop").hidden = !docked || mine[10].length >= 2 || !afford;
-      if (docked) $("r-ups").innerHTML = Object.entries(UPS).map(([id, [n, c, t]]) => `<button class="fac" type="button" data-up="${id}" ${mine[10].includes(id) || mine[7] < c ? "disabled" : ""}><b>${n}</b>${c} fish<small>${t}</small></button>`).join("");
+      const price = mine[13], afford = price !== null && mine[7] >= price;
+      $("r-shop").hidden = !docked || !afford;
+      if (docked && afford) $("r-ups").innerHTML = Object.entries(UPS).map(([id, [n, t]]) => `<button class="fac" type="button" data-up="${id}" ${mine[10].includes(id) ? "disabled" : ""}><b>${n}</b>${price} fish<small>${t}</small></button>`).join("");
+      canAfford = afford; banked = mine[7];
       $("r-tip").textContent = mine[6] & 32 ? "The reeds: thick with fish, but you sail at half speed." : mine[10].length ? `Upgrades: ${mine[10].map((u) => UPS[u][0]).join(", ")}` : "Fish aboard are not yours until they are home.";
       $("r-cast").disabled = mine[8] > 0; $("r-dash").disabled = mine[9] > 0;
     }
@@ -110,6 +112,7 @@ export function mount({ world, sound, ui, send, view }) {
       ["cast", "Fish ahead: tap CAST (or Space)", () => fishAhead],
       ["charge", "Hold CAST longer for a wider net", () => fishAhead],
       ["home", "Hold filling up: sail home to your dock", () => b[4] >= b[5] * .6],
+      ["buy", "Spend fish on an upgrade?", () => unloaded && canAfford],
     ]);
     if (b[6] & 8 && b[7] === 0 && b[4] === 0) ui.did("home");
   }
@@ -144,7 +147,9 @@ export function mount({ world, sound, ui, send, view }) {
     for (const [i, r] of [[210, 300, 70], [790, 410, 70]].entries()) { const m = world.prop(`reed${i}`, () => reeds(world)); m.position.set((r[0] - 500) / 10, 0, (r[1] - 350) / 10); }
     world.sweepProps();
     if (me() !== null && cur.b[me()]) { const b = cur.b[me()]; world.setCamera([(b[1] - 500) / 10 * .8, 40, (b[2] - 350) / 10 * .8 + 46], [(b[1] - 500) / 10 * .8, 0, (b[2] - 350) / 10 * .8 + 2]); }
-    world.setLanterns(cur.lantern ? cur.b.map((b) => [b[1], b[2], .9]) : []);
+    const glow = canAfford && me() !== null ? (() => { const a = Math.PI / 2 + (me() * 2 * Math.PI) / Math.max(cur.players, 2); return [[500 + 414 * Math.cos(a), 350 + 283.5 * Math.sin(a), 1.4 + Math.sin(t * 5) * .5]]; })() : [];
+    world.setLanterns([...(cur.lantern ? cur.b.map((b) => [b[1], b[2], .9]) : []), ...glow]);
+    world.setNight(cur.lantern ? .85 : canAfford ? .35 : 0);
   }
 }
 

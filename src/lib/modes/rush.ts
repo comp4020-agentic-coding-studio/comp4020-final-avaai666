@@ -46,6 +46,7 @@ const nearAnyDock = (s: RushSim, x: number, y: number, r: number): boolean =>
   s.boats.some((b) => { const d = dockOf(b.seat, s.players); return Math.hypot(x - d.x, y - d.y) < r; });
 const tierOf = (banked: number): number => { let t = 0; for (let i = 0; i < Q.TIERS.length; i++) if (banked >= Q.TIERS[i]) t = i; return t; };
 const holdValue = (b: Boat): number => b.hold.reduce((n, v) => n + v, 0);
+const nextCost = (b: Boat): number => (b.ups.length === 0 ? Q.FIRST_UP_COST : Q.SECOND_UP_COST);
 const has = (b: Boat, u: Upgrade): boolean => b.ups.includes(u);
 const holdMax = (b: Boat): number => Q.HOLD + (has(b, "bigHold") ? Q.UPGRADES.bigHold.hold! : 0);
 const netR = (b: Boat, charge: number): number => Q.NET_R * (has(b, "wideNet") ? Q.UPGRADES.wideNet.net! : 1) * (1 + Q.MAX_CHARGE * charge);
@@ -116,10 +117,10 @@ function apply(s: RushSim, seat: number, inp: RushInput, ev: GameEvent[]): void 
     ev.push({ k: "dash", seat });
   }
   if (inp.k === "buy") {
-    const u = Q.UPGRADES[inp.up];
-    if (!b.docked || has(b, inp.up) || b.ups.length >= Q.MAX_UPGRADES || b.banked < u.cost) return;
-    b.banked -= u.cost; b.stats.spent += u.cost; b.ups.push(inp.up);
-    ev.push({ k: "buy", seat, up: inp.up, cost: u.cost, banked: b.banked });
+    const cost = nextCost(b);
+    if (!b.docked || has(b, inp.up) || b.ups.length >= Q.MAX_UPGRADES || b.banked < cost) return;
+    b.banked -= cost; b.stats.spent += cost; b.ups.push(inp.up);
+    ev.push({ k: "buy", seat, up: inp.up, cost, banked: b.banked });
   }
 }
 
@@ -335,7 +336,7 @@ function bot(s: RushSim, seat: number, r: () => number): RushInput[] {
   if (n >= max * homeAt || (left < 15 && n > 0) || (s.lantern && n >= 4)) m.mode = "home";
   else if (b.docked && n === 0) m.mode = "fish";
   if (b.docked && b.ups.length < Q.MAX_UPGRADES) {
-    const want = (["bigHold", "fastHull", "ironBow", "wideNet"] as Upgrade[]).find((u) => !has(b, u) && b.banked >= Q.UPGRADES[u].cost + 6);
+    const want = (["bigHold", "fastHull", "ironBow", "wideNet"] as Upgrade[]).find((u) => !has(b, u) && b.banked >= nextCost(b) + 4);
     if (want) out.push({ k: "buy", up: want });
   }
   if (m.mode === "home") { out.push({ k: "steer", x: Math.round(d.x), y: Math.round(d.y) }); return out; }
@@ -380,10 +381,10 @@ const FLAG = { DASH: 1, STUN: 2, SHIELD: 4, DOCKED: 8, KOI: 16, REEDS: 32 } as c
 function frameFor(s: RushSim, _seat: number) {
   return {
     t: s.t, left: Math.max(0, Q.SECONDS - s.t), fishN: s.fish.length, crown: s.crown, lantern: s.lantern, players: s.players,
-    // seat, x, y, h*100, holdN, holdMax, flags, banked, castCd*10, dashCd*10, ups, tx, ty
+    // seat, x, y, h*100, holdN, holdMax, flags, banked, castCd*10, dashCd*10, ups, tx, ty, next upgrade's price (null when done)
     b: s.boats.map((b) => [b.seat, Math.round(b.x), Math.round(b.y), Math.round(b.h * 100), b.hold.length, holdMax(b),
       (b.dashT > 0 ? FLAG.DASH : 0) | (b.stun > 0 ? FLAG.STUN : 0) | (b.shield > 0 ? FLAG.SHIELD : 0) | (b.docked ? FLAG.DOCKED : 0) | (b.hold.includes(Q.KOI_VALUE) ? FLAG.KOI : 0) | (inReeds(b.x, b.y) ? FLAG.REEDS : 0),
-      b.banked, Math.max(0, Math.ceil(b.castCd * 10)), Math.max(0, Math.ceil(b.dashCd * 10)), b.ups, Math.round(b.tx), Math.round(b.ty)]),
+      b.banked, Math.max(0, Math.ceil(b.castCd * 10)), Math.max(0, Math.ceil(b.dashCd * 10)), b.ups, Math.round(b.tx), Math.round(b.ty), b.ups.length >= Q.MAX_UPGRADES ? null : nextCost(b)]),
     f: s.fish.map((f) => [Math.round(f.x), Math.round(f.y), Math.round(f.h * 100), f.adult ? 1 : 0]),
     n: s.nets.map((n) => [n.seat, Math.round(n.x), Math.round(n.y), Math.round(n.r), Math.round((n.closeAt - s.t) * 1000)]),
     l: s.loose.map((l) => [l.id, Math.round(l.x), Math.round(l.y), l.value]),

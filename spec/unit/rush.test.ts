@@ -232,3 +232,34 @@ describe("the lake and the record", { timeout: 30000 }, () => {
     expect(JSON.stringify(rush.frameFor(s, 0))).toBe(JSON.stringify(rush.frameFor(s, 1)));
   });
 });
+
+describe("v3.1 prices: the first upgrade costs 3, the second 7", () => {
+  it("whichever upgrade is first costs 3 banked fish, and the second costs 7", () => {
+    for (const [a, b] of [["fastHull", "bigHold"], ["ironBow", "wideNet"]] as const) {
+      const s = make();
+      dock(s, 0);
+      s.boats[0].banked = 10;
+      step(s, [{ seat: 0, i: { k: "buy", up: a } }]);
+      expect(s.boats[0].banked).toBe(10 - RUSH.FIRST_UP_COST);
+      step(s, [{ seat: 0, i: { k: "buy", up: b } }]);
+      expect(s.boats[0].banked).toBe(10 - RUSH.FIRST_UP_COST - RUSH.SECOND_UP_COST);
+      expect(s.boats[0].ups).toEqual([a, b]);
+    }
+    expect(RUSH.FIRST_UP_COST).toBe(3);
+    expect(RUSH.SECOND_UP_COST).toBe(7);
+  });
+  it("a second upgrade needs 7 banked", () => {
+    const s = make();
+    dock(s, 0);
+    s.boats[0].banked = 3 + 6;
+    step(s, [{ seat: 0, i: { k: "buy", up: "wideNet" } }]);
+    step(s, [{ seat: 0, i: { k: "buy", up: "fastHull" } }]);
+    expect(s.boats[0].ups).toEqual(["wideNet"]);
+    expect(s.boats[0].banked).toBe(6);
+  });
+  it("the frame tells a boat what its next upgrade costs", () => {
+    const s = make();
+    const b = (rush.frameFor(s, 0) as { b: unknown[][] }).b[0];
+    expect(b[13]).toBe(RUSH.FIRST_UP_COST);
+  });
+});

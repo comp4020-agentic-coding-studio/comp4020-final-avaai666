@@ -535,8 +535,11 @@ worth 5.
 New in rush 1.0:
 - Upgrades at your dock, paid from banked fish, at most two a match: Big
   Hold (+5), Fast Hull, Wide Net, Iron Bow (a ram you deal spills 1 more, a
-  ram you take spills 1 fewer). Spending lowers your score now for speed
-  later.
+  ram you take spills 1 fewer). The first upgrade costs 3 banked fish and
+  the second 7, whichever they are. The start card lists them with their
+  prices; your dock glows when you can afford one, and after your first
+  unload a coach mark asks "Spend fish on an upgrade?". Spending lowers your
+  score now for speed later.
 - Schools scatter after a net hits them.
 - The reed shallows: dense fish, but boats there move at half speed.
 - The leader's boat wears a crown; ramming it spills one extra fish.
@@ -767,7 +770,10 @@ decides.
 
 ## Changelog
 
-- v3.1 (15 Oct): Who's Poaching after the balance harness (bots only): a
+- v3.1 (15 Oct): Boat Rush upgrades cost 3 then 7, shown on the start card,
+  with a dock glow and a coach mark (balance numbers in
+  docs/checks/balance-2026-10-15.md). Who's Poaching after the balance
+  harness (bots only): a
   meeting after day 3 with no Skip; a meeting that exiles nobody costs the
   lake 5; the results show each player's quota. The fine net's cooldown is
   1.5 s (was 0.6), because the bot poacher sank the lake below 40% on day 1

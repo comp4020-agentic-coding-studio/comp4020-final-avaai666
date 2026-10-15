@@ -45,7 +45,9 @@ function coach(list) {
   coachEl.hidden = !next; if (next) coachEl.textContent = next[1];
 }
 const did = (id) => coachState.done.add(id);
-const ui = { hud, banner, setClock, coach, did, esc, crewOf, portrait, overlay, stage, goalEl, sound };
+// a mark that matters later (after the first 20 s) can open the coach again, briefly
+const rearm = (ms = 8000) => { coachState.until = Math.max(coachState.until, performance.now() + ms); };
+const ui = { hud, banner, setClock, coach, did, rearm, esc, crewOf, portrait, overlay, stage, goalEl, sound };
 
 // ---- the mode script ----
 let mode = null, modeId = null, modeApi = null;
@@ -86,6 +88,7 @@ function cardHtml() {
     <p class="goal"><b>How you win</b>${esc(c.goal)}</p>
     <div class="icons3">${c.actions.map(([a, b]) => `<div><span class="ic" aria-hidden="true">${iconFor(a)}</span><b>${esc(a)}</b><small>${esc(b)}</small></div>`).join("")}</div>
     <p class="choice"><b>The choice that matters:</b> ${esc(c.choice)}</p>
+    ${c.extra ? `<p class="small">${esc(c.extra)}</p>` : ""}
     ${whoHtml(view.players)}
     ${lakeHtml()}
     ${view.note ? `<p class="toast">${esc(view.note)}</p>` : ""}

@@ -153,6 +153,7 @@ export const PLAY_CHARACTERS = ["mei", "wang", "jin", "lu", "lian", "shitou"] as
 export const RUSH = {
   ...BOAT,
   SECONDS: 150, // two and a half minutes
+  LOAD_SLOW: 0.6, // a full hold is 60% slower (boat-sim 0.1: 35%)
   MAX_CHARGE: 0.6, // a full charge widens the net by this much (to 1.6 times)
   CHARGE_SINK: 0.3, // and it sinks this much slower
   SCATTER_R: 2.2, // a closing net scares fish within this many net radii
@@ -163,11 +164,12 @@ export const RUSH = {
   LANTERN_S: 30, // the last 30 s: Lantern Rush
   LANTERN_MULT: 2, // fish banked then count double
   MAX_UPGRADES: 2,
+  FIRST_UP_COST: 3, SECOND_UP_COST: 7, // banked fish: the first upgrade, whichever it is, then the second
   UPGRADES: {
-    bigHold: { cost: 8, hold: 5, name: "Big Hold", text: "+5 hold" },
-    fastHull: { cost: 6, speed: 1.2, name: "Fast Hull", text: "20% faster" },
-    wideNet: { cost: 6, net: 1.25, name: "Wide Net", text: "25% wider net" },
-    ironBow: { cost: 6, dealt: 1, taken: 1, name: "Iron Bow", text: "+1 spill dealt, −1 taken" },
+    bigHold: { cost: 3, hold: 5, name: "Big Hold", text: "+5 hold" },
+    fastHull: { cost: 3, speed: 1.12, name: "Fast Hull", text: "12% faster" },
+    wideNet: { cost: 3, net: 1.12, name: "Wide Net", text: "12% wider net" },
+    ironBow: { cost: 3, dealt: 1, taken: 1, name: "Iron Bow", text: "+1 spill dealt, −1 taken" },
   } as Record<string, { cost: number; name: string; text: string; hold?: number; speed?: number; net?: number; dealt?: number; taken?: number }>,
   KOI_STOP: 12, // no golden carp in the last 12 s
   SEATS: { min: 2, max: 4, botFill: 4 },
