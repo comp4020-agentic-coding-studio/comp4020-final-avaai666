@@ -37,6 +37,13 @@ be rebuilt by replaying its ledger. That is also how a lake survives a
 restart. SSE still fits: actions are plain POSTs, rows replay by id after a
 reconnect, and frames are simply not replayed.
 
+## Art
+
+The six portraits are SVG and the 3D world (lake, boats, fish, lanterns,
+docks) is Three.js code, all written by Claude in chat for prototype v7 and
+moved into src/static/play/ in session 13. No image model was used, and
+nothing is generated at run time.
+
 ## Moments
 
 ### A pond became a game
