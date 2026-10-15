@@ -200,16 +200,17 @@ export const BAYS = ["North Bay", "East Bay", "South Bay", "West Bay"] as const;
 // ---- Fishing Party, "party 1.0" (DESIGN.md "Fishing Party") ----
 export const PARTY = {
   W: 1000, H: 700, RX: 460, RY: 315, DT: 0.05,
-  INTRO_S: 3, ROUND_S: 35, STANDINGS_S: 4, SHOP_S: 8,
+  INTRO_S: 3, ROUND_S: 35, STANDINGS_S: 4, PICK_S: 4, SHOP_S: 8, // the last-placed player's variant pick is its own screen
   GAMES: ["shoal", "koi", "tug", "night"] as const, // rounds 1 to 4, in a seeded order; Last Net is round 5
   // Shoal Scramble
   SHOAL_EVERY_S: 2, SHOAL_UP_S: 1.5, SHOAL_MAX: 6, TAP_R: 55, BIG_NET: 1.5,
   // Koi Chase
-  SPEED: 160, FAST: 1.35, GATE_R: 40, GATES: 6, KOI_R: 30, KOI_COINS: 5, KOI_SPEED: 120,
+  SPEED: 160, FAST: 1.15, GATE_R: 40, GATES: 6, KOI_R: 30, KOI_COINS: 5, KOI_SPEED: 120,
   // Tug of Line
   NEEDLE_HZ: 0.7, GREEN: 0.36, GREEN_SOLO: 0.24, REEL_GAP_S: 0.25, PULL: 1, SLIP: 0.6, ROPE_WIN: 10, TUG_COINS: 6,
   // Lantern Night
   LANTERN_R: 140, DROP_R: 120, DROP_S: 10, NIGHT_NET_R: 40, NIGHT_CD: 0.9, MUDDY: 0.55, BAIT_PULL: 14,
+  BAIT_R: 2, BAIT_S: 10, // bait pulls fish within this many lantern radii, for the first 10 s of the round
   // Last Net
   NETS: [3, 6, 10] as const, SCHOOL_SHARE: 0.25, LAST_MULT: 2,
   SHOP: {

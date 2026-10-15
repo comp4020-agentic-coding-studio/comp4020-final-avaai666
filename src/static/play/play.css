@@ -290,3 +290,9 @@ body.play.in-room { overflow: hidden; }
 .pin.could { background: rgba(232,184,77,.18); color: var(--gold); }
 .pin.best { background: var(--gold); color: var(--ink); font-size: 13px; }
 .pin.dry { background: rgba(120,120,120,.6); color: #eee; }
+.tugbar { position: absolute; z-index: 6; left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); bottom: max(12px, env(safe-area-inset-bottom, 0px)); display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+.tugbar .meter { height: 34px; background: rgba(207,59,46,.55); border: 1px solid var(--line); }
+.tugbar .meter .green { position: absolute; top: 0; bottom: 0; background: rgba(69,164,140,.9); }
+.tugbar .meter i { width: 6px; margin-left: -3px; z-index: 1; }
+.tugbar .pad { padding: 14px 26px; font-size: 20px; }
+@media (min-width: 861px) { .tugbar { left: 25%; right: calc(340px + 40px); } }

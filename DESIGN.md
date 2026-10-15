@@ -573,11 +573,14 @@ The five rounds (Ava's five; none replaced):
 5. Last Net. Everyone secretly picks small (3), medium (6) or huge (10). If
    the sum exceeds the school, everyone gets 1. Coins are doubled.
 
-Between rounds, an 8 s shop: Big Net (bigger catch next round), Fast Boat
-(faster next round), Bait (schools swim to you first next round), and
+Between rounds, after the standings, the last-placed player gets a 4 s
+screen to pick one of two variants for the next round (only that player is
+sent the choice; everyone else sees who is choosing). Then an 8 s shop: Big
+Net (bigger catch next round), Fast Boat (faster next round), Bait (for the
+first 10 s of the next round, fish within two lantern radii swim to you), and
 Muddy Water, which only players behind the leader may buy and which shrinks
-the leader's view next round. The last-placed player picks one of two
-variants for the next round (for example, tug alone or in pairs).
+the leader's view next round. Tug of Line's needle is drawn over the fish on
+the lake and as a full-width bar at the bottom of the screen.
 
 The lake carries over: rounds 1, 2 and 4 draw from it and fish taken do not
 come back; Last Net's school is what is left. Before round 5 the screen says
@@ -776,7 +779,8 @@ decides.
 
 ## Changelog
 
-- v3.1 (15 Oct): Lake Holdings nets take 2 from every school; dry water,
+- v3.1 (15 Oct): Fishing Party's variant pick is its own screen, bait has a
+  range and a time, the Tug needle is on the lake. Lake Holdings nets take 2 from every school; dry water,
   revived only by ponds; paid labels and card previews. Boat Rush upgrades cost 3 then 7, shown on the start card,
   with a dock glow and a coach mark (balance numbers in
   docs/checks/balance-2026-10-15.md). Who's Poaching after the balance

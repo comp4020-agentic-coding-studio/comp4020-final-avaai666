@@ -16,7 +16,7 @@ const HOW = {
 const setHtml = (el, html) => { if (el.dataset.html !== html) { el.dataset.html = html; el.innerHTML = html; } };
 
 export function mount({ world, sound, ui, send, view }) {
-  let prev = null, cur = null, curAt = 0, seats = null;
+  let prev = null, cur = null, curAt = 0, seats = null, needle = 0;
   const me = () => view().mySeat;
   const colorOf = (seat) => COLORS[seats?.[seat]?.character] ?? "#f5ead6";
   const nameOf = (seat) => (seat === me() ? "You" : seats?.[seat]?.name ?? `P${seat + 1}`);
@@ -26,6 +26,11 @@ export function mount({ world, sound, ui, send, view }) {
     <div class="card"><h4 id="y-title">Round 1 of 5</h4><p class="small" id="y-how" style="margin-top:0"></p><div class="rounds" id="y-rounds"></div></div>
     <div class="card" id="y-panel"></div>
     <div class="card hide-sm"><h4>Coins</h4><div class="board" id="y-board"></div><p class="small" id="y-lake"></p></div>`;
+  // Tug of Line's needle: a full-width bar at the bottom with REEL (on every screen), and a meter over the fish on the lake
+  const tugBar = document.createElement("div"); tugBar.className = "tugbar"; tugBar.hidden = true;
+  tugBar.innerHTML = `<div class="meter"><b class="green"></b><i></i></div><button class="pad red" type="button" data-a="reel">REEL</button>`;
+  ui.stage.appendChild(tugBar);
+  tugBar.querySelector("button").addEventListener("pointerdown", (e) => { e.preventDefault(); send({ k: "reel" }); ui.did("reel"); });
   const canvas = document.getElementById("gl");
   let lastSteer = 0, dragging = false;
   const toSim = (e) => world.screenToSim(e.clientX, e.clientY);
@@ -55,8 +60,13 @@ export function mount({ world, sound, ui, send, view }) {
     if (f.phase === "shop") {
       setHtml(el, `<h4>Shop · ${Math.ceil(f.left)} s · you have ${f.coins[me()]} coins</h4><div class="cards">${Object.entries(SHOP).map(([id, [n, c, t]]) => `<button class="fac" type="button" data-a="buy" data-item="${id}" ${f.coins[me()] < c || f.perks.includes(id) || (id === "muddy" && !f.behind) ? "disabled" : ""}><b>${n}</b>${c} coins<small>${t}</small></button>`).join("")}</div>
         ${f.perks.length ? `<p class="small">Next round you have: ${f.perks.map((p) => SHOP[p][0]).join(", ")}</p>` : ""}
-        <h4 style="margin-top:8px">Next: ${ui.esc(f.name)} · ${f.picker === me() ? "you are last, so you pick" : `${ui.esc(nameOf(f.picker))} picks`}</h4>
-        <div class="chips">${f.variants.map((v, i) => `<button class="chipbtn" type="button" data-a="variant" data-v="${i}" aria-pressed="${f.variant === v}" ${f.picker === me() ? "" : "disabled"}>${ui.esc(v)}</button>`).join("")}</div>`);
+        <p class="small">Next: ${ui.esc(f.name)} · ${ui.esc(f.variant)} (chosen by ${ui.esc(nameOf(f.picker))})</p>`);
+      return;
+    }
+    if (f.phase === "pick") {
+      setHtml(el, f.picking
+        ? `<h4>You are last, so you choose: ${ui.esc(f.name)} · ${Math.ceil(f.left)} s</h4><div class="chips">${f.variants.map((v, i) => `<button class="chipbtn" type="button" data-a="variant" data-v="${i}" aria-pressed="${f.variant === v}">${ui.esc(v)}</button>`).join("")}</div>`
+        : `<h4>${ui.esc(nameOf(f.picker))} is choosing…</h4><p class="small" style="margin:0">Next: ${ui.esc(f.name)}. The last-placed player picks how it is played.</p>`);
       return;
     }
     if (f.phase === "standings") { setHtml(el, `<h4>Standings after round ${f.round - 1}</h4><div class="podium">${[...f.coins.keys()].sort((a, b) => f.coins[b] - f.coins[a]).map((s, i) => `<div class="pl ${i === 0 ? "first" : ""}">${ui.portrait(seats?.[s]?.character ?? "mei", "")}<b>${ui.esc(nameOf(s))}</b><span class="sc">${f.coins[s]}</span></div>`).join("")}</div>`); return; }
@@ -66,9 +76,7 @@ export function mount({ world, sound, ui, send, view }) {
     if (f.game === "tug") {
       const rope = f.ropes.find((r) => r.seats.includes(me())), dir = rope?.seats[0] === me() ? 1 : -1, pos = rope ? rope.pos * dir : 0;
       const vs = rope?.seats.length === 2 ? `against ${ui.esc(nameOf(rope.seats.find((x) => x !== me())))}` : "against the fish";
-      setHtml(el, `<h4>Tug of Line · ${vs}</h4><div class="meter" style="--g:${f.green}"><i style="left:${50 + f.needle * 50}%"></i></div>
-        <div class="bar" style="margin-top:8px"><i style="width:${50 + pos * 5}%;background:${pos >= 0 ? "#45a48c" : "#cf3b2e"}"></i></div><p class="small">${pos > 0 ? "You are winning the line" : pos < 0 ? "The line is slipping away" : "Even"} · pull to 10 to land it</p>
-        <div class="pads"><button class="pad red" type="button" data-a="reel">REEL</button></div>`);
+      setHtml(el, `<h4>Tug of Line · ${vs}</h4><p class="small" style="margin:0">${pos > 0 ? "You are winning the line" : pos < 0 ? "The line is slipping away" : "Even"} (${pos > 0 ? "+" : ""}${pos} of 10) · REEL when the needle over the fish is in the green</p>`);
     }
     if (f.game === "night") setHtml(el, `<h4>Lantern Night</h4><p class="small" style="margin:0">Lantern ${f.view < 140 ? `<b>shrunk to ${f.view} (muddy water)</b>` : f.view}. Drops left: ${f.dropsLeft}.</p><div class="pads"><button class="pad" type="button" data-a="cast">CAST</button><button class="pad red" type="button" data-a="drop" ${f.dropsLeft ? "" : "disabled"}>DROP LANTERN</button></div>`);
     if (f.game === "last") setHtml(el, `<h4>Last Net · the school holds ${f.school}</h4><p class="small" style="margin:0">${f.lakeStart - f.lake > 0 ? `You started with ${f.lakeStart} fish in the lake; ${f.lake} are left. ` : ""}Pick in secret. ${f.picked.filter(Boolean).length} of ${f.picked.length} have picked.</p>
@@ -91,7 +99,8 @@ export function mount({ world, sound, ui, send, view }) {
       if (e.k === "lastNet") { ui.banner(e.broke ? "The school broke!" : "Every net came up full", `${e.picks.map((p, i) => `${nameOf(i)} ${p ?? "–"}`).join(" · ")} (school ${e.school})`, 4500); e.broke ? (sound.hit(), world.shake()) : sound.big(); }
       if (e.k === "standings") sound.horn();
       if (e.k === "lastWarning") ui.banner("Before the last round", `the lake started with ${e.started} fish and has ${e.lake} left: Last Net's school is ${e.school}`, 5000);
-      if (e.k === "shop") ui.banner("Shop: 8 seconds", e.picker === me() ? "you are last: pick the next round's variant" : `next: ${e.next}`);
+      if (e.k === "pick") ui.banner(e.picker === me() ? "You are last: you choose" : `${nameOf(e.picker)} is choosing…`, `how ${e.next} is played`, 2400);
+      if (e.k === "shop") ui.banner("Shop: 8 seconds", `next: ${e.next} · ${e.variant}`);
       if (e.k === "bought" && e.seat === me()) { ui.banner(`${SHOP[e.item][0]} bought`, SHOP[e.item][2]); sound.coin(); }
       if (e.k === "coins" && e.seat === me()) ui.did("scored");
       if (e.k === "end") sound.horn();
@@ -107,6 +116,9 @@ export function mount({ world, sound, ui, send, view }) {
     $("y-board").innerHTML = [...f.coins.keys()].sort((a, b) => f.coins[b] - f.coins[a]).map((s) => `<div><span><span class="swatch" style="background:${colorOf(s)}"></span>${ui.esc(nameOf(s))}</span><b>${f.coins[s]}</b></div>`).join("");
     $("y-lake").textContent = `The lake: ${f.lake} fish (started ${f.lakeStart}). Fish taken now are gone for later rounds.`;
     panel(f);
+    const tug = f.phase === "round" && f.game === "tug" && me() !== null;
+    tugBar.hidden = !tug;
+    if (tug) { const g = tugBar.querySelector(".green"); g.style.left = `${50 - f.green * 50}%`; g.style.width = `${f.green * 100}%`; }
   }
 
   function coach() {
@@ -124,7 +136,7 @@ export function mount({ world, sound, ui, send, view }) {
     room(v) { seats = v.seats; },
     start(frame, v) { seats = v.seats; prev = cur = frame; curAt = performance.now(); world.setDocks([]); world.onFrame(draw); hudFrom(frame); },
     frame(f, ev) { seats = view().seats ?? seats; prev = cur ?? f; cur = f; curAt = performance.now(); events(ev); hudFrom(f); coach(); },
-    end() { canvas.removeEventListener("pointerdown", onDown); canvas.removeEventListener("pointermove", onMove); removeEventListener("pointerup", onUp); removeEventListener("keydown", onKey); },
+    end() { tugBar.remove(); canvas.removeEventListener("pointerdown", onDown); canvas.removeEventListener("pointermove", onMove); removeEventListener("pointerup", onUp); removeEventListener("keydown", onKey); },
   };
 
   function draw(dt, t) {
@@ -144,8 +156,27 @@ export function mount({ world, sound, ui, send, view }) {
     world.setKoi(cur.phase === "round" && cur.koi ? [cur.koi[0], cur.koi[1], cur.koi[2] / 100] : null, t);
     if (cur.phase === "round" && cur.game === "koi") cur.gates.forEach((g, i) => { const m = world.prop(`gate${i}`, () => world.makeLantern(.9)); m.position.set((g[0] - 500) / 10, 2 + (i === cur.next ? Math.sin(t * 5) * .4 : 0), (g[1] - 350) / 10); m.scale.setScalar(i === cur.next ? 1.5 : .8); });
     if (cur.phase === "round" && cur.game === "night") cur.drops.forEach((d, i) => { const m = world.prop(`drop${d[0]},${d[1]}`, () => world.makeLantern(1.2)); m.position.set((d[0] - 500) / 10, 1.5, (d[1] - 350) / 10); });
+    if (cur.phase === "round" && cur.game === "tug") {
+      // the server's needle, eased between frames
+      needle += (cur.needle - needle) * Math.min(1, dt * 12);
+      const ni = tugBar.querySelector("i"); if (ni) ni.style.left = `${50 + needle * 50}%`;
+      const meter = world.prop("tugmeter", () => tugMeter(world));
+      meter.position.set(7, 4.2, 5); meter.lookAt(world.camera.position);
+      meter.userData.needle.position.x = needle * 3; meter.userData.green.scale.x = cur.green;
+      const inG = Math.abs(cur.needle) <= cur.green / 2; meter.userData.needle.material.color.set(inG ? "#8fe0c9" : "#ff7a5a");
+    }
     if (cur.phase === "round" && cur.game === "tug") { const m = world.prop("bigfish", () => { const g = world.makeLantern(.01); const f = new world.THREE.Mesh(new world.THREE.SphereGeometry(1.4, 12, 8).scale(2, .7, .8), world.toon("#ff9a3c")); g.add(f); return g; }); m.position.set(7 + Math.sin(t * 2) * 1.5, -.2, 5 + Math.cos(t * 1.3)); }
     world.sweepProps();
     world.setLanterns(cur.game === "night" && cur.phase === "round" ? [...cur.b.map((b) => [b[0], b[1], 1]), ...cur.drops.map((d) => [d[0], d[1], 1.2])] : []);
   }
+}
+
+// a meter that floats over the big fish: a bar, its green middle, and the needle
+function tugMeter(world) {
+  const { THREE } = world, g = new THREE.Group();
+  const bar = new THREE.Mesh(new THREE.PlaneGeometry(6.4, .7), new THREE.MeshBasicMaterial({ color: "#cf3b2e", transparent: true, opacity: .75, depthTest: false }));
+  const green = new THREE.Mesh(new THREE.PlaneGeometry(6, .72), new THREE.MeshBasicMaterial({ color: "#45a48c", depthTest: false }));
+  const needle = new THREE.Mesh(new THREE.PlaneGeometry(.18, 1.2), new THREE.MeshBasicMaterial({ color: "#f5ead6", depthTest: false }));
+  green.position.z = .01; needle.position.z = .02; bar.renderOrder = green.renderOrder = needle.renderOrder = 10;
+  g.add(bar, green, needle); g.userData = { needle, green }; return g;
 }

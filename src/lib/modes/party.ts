@@ -25,14 +25,14 @@ interface Boat { x: number; y: number; h: number; tx: number; ty: number; vx: nu
 interface Fish { x: number; y: number; h: number }
 export interface PartySim {
   tick: number; t: number; phaseT: number; n: number; rng: () => number;
-  phase: "intro" | "round" | "standings" | "shop" | "end"; round: number; order: Game[]; game: Game; variant: 0 | 1;
+  phase: "intro" | "round" | "standings" | "pick" | "shop" | "end"; round: number; order: Game[]; game: Game; variant: 0 | 1;
   coins: number[]; roundCoins: number[][]; lake: number; lakeStart: number; school: number;
   perks: Item[][]; muddy: number[]; view: number[]; picker: number; // perks: bought in a shop, used in the next round, then gone
   boats: Boat[]; fish: Fish[]; shoals: { x: number; y: number; n: number; at: number; until: number }[]; nextShoal: number;
   gates: { x: number; y: number }[]; nextGate: number[]; koi: { x: number; y: number; h: number };
   ropes: { seats: number[]; pos: number }[]; needle: number; reelAt: number[];
   drops: { seat: number; x: number; y: number; until: number }[]; dropsLeft: number[];
-  picks: (number | null)[]; firstScoreAt: (number | null)[]; best: { seat: number; coins: number; game: Game } | null;
+  baitUntil: number[]; picks: (number | null)[]; firstScoreAt: (number | null)[]; best: { seat: number; coins: number; game: Game } | null;
 }
 
 const ell = (x: number, y: number): number => Math.hypot((x - Q.W / 2) / Q.RX, (y - Q.H / 2) / Q.RY);
@@ -50,7 +50,7 @@ function make(seed: string, seats: Seat[], lake: { fish: number }): PartySim {
     perks: seats.map(() => []), muddy: [], view: seats.map(() => Q.LANTERN_R), picker: n - 1,
     boats: seats.map((_, i) => { const a = (i / n) * Math.PI * 2 + Math.PI / 2, x = Q.W / 2 + Math.cos(a) * Q.RX * 0.75, y = Q.H / 2 + Math.sin(a) * Q.RY * 0.75; return { x, y, h: a + Math.PI, tx: x, ty: y, vx: 0, vy: 0, cd: 0 }; }),
     fish: [], shoals: [], nextShoal: 0, gates: [], nextGate: seats.map(() => 0), koi: { x: Q.W / 2, y: Q.H / 2, h: 0 },
-    ropes: [], needle: 0, reelAt: seats.map(() => -99), drops: [], dropsLeft: seats.map(() => 1), picks: seats.map(() => null),
+    ropes: [], needle: 0, reelAt: seats.map(() => -99), drops: [], dropsLeft: seats.map(() => 1), baitUntil: seats.map(() => -1), picks: seats.map(() => null),
     firstScoreAt: seats.map(() => null), best: null,
   };
 }
@@ -79,6 +79,7 @@ const take = (s: PartySim, n: number): number => { const got = Math.max(0, Math.
 
 function startRound(s: PartySim, ev: GameEvent[]): void {
   s.game = s.order[s.round]; s.phase = "round"; s.phaseT = 0; s.roundCoins[s.round] = s.coins.map(() => 0);
+  s.baitUntil = s.perks.map((p) => (p.includes("bait") ? s.t + Q.BAIT_S : -1));
   s.view = s.coins.map((_, i) => Q.LANTERN_R * (s.muddy.includes(i) ? Q.MUDDY : 1) * (s.variant && s.game === "night" ? 0.8 : 1));
   const g = s.game;
   if (g === "shoal") { s.shoals = []; s.nextShoal = 1; }
@@ -133,7 +134,9 @@ function endRound(s: PartySim, ev: GameEvent[]): void {
 
 function apply(s: PartySim, seat: number, i: PartyInput, ev: GameEvent[]): void {
   const b = s.boats[seat];
-  if (s.phase === "shop") {
+  if (s.phase === "pick" || s.phase === "shop") {
+    if (i.k === "variant" && seat === s.picker) { s.variant = i.v; ev.push({ k: "variant", seat, v: i.v, text: Q.VARIANTS[s.order[s.round]][i.v] }); }
+    if (s.phase === "pick") return;
     if (i.k === "buy") {
       const it = Q.SHOP[i.item];
       if (s.coins[seat] < it.cost || s.perks[seat].includes(i.item)) return;
@@ -142,7 +145,6 @@ function apply(s: PartySim, seat: number, i: PartyInput, ev: GameEvent[]): void 
       if (i.item === "muddy") { const l = leaderOf(s); if (!s.muddy.includes(l)) s.muddy.push(l); }
       ev.push({ k: "bought", seat, item: i.item });
     }
-    if (i.k === "variant" && seat === s.picker) { s.variant = i.v; ev.push({ k: "variant", seat, v: i.v, text: Q.VARIANTS[s.order[s.round]][i.v] }); }
     return;
   }
   if (s.phase !== "round") return;
@@ -202,7 +204,7 @@ function play(s: PartySim, ev: GameEvent[]): void {
       for (let k = 0; k < (two ? 2 : 1); k++) {
         let x, y; do { x = Q.W / 2 + (s.rng() * 2 - 1) * Q.RX; y = Q.H / 2 + (s.rng() * 2 - 1) * Q.RY; } while (ell(x, y) > 0.8);
         // bait: a school surfaces nearer the buyer
-        const baiter = s.perks.findIndex((p) => p.includes("bait"));
+        const baiter = s.baitUntil.findIndex((u) => u > s.t + 1e-9);
         if (baiter >= 0 && s.rng() < 0.5) { x = (x + s.boats[baiter].x) / 2; y = (y + s.boats[baiter].y) / 2; }
         const n = Math.max(1, Math.min(two ? 3 : Q.SHOAL_MAX, Math.round(s.lake / 30)));
         s.shoals.push({ x: Math.round(x), y: Math.round(y), n, at: s.t, until: s.t + Q.SHOAL_UP_S });
@@ -229,10 +231,11 @@ function play(s: PartySim, ev: GameEvent[]): void {
   if (g === "tug") s.needle = Math.sin(s.phaseT * Math.PI * 2 * Q.NEEDLE_HZ);
   if (g === "night") {
     for (let i = 0; i < s.n; i++) sail(s, i);
-    const baiter = s.perks.findIndex((p) => p.includes("bait"));
+    const baiter = s.baitUntil.findIndex((u) => u > s.t + 1e-9);
     for (const f of s.fish) {
       f.h += (s.rng() - 0.5) * 0.5;
-      if (baiter >= 0) { const b = s.boats[baiter]; f.h = Math.atan2(Math.sin(f.h) + (b.y - f.y) / Q.BAIT_PULL / 40, Math.cos(f.h) + (b.x - f.x) / Q.BAIT_PULL / 40); }
+      const b = baiter >= 0 ? s.boats[baiter] : null;
+      if (b && Math.hypot(b.x - f.x, b.y - f.y) <= Q.BAIT_R * Q.LANTERN_R) f.h = Math.atan2(b.y - f.y, b.x - f.x) + (s.rng() - 0.5) * 0.3;
       if (ell(f.x, f.y) > 0.85) f.h = Math.atan2(Q.H / 2 - f.y, Q.W / 2 - f.x);
       f.x += Math.cos(f.h) * 26 * Q.DT; f.y += Math.sin(f.h) * 26 * Q.DT;
     }
@@ -247,16 +250,17 @@ function step(s: PartySim, inputs: { seat: number; i: PartyInput }[]): GameEvent
   s.tick++; s.t = Math.round(s.tick * Q.DT * 1000) / 1000; s.phaseT = Math.round((s.phaseT + Q.DT) * 1000) / 1000;
   if (s.phase === "intro" && s.phaseT >= Q.INTRO_S - 1e-9) startRound(s, ev);
   else if (s.phase === "round") { play(s, ev); if (s.phaseT >= Q.ROUND_S - 1e-9 || (s.game === "last" && s.picks.every((p) => p !== null) && s.phaseT > 2)) endRound(s, ev); }
-  else if (s.phase === "standings" && s.phaseT >= Q.STANDINGS_S - 1e-9) { s.phase = "shop"; s.phaseT = 0; ev.push({ k: "shop", picker: s.picker, next: NAMES[s.order[s.round]], variants: Q.VARIANTS[s.order[s.round]] }); }
+  else if (s.phase === "standings" && s.phaseT >= Q.STANDINGS_S - 1e-9) { s.phase = "pick"; s.phaseT = 0; ev.push({ k: "pick", picker: s.picker, next: NAMES[s.order[s.round]] }); ev.push({ k: "choose", variants: Q.VARIANTS[s.order[s.round]], to: [s.picker] }); }
+  else if (s.phase === "pick" && s.phaseT >= Q.PICK_S - 1e-9) { s.phase = "shop"; s.phaseT = 0; ev.push({ k: "shop", picker: s.picker, next: NAMES[s.order[s.round]], variant: Q.VARIANTS[s.order[s.round]][s.variant] }); }
   else if (s.phase === "shop" && s.phaseT >= Q.SHOP_S - 1e-9) startRound(s, ev);
   return ev;
 }
 
 // ---- a bot ----
 function bot(s: PartySim, seat: number, r: () => number): PartyInput[] {
+  if (s.phase === "pick") return seat === s.picker && r() < 0.05 ? [{ k: "variant", v: r() < 0.5 ? 0 : 1 }] : [];
   if (s.phase === "shop") {
     if (r() > 0.05) return [];
-    if (seat === s.picker && r() < 0.5) return [{ k: "variant", v: r() < 0.5 ? 0 : 1 }];
     const behind = s.coins[seat] < Math.max(...s.coins);
     const items: Item[] = behind ? ["muddy", "bigNet", "fastBoat"] : ["bigNet", "fastBoat", "bait"];
     const it = items[Math.floor(r() * items.length)];
@@ -289,8 +293,10 @@ function frameFor(s: PartySim, seat: number) {
   const g = s.phase === "round" ? s.game : null;
   return {
     t: s.t, phase: s.phase, round: s.round + 1, game: s.order[Math.min(s.round, 4)], name: NAMES[s.order[Math.min(s.round, 4)]],
-    variant: Q.VARIANTS[s.order[Math.min(s.round, 4)]][s.variant], variants: Q.VARIANTS[s.order[Math.min(s.round, 4)]],
-    left: Math.max(0, (s.phase === "round" ? Q.ROUND_S : s.phase === "shop" ? Q.SHOP_S : s.phase === "standings" ? Q.STANDINGS_S : Q.INTRO_S) - s.phaseT),
+    variant: Q.VARIANTS[s.order[Math.min(s.round, 4)]][s.variant],
+    // the choice goes only to the last-placed player; everyone else is told who is choosing
+    variants: s.phase !== "pick" || me === s.picker ? Q.VARIANTS[s.order[Math.min(s.round, 4)]] : [], picking: s.phase === "pick" && me === s.picker,
+    left: Math.max(0, (s.phase === "round" ? Q.ROUND_S : s.phase === "shop" ? Q.SHOP_S : s.phase === "standings" ? Q.STANDINGS_S : s.phase === "pick" ? Q.PICK_S : Q.INTRO_S) - s.phaseT),
     coins: s.coins, lake: s.lake, lakeStart: s.lakeStart, picker: s.picker, perks: me >= 0 ? s.perks[me] : [],
     behind: me >= 0 ? s.coins[me] < Math.max(...s.coins) : false,
     b: g === "koi" || g === "night" ? s.boats.map((b) => [Math.round(b.x), Math.round(b.y), Math.round(b.h * 100)]) : [],

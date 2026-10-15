@@ -239,3 +239,44 @@ it("bots play a whole match and buy and pick like players", () => {
   while (!party.over(s)) { const ins: { seat: number; i: PartyInput }[] = []; for (const st of seats) if (st.bot) for (const i of party.bot(s, st.seat, rng)) ins.push({ seat: st.seat, i }); step(s, ins); }
   expect(s.coins[1] + s.coins[2]).toBeGreaterThan(0);
 }, 30000);
+
+describe("v3.1: the variant pick is its own screen, and bait reaches only so far", () => {
+  it("after the standings, a 4 s pick screen comes before the shop; only the last-placed player gets the choice", () => {
+    const s = make(3, "v31-pick");
+    s.coins = [9, 1, 5];
+    until(s, () => s.phase === "pick");
+    expect(s.picker).toBe(1);
+    const t0 = s.t;
+    const fp = party.frameFor(s, 1) as { phase: string; variants: string[]; picking: boolean };
+    const fo = party.frameFor(s, 0) as { phase: string; variants: string[]; picking: boolean; picker: number };
+    expect(fp.phase).toBe("pick");
+    expect(fp.picking).toBe(true);
+    expect(fp.variants.length).toBe(2);
+    expect(fo.picking).toBe(false);
+    expect(fo.variants).toEqual([]); // the others are told who is choosing, not the choice
+    expect(fo.picker).toBe(1);
+    step(s, [{ seat: 0, i: { k: "variant", v: 1 } }]);
+    expect(s.variant).toBe(0);
+    step(s, [{ seat: 1, i: { k: "variant", v: 1 } }]);
+    expect(s.variant).toBe(1);
+    until(s, () => s.phase === "shop");
+    expect(s.t - t0).toBeCloseTo(PARTY.PICK_S, 0);
+  });
+
+  it("bait pulls only fish within two lantern radii of the buyer, and only for 10 s", () => {
+    const s = make(2, "v31-bait");
+    s.order[s.round] = "night";
+    s.perks[0] = ["bait"]; // bought before the round
+    until(s, () => s.phase === "round" && s.game === "night");
+    const b = s.boats[0]; b.x = b.tx = 300; b.y = b.ty = 350;
+    s.fish = [{ x: 300 + PARTY.LANTERN_R * 1.5, y: 350, h: 0 }, { x: 300 + PARTY.LANTERN_R * 3, y: 350, h: 0 }];
+    const d0 = s.fish.map((f) => Math.hypot(f.x - b.x, f.y - b.y));
+    for (let i = 0; i < 20; i++) step(s);
+    const d1 = s.fish.map((f) => Math.hypot(f.x - b.x, f.y - b.y));
+    expect(d1[0]).toBeLessThan(d0[0]); // inside two radii: pulled in
+    expect(s.baitUntil[0]).toBeCloseTo(s.t - 20 * PARTY.DT + PARTY.BAIT_S, 0);
+    // after 10 s the pull stops
+    expect(PARTY.BAIT_S).toBe(10);
+    expect(PARTY.BAIT_R).toBe(2);
+  });
+});
