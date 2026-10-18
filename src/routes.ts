@@ -17,7 +17,7 @@ import { lakeHomePage, lakePage } from "./lake-pages.ts";
 import { log } from "./log.ts";
 import { errorPage, pondPage, pondRegisterPage } from "./pages.ts";
 import { langFrom } from "./lib/i18n.ts";
-import { howPage, makingOfPage, notFoundPage, readmeSitePage } from "./site-pages.ts";
+import { homePage, howPage, makingOfPage, notFoundPage, readmeSitePage } from "./site-pages.ts";
 
 const DIG_INTERVAL_MS = 10_000;
 const COOKIE_MAX_AGE_S = 365 * 24 * 60 * 60;
@@ -387,7 +387,9 @@ export function createHandler({ store, hub, lakeStore, lakeHub, now, readmeHtml,
     if (boat && (path === "/b" || path.startsWith("/b/")) && (await boat(req, res, path, method ?? "GET"))) return;
     if (play && (path === "/play" || path.startsWith("/play/") || path.startsWith("/static/play/") || path.startsWith("/static/vendor/")) && (await play(req, res, path, method ?? "GET"))) return;
 
-    if (path === "/" && method === "GET") {
+    // "/" is the current game's home; the five-year lake's home is /classic
+    if (path === "/" && method === "GET") return sendHtml(res, 200, homePage(langFrom(req.headers.cookie)));
+    if (path === "/classic" && method === "GET") {
       const rawCode = url.searchParams.get("code");
       if (rawCode !== null) {
         const upper = rawCode.toUpperCase();

@@ -85,7 +85,7 @@ function page(title: string, body: string, bodyClass = ""): string {
 
 function topBar(code: string | null, extra = ""): string {
   return `<header class="bar">
-      <a class="seal" href="/" aria-label="Next Year, No Fish: home">明年无鱼</a>
+      <a class="seal" href="/classic" aria-label="Next Year, No Fish: home">明年无鱼</a>
       <div class="titles"><span class="title-en">Next Year, No Fish</span><span class="sub">${code ? `Lake <b class="code">${esc(code)}</b>` : "A fishing game for one table"}</span></div>
       ${extra}
     </header>`;
@@ -127,7 +127,7 @@ export function lakeHomePage(pastLakes: { code: string; openedAt: number }[]): s
         ${HOW}
         <div class="go">
           <form method="post" action="/lakes"><button class="cta" type="submit">Open a lake</button></form>
-          <form class="join-code" id="join-code" action="/" method="get">
+          <form class="join-code" id="join-code" action="/classic" method="get">
             <label for="code">or type a lake's code</label>
             <input id="code" name="code" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="BKMT" pattern="[A-Za-z]{4}" required />
             <button class="btn" type="submit">Go</button>
@@ -137,6 +137,7 @@ export function lakeHomePage(pastLakes: { code: string; openedAt: number }[]): s
       <section class="card past">${table}</section>
       <p class="foot"><a class="newgame" href="/b">New and experimental: <b>Quick Catch</b>, boats on a shared lake →</a></p>
       <p class="foot"><a href="/readme/">About this game, and how it was made</a></p>
+      <p class="foot"><a href="/making-of">This is an earlier version. The current game is at / · every version is at /making-of</a></p>
     </main>`,
     "page-home",
   );

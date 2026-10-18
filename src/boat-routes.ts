@@ -58,7 +58,7 @@ export function boatHome(): string {
         <form method="post" action="/b"><button class="cta" type="submit">Open a room</button></form>
         <form class="join-code" id="join-code"><label for="code">or join a room</label><input id="code" maxlength="4" autocomplete="off" autocapitalize="characters" placeholder="CODE" /><button class="btn" type="submit">Go</button></form>
       </section>
-      <p class="foot"><a href="/">← the original Next Year, No Fish</a></p>
+      <p class="foot"><a href="/making-of">← every version of Next Year, No Fish</a></p>
     </main>`,
   );
 }

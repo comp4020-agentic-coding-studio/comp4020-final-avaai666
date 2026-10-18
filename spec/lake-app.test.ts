@@ -116,9 +116,9 @@ function openStream(code: string, headers: Record<string, string> = {}) {
   };
 }
 
-it("1. GET / is 200; POST /lakes answers 303 to /l/CODE", async () => {
+it("1. GET /classic is 200; POST /lakes answers 303 to /l/CODE", async () => {
   const code = await openLake();
-  const res = await fetch(at("/"));
+  const res = await fetch(at("/classic"));
   expect(res.status).toBe(200);
 });
 
@@ -206,8 +206,8 @@ it("7. the lobby stream sees a second client's join row within 1s, and reload wh
   }
 });
 
-it("8. GET /?code=bkmt answers 303 to /l/BKMT", async () => {
-  const res = await fetch(at("/?code=bkmt"), { redirect: "manual" });
+it("8. GET /classic?code=bkmt answers 303 to /l/BKMT", async () => {
+  const res = await fetch(at("/classic?code=bkmt"), { redirect: "manual" });
   expect(res.status).toBe(303);
   expect(res.headers.get("location")).toBe("/l/BKMT");
 });
