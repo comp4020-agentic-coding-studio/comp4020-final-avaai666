@@ -136,7 +136,6 @@ Authority (the five-year lake, /l)
   replayed by that version.
 
 The ledger
-The ledger
 - No state change without a ledger row, written in the same transaction.
   One catch that kills a pond writes two rows (catch, then collapse) in one
   transaction; a haul that leaves a lake with fewer than two fish
