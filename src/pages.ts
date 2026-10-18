@@ -143,3 +143,10 @@ export function readmePage(html: string): string {
 export function errorPage(title: string, message: string): string {
   return layout(`${title} · Common Pool`, `<main><h1>${esc(title)}</h1><p>${esc(message)}</p><p><a href="/">All ponds</a></p></main>`);
 }
+
+// The v0.4 register, reached from /making-of: the most recent ponds, each
+// still open at /p/{id}, and a Dig button.
+export function pondRegisterPage(ponds: { pondId: number; dugAt: number; stock: number; dead: boolean }[]): string {
+  const rows = ponds.map((p) => `<li><a href="/p/${p.pondId}">Pond ${p.pondId}</a> · ${p.dead ? "dead" : `${p.stock} fish`}</li>`).join("");
+  return layout("Ponds · Common Pool", `<main><h1>Common Pool: the ponds (v0.4)</h1><p>An earlier version of Next Year, No Fish. It still runs, and every pond is still here. <a href="/making-of">How it was made</a></p>${digForm()}${ponds.length ? `<ul class="register">${rows}</ul>` : "<p>No ponds yet.</p>"}</main>`);
+}

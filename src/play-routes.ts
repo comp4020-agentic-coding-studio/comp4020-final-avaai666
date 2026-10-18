@@ -10,8 +10,9 @@ import type { GameHub } from "./lib/game-hub.ts";
 import type { GameStore } from "./lib/game-store.ts";
 import { PLAY_INPUT_RATE } from "./lib/game-constants.ts";
 import { log } from "./log.ts";
-import { lobbyPage, noRoomPage, roomPage } from "./play-pages.ts";
-import { langFrom } from "./lib/i18n.ts";
+import { lobbyPage, roomPage } from "./play-pages.ts";
+import { langFrom, t } from "./lib/i18n.ts";
+import { noRoomSitePage, roomSitePage } from "./site-pages.ts";
 
 const CODE = /^\/play\/([BCDFGHJKLMNPQRSTVWXZ]{4})(\/join|\/start|\/stop|\/mode|\/in|\/events|\/summary\.json)?$/;
 const COOKIE_MAX_AGE_S = 365 * 24 * 60 * 60;
@@ -28,13 +29,8 @@ const FILES: Record<string, string> = {
   "play/play.css": "text/css; charset=utf-8",
   "vendor/three.module.js": "text/javascript; charset=utf-8",
 };
-const JOIN_MESSAGES: Record<string, string> = {
-  bad_name: "That name will not do: use 1 to 24 characters, not only spaces.",
-  name_taken: "Someone in this room already has that name.",
-  bot_name: "Names with \"bot\" are kept for bots. Pick another.",
-  bad_character: "Pick one of the six fishers.",
-  full: "This room is full for this game.",
-};
+// where the share link points: this server, as the browser reached it
+const originOf = (req: IncomingMessage): string => `${overHttps(req) ? "https" : "http"}://${req.headers.host ?? "localhost"}`;
 
 export function createPlayRoutes(hub: GameHub, store: GameStore, staticDir: string, modeIds: string[]) {
   const rate = new Map<string, { n: number; at: number }>();
@@ -66,6 +62,12 @@ export function createPlayRoutes(hub: GameHub, store: GameStore, staticDir: stri
       return true;
     }
     if (path === "/play" && method === "GET") { sendHtml(res, 200, lobbyPage(hub.readyModes())); return true; }
+    // "Join with a code" on the home page: a plain GET form
+    if (path === "/play/join" && method === "GET") {
+      const raw = (new URL(req.url ?? "/", "http://x").searchParams.get("code") ?? "").trim().toUpperCase();
+      redirect(res, /^[BCDFGHJKLMNPQRSTVWXZ]{4}$/.test(raw) ? `/play/${raw}` : "/");
+      return true;
+    }
     if (path === "/play" && method === "POST") {
       const form = new URLSearchParams(await readBody(req, 4096));
       const mode = form.get("mode") ?? "";
@@ -81,8 +83,9 @@ export function createPlayRoutes(hub: GameHub, store: GameStore, staticDir: stri
     const who = me(req, code);
     if (sub === undefined && method === "GET") {
       const view = hub.view(code, who?.seat ?? null);
-      if (!view) { sendHtml(res, 404, noRoomPage(code)); return true; }
-      sendHtml(res, 200, roomPage(view, undefined, langFrom(req.headers.cookie)));
+      const lang = langFrom(req.headers.cookie);
+      if (!view) { sendHtml(res, 404, noRoomSitePage(lang, code)); return true; }
+      sendHtml(res, 200, roomSitePage(lang, view, hub.history(code) ?? [], originOf(req), roomPage(view, undefined, lang, true)));
       return true;
     }
     if (sub === "/join" && method === "POST") {
@@ -95,7 +98,8 @@ export function createPlayRoutes(hub: GameHub, store: GameStore, staticDir: stri
       }
       log({ event: "refused", action: "play_join", room: code, reason: r.reason });
       if (r.reason === "no_room") { redirect(res, "/play"); return true; }
-      sendHtml(res, 409, roomPage(hub.view(code, null)!, JOIN_MESSAGES[r.reason] ?? r.reason, langFrom(req.headers.cookie)));
+      const lang = langFrom(req.headers.cookie), view = hub.view(code, null)!;
+      sendHtml(res, 409, roomSitePage(lang, view, hub.history(code) ?? [], originOf(req), roomPage(view, undefined, lang, true), t(lang, `join_${r.reason}`)));
       return true;
     }
     if (sub === "/summary.json" && method === "GET") {

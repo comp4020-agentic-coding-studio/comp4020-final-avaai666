@@ -15,7 +15,9 @@ import { cookie, overHttps, readBody, redirect, sameOrigin, sendHtml, sendJson, 
 import type { Hub } from "./live.ts";
 import { lakeHomePage, lakePage } from "./lake-pages.ts";
 import { log } from "./log.ts";
-import { errorPage, pondPage, readmePage } from "./pages.ts";
+import { errorPage, pondPage, pondRegisterPage } from "./pages.ts";
+import { langFrom } from "./lib/i18n.ts";
+import { howPage, makingOfPage, notFoundPage, readmeSitePage } from "./site-pages.ts";
 
 const DIG_INTERVAL_MS = 10_000;
 const COOKIE_MAX_AGE_S = 365 * 24 * 60 * 60;
@@ -32,7 +34,11 @@ const STATIC: Record<string, string> = {
   "style.css": "text/css; charset=utf-8",
   "boat.js": "text/javascript; charset=utf-8",
   "boat.css": "text/css; charset=utf-8",
+  "site.css": "text/css; charset=utf-8",
+  "site.js": "text/javascript; charset=utf-8",
 };
+const MODES = ["rush", "party", "poach", "hold"];
+const LANG_MAX_AGE_S = 365 * 24 * 60 * 60;
 const IMAGE_TYPES: Record<string, string> = {
   png: "image/png",
   jpg: "image/jpeg",
@@ -72,8 +78,8 @@ export function createHandler({ store, hub, lakeStore, lakeHub, now, readmeHtml,
     sendJson(res, 403, {});
   };
 
-  const notFound = (res: ServerResponse): void =>
-    sendHtml(res, 404, errorPage("Not found", "There is nothing at this address."));
+  const notFound = (res: ServerResponse, req?: IncomingMessage): void =>
+    sendHtml(res, 404, notFoundPage(langFrom(req?.headers.cookie)));
 
   const netIn = (req: IncomingMessage, pondId: number): { token: string; netId: number; name: string } | null => {
     const token = cookie(req, `net_${pondId}`);
@@ -362,6 +368,16 @@ export function createHandler({ store, hub, lakeStore, lakeHub, now, readmeHtml,
     }
   }
 
+  // the EN/中文 switch: a lang cookie, then back to the page it was on
+  async function setLang(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const form = new URLSearchParams(await readBody(req, BODY_LIMIT));
+    const lang = form.get("lang") === "zh" ? "zh" : "en";
+    const back = form.get("back") ?? "/";
+    const safe = /^\/(?!\/)[\w\-./]*$/.test(back) ? back : "/";
+    const secure = overHttps(req) ? "; Secure" : "";
+    redirect(res, safe, { "set-cookie": `lang=${lang}; SameSite=Lax; Path=/; Max-Age=${LANG_MAX_AGE_S}${secure}` });
+  }
+
   async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? "/", "http://localhost");
     const path = url.pathname;
@@ -382,7 +398,15 @@ export function createHandler({ store, hub, lakeStore, lakeHub, now, readmeHtml,
     if (path === "/dig" && method === "POST") return dig(req, res);
     if (path === "/lakes" && method === "POST") return openLake(res);
     if (path === "/readme") return redirect(res, "/readme/");
-    if (path === "/readme/" && method === "GET") return sendHtml(res, 200, readmePage(readmeHtml));
+    if (path === "/readme/" && method === "GET") return sendHtml(res, 200, readmeSitePage(langFrom(req.headers.cookie), readmeHtml));
+    // the site (DESIGN.md "The site"), in the language of the lang cookie
+    if (path === "/how" && method === "GET") return sendHtml(res, 200, howPage(langFrom(req.headers.cookie), "rush"));
+    const how = path.match(/^\/how\/(\w+)$/);
+    if (how && method === "GET") return MODES.includes(how[1]) ? sendHtml(res, 200, howPage(langFrom(req.headers.cookie), how[1])) : notFound(res, req);
+    if (path === "/making-of" && method === "GET") return sendHtml(res, 200, makingOfPage(langFrom(req.headers.cookie)));
+    if (path === "/lang" && method === "POST") return setLang(req, res);
+    // the v0.4 pond register, reached from /making-of (DESIGN.md: frozen, keeps its data)
+    if (path === "/p" && method === "GET") return sendHtml(res, 200, pondRegisterPage(store.listPonds()));
 
     const stat = path.match(/^\/static\/([\w.-]+)$/);
     if (stat && method === "GET" && STATIC[stat[1]]) return sendFile(res, join(staticDir, stat[1]), STATIC[stat[1]]);
@@ -457,7 +481,7 @@ export function createHandler({ store, hub, lakeStore, lakeHub, now, readmeHtml,
       return sendHtml(res, 405, errorPage("Not allowed", "That method is not allowed here."));
     }
 
-    notFound(res);
+    notFound(res, req);
   }
 
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {

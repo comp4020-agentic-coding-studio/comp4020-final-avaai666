@@ -143,9 +143,37 @@ function bindOverlay() {
   }));
 }
 
+// ---- the site's panels around the stage (src/site-pages.ts): who is here,
+// the picked game, this room's lake and what happened here, kept live from
+// the room's stream; a match takes the whole screen ----
+const LAKE_FULL = 220;
+const whenFmt = new Intl.DateTimeFormat(boot.lang === "zh" ? "zh-CN" : "en-AU", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Australia/Sydney" });
+function logLine(m) {
+  const game = t(`${m.mode}_name`);
+  const what = m.winner.kind === "seat" ? t("log_won", { game, name: m.winner.name }) : m.winner.kind === "fishers" ? t("log_fishers", { game }) : m.winner.kind === "poacher" ? t("log_poacher", { game }) : t("log_nobody", { game });
+  return `<li><time datetime="${new Date(m.endedAt).toISOString()}">${esc(whenFmt.format(m.endedAt))}</time><span>${esc(what)}</span><span class="fish">${m.lakeBefore} → ${m.lakeAfter}</span></li>`;
+}
+function sitePanels() {
+  const people = $("people");
+  if (people) people.innerHTML = view.players.map((p) => `<div class="person on"><div class="f">${portrait(p.character, p.name)}</div><span class="dot"></span>${esc(p.name)}</div>`).join("") + `<div class="person empty"><div class="f">+</div>${esc(t("waiting"))}</div>`;
+  const fish = $("lakefish"); if (fish) fish.innerHTML = `${view.lake.fish} <small>${esc(t("room_lake_of", { n: LAKE_FULL }))}</small>`;
+  const bar = $("lakebar"); if (bar) bar.style.width = `${Math.min(100, (view.lake.fish / LAKE_FULL) * 100).toFixed(1)}%`;
+  const log = $("log"); if (log) log.innerHTML = view.history.length ? view.history.map(logLine).join("") : `<li class="none">${esc(t("log_none"))}</li>`;
+  document.querySelectorAll("#pick [data-pick]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.pick === view.mode)));
+  const pn = $("pickname"); if (pn) pn.textContent = t(`${view.mode}_name`);
+  const pr = $("pickrules"); if (pr) pr.setAttribute("href", `/how/${view.mode}`);
+  document.body.classList.toggle("playing", view.state === "play");
+}
+$("pick")?.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-pick]"); if (!b) return;
+  const r = await post("mode", { mode: b.dataset.pick });
+  if (!r.ok) banner(r.reason === "not_in_room" ? t("g_join_change") : r.reason);
+});
+
 // ---- the stream ----
 let countdownT = 0;
 function showRoom() {
+  sitePanels();
   goalEl.textContent = t(`${view.mode}_hud`);
   stopBtn.hidden = !(view.state === "play" && isFirst());
   if (view.me === null && document.querySelector(".joinform")) { overlay.innerHTML = ""; return; }

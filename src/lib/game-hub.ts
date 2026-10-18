@@ -30,7 +30,10 @@ export interface RoomView {
   code: string; mode: string; state: Room["state"]; me: number | null; mySeat: number | null;
   players: { seat: number; name: string; character: Character }[]; seats: Seat[] | null; startedAt: number | null;
   lake: { fish: number; died: boolean }; results: Summary | null; note: string | null; ready: string[];
+  history: HistoryLine[]; // the room's finished matches, for "What happened here"
 }
+// one finished match, for the room's "What happened here" (no seed, no token)
+export interface HistoryLine { endedAt: number; mode: string; winner: { kind: "seat"; name: string } | { kind: "fishers" | "poacher" | "none" }; lakeBefore: number; lakeAfter: number }
 export interface GameHub {
   createRoom(mode: string): { code: string }; // throws for a mode it does not know
   view(code: string, me: number | null): RoomView | null;
@@ -41,6 +44,7 @@ export interface GameHub {
   stop(code: string, seat: number): { ok: true } | { ok: false; reason: string }; // the room's first player ends a match: interrupted, no results
   open(code: string, res: ServerResponse, seat: number | null): boolean;
   summaries(code: string): unknown[] | null;
+  history(code: string): HistoryLine[] | null; // finished matches, newest first
   readyModes(): string[];
   knows(mode: string): boolean;
   tick(): void;
@@ -81,9 +85,17 @@ export function createGameHub(store: GameStore, modes: Record<string, AnyMode>, 
       code: room.code, mode: r.mode, state: room.state, me, mySeat: seatOf(room, me), players: store.players(room.id),
       seats: room.match?.seats ?? room.last?.seats ?? null, startedAt: room.match?.startedAt ?? null,
       lake: { fish: r.lakeFish, died: r.lakeFish < LAKE_DEAD }, results: room.state === "end" ? (room.last?.summary ?? null) : null,
-      note: room.note, ready,
+      note: room.note, ready, history: historyOf(r.id),
     };
   };
+  const historyOf = (roomId: number): HistoryLine[] =>
+    store.matches(roomId).filter((m) => m.status === "done" && m.summary && m.endedAt !== null).reverse().map((m) => {
+      const s = m.summary!, w = (s.extra as { winner?: string } | undefined)?.winner;
+      const first = s.seats.filter((x) => x.place === 1);
+      const winner: HistoryLine["winner"] = w === "fishers" || w === "poacher" ? { kind: w }
+        : first.length === 1 ? { kind: "seat", name: first[0].name } : { kind: "none" };
+      return { endedAt: m.endedAt!, mode: m.mode, winner, lakeBefore: s.lakeBefore, lakeAfter: s.lakeAfter };
+    });
   const broadcastRoom = (room: Room): void => { for (const s of room.streams) send(s, "room", viewOf(room, s.seat)); };
   const frameFor = (m: Match, s: Stream): unknown => { const seat = s.seat === null ? -1 : (m.humanSeat.get(s.seat) ?? -1); return m.mode.frameFor(m.sim, seat); };
   const seatFor = (m: Match, s: Stream): number => (s.seat === null ? -1 : (m.humanSeat.get(s.seat) ?? -1));
@@ -215,6 +227,10 @@ export function createGameHub(store: GameStore, modes: Record<string, AnyMode>, 
         mode: m.mode, model: m.model, status: m.status, startedAt: m.startedAt, endedAt: m.endedAt,
         seed: m.status === "running" ? null : m.seed, summary: m.summary,
       }));
+    },
+    history(code) {
+      const r = store.roomByCode(code);
+      return r ? historyOf(r.id) : null;
     },
     tick() {
       const t = now();

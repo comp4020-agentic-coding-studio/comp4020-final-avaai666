@@ -4,7 +4,7 @@
 // the choice that matters) are the C1 card's words too.
 import { esc } from "./pages.ts";
 import type { RoomView } from "./lib/game-hub.ts";
-import { DICT, type Lang } from "./lib/i18n.ts";
+import { DICT, t, type Lang } from "./lib/i18n.ts";
 import { CREW, ICONS, portrait } from "./static/play/art.js";
 
 export interface ModeCard {
@@ -108,26 +108,25 @@ export function lobbyPage(ready: string[], error?: string): string {
 </div>`, "play lobby", `<script type="module" src="/static/play/lobby.js"></script>`);
 }
 
-export function noRoomPage(code: string): string {
-  return page("No such room", `<main class="solo"><h1>No room ${esc(code)}</h1><p><a class="btn primary" href="/play">Back to the lobby</a></p></main>`, "play", "");
-}
-
-export function roomPage(view: RoomView, error?: string, lang: Lang = "en"): string {
+// inner: only the game's stage, its boot data and its script, for the site's
+// room page (src/site-pages.ts), which has the join form and the top bar
+export function roomPage(view: RoomView, error?: string, lang: Lang = "en", inner = false): string {
   const crew = CREW;
   const taken = new Set(view.players.map((p) => p.character));
   const firstFree = crew.find((c) => !taken.has(c.id as RoomView["players"][number]["character"]))?.id ?? "mei";
   const card = cardOf(view.mode);
-  const join = view.me === null ? `<form class="joinform card" method="post" action="/play/${esc(view.code)}/join">
+  const join = view.me === null && !inner ? `<form class="joinform card" method="post" action="/play/${esc(view.code)}/join">
       <h3>Join room ${esc(view.code)}</h3>
       <label for="name">Your name</label><input id="name" name="name" maxlength="24" required autocomplete="nickname" />
       <div class="roster small">${crew.map((c) => `<label class="face-btn" title="${esc(c.name)}"><input type="radio" name="character" value="${c.id}" ${c.id === firstFree ? "checked" : ""} />${portrait(c.id, c.name)}</label>`).join("")}</div>
       <button class="btn primary" type="submit">Join</button>
       ${error ? `<p class="toast" role="alert" id="join-error">${esc(error)}</p>` : ""}
     </form>` : "";
-  return page(`Room ${view.code} · ${card.name}`, `<div class="app room" id="app" data-room="${esc(view.code)}">
-  <div class="stage" id="stage"><canvas id="gl" tabindex="0" aria-label="The lake, drawn in 3D"></canvas><div class="tags" id="tags"></div><div class="floats" id="floats"></div>
-    <div class="topbar" id="topbar"><a class="seal mini" href="/play" aria-label="Lobby">${seal}</a><div class="goalclock"><b id="goal">${esc(card.hud)}</b><span id="clock"></span></div><span class="conn" id="conn">connecting…</span><button class="tiny" id="stopbtn" type="button" hidden>Stop match</button><button class="tiny" id="sound" type="button">sound off</button></div>
-    <button class="hudtoggle" id="hudtoggle" type="button" aria-expanded="false" aria-controls="hud">Details ▾</button>
+  const w = (k: string) => esc(t(lang, k));
+  const shell = `<div class="app room" id="app" data-room="${esc(view.code)}">
+  <div class="stage" id="stage"><canvas id="gl" tabindex="0" aria-label="${w("g_lake_3d")}"></canvas><div class="tags" id="tags"></div><div class="floats" id="floats"></div>
+    <div class="topbar" id="topbar"><a class="seal mini" href="/" aria-label="${w("g_lobby")}">${seal}</a><div class="goalclock"><b id="goal">${w(`${view.mode}_hud`)}</b><span id="clock"></span></div><span class="conn" id="conn">${w("g_connecting")}</span><button class="tiny" id="stopbtn" type="button" hidden>${w("g_stop")}</button><button class="tiny" id="sound" type="button">${w("g_sound_off")}</button></div>
+    <button class="hudtoggle" id="hudtoggle" type="button" aria-expanded="false" aria-controls="hud">${w("g_details")}</button>
     <div class="hud" id="hud"></div>
     <p class="coach" id="coach" hidden></p>
     <div class="banner" id="banner" hidden role="status"></div>
@@ -135,5 +134,7 @@ export function roomPage(view: RoomView, error?: string, lang: Lang = "en"): str
   </div>
   ${join}
 </div>
-<script type="application/json" id="boot">${JSON.stringify({ view, cards: MODE_CARDS, lang, words: DICT[lang], other: Object.fromEntries(MODE_CARDS.map((m) => [`${m.id}_name`, DICT[lang === "en" ? "zh" : "en"][`${m.id}_name`]])) }).replace(/</g, "\\u003c")}</script>`, "play in-room", `<script type="module" src="/static/play/room.js"></script>`);
+<script type="application/json" id="boot">${JSON.stringify({ view, cards: MODE_CARDS, lang, words: DICT[lang], other: Object.fromEntries(MODE_CARDS.map((m) => [`${m.id}_name`, DICT[lang === "en" ? "zh" : "en"][`${m.id}_name`]])) }).replace(/</g, "\\u003c")}</script>`;
+  if (inner) return `${shell}\n<script type="module" src="/static/play/room.js"></script>`;
+  return page(`Room ${view.code} · ${card.name}`, shell, "play in-room", `<script type="module" src="/static/play/room.js"></script>`);
 }
