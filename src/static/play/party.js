@@ -3,32 +3,28 @@
 // lights). Sends taps, steers, reels, casts, lantern drops, shop buys, the
 // variant pick and the secret Last Net size. It decides nothing.
 const COLORS = { mei: "#d6473a", wang: "#4a7d9c", jin: "#e0a93a", lu: "#2f9a8f", lian: "#d9668a", shitou: "#62a344" };
-const SHOP = { bigNet: ["Big Net", 3, "bigger catch next round"], fastBoat: ["Fast Boat", 3, "faster next round"], bait: ["Bait", 3, "schools come to you first"], muddy: ["Muddy Water", 4, "the leader sees less next round"] };
-const HOW = {
-  shoal: "Schools flash up for 1.5 s: tap them first.",
-  koi: "Sail through your next gate (+1) and touch the golden carp (+5).",
-  tug: "Tap REEL when the needle is in the green. Off the green, the fish slips back.",
-  night: "Dark lake: you only see fish in your lantern. CAST to net them; DROP a lantern lights a spot for everyone.",
-  last: "Pick a net in secret. If all nets together are more than the school, everyone gets 1. Coins ×2.",
-};
+// the shop's prices, as the server charges them; the words are in src/lib/i18n.ts
+const SHOP = { bigNet: 3, fastBoat: 3, bait: 3, muddy: 4 };
 
 // replace a panel's markup only when it changed, so a tap is never lost to a rebuild
 const setHtml = (el, html) => { if (el.dataset.html !== html) { el.dataset.html = html; el.innerHTML = html; } };
 
 export function mount({ world, sound, ui, send, view }) {
+  const t = ui.t, item = (id) => t(`y_shop_${id}`), itemS = (id) => t(`y_shop_${id}_s`);
+  const roundName = (g) => t(`y_round_${g}`), variantName = (g, i) => t(`y_var_${g}_${i}`);
   let prev = null, cur = null, curAt = 0, seats = null, needle = 0;
   const me = () => view().mySeat;
   const colorOf = (seat) => COLORS[seats?.[seat]?.character] ?? "#f5ead6";
-  const nameOf = (seat) => (seat === me() ? "You" : seats?.[seat]?.name ?? `P${seat + 1}`);
+  const nameOf = (seat) => (seat === me() ? t("g_you") : ui.seatName(seats?.[seat]) ?? t("g_player_n", { n: seat + 1 }));
   const $ = (id) => document.getElementById(id);
   world.setCamera([0, 44, 56], [0, 0, 2]);
   ui.hud.innerHTML = `
-    <div class="card"><h4 id="y-title">Round 1 of 5</h4><p class="small" id="y-how" style="margin-top:0"></p><div class="rounds" id="y-rounds"></div></div>
+    <div class="card"><h4 id="y-title">${t("y_title", { n: 1 })}</h4><p class="small" id="y-how" style="margin-top:0"></p><div class="rounds" id="y-rounds"></div></div>
     <div class="card keep" id="y-panel"></div>
-    <div class="card hide-sm"><h4>Coins</h4><div class="board" id="y-board"></div><p class="small" id="y-lake"></p></div>`;
+    <div class="card hide-sm"><h4>${t("y_coins")}</h4><div class="board" id="y-board"></div><p class="small" id="y-lake"></p></div>`;
   // Tug of Line's needle: a full-width bar at the bottom with REEL (on every screen), and a meter over the fish on the lake
   const tugBar = document.createElement("div"); tugBar.className = "tugbar"; tugBar.hidden = true;
-  tugBar.innerHTML = `<div class="meter"><b class="green"></b><i></i></div><button class="pad red" type="button" data-a="reel">REEL</button>`;
+  tugBar.innerHTML = `<div class="meter"><b class="green"></b><i></i></div><button class="pad red" type="button" data-a="reel">${t("y_reel")}</button>`;
   ui.stage.appendChild(tugBar);
   tugBar.querySelector("button").addEventListener("pointerdown", (e) => { e.preventDefault(); send({ k: "reel" }); ui.did("reel"); });
   const canvas = document.getElementById("gl");
@@ -58,63 +54,63 @@ export function mount({ world, sound, ui, send, view }) {
   function panel(f) {
     const el = $("y-panel"); if (me() === null) { setHtml(el, ""); return; }
     if (f.phase === "shop") {
-      setHtml(el, `<h4>Shop · ${Math.ceil(f.left)} s · you have ${f.coins[me()]} coins</h4><div class="cards">${Object.entries(SHOP).map(([id, [n, c, t]]) => `<button class="fac" type="button" data-a="buy" data-item="${id}" ${f.coins[me()] < c || f.perks.includes(id) || (id === "muddy" && !f.behind) ? "disabled" : ""}><b>${n}</b>${c} coins<small>${t}</small></button>`).join("")}</div>
-        ${f.perks.length ? `<p class="small">Next round you have: ${f.perks.map((p) => SHOP[p][0]).join(", ")}</p>` : ""}
-        <p class="small">Next: ${ui.esc(f.name)} · ${ui.esc(f.variant)} (chosen by ${ui.esc(nameOf(f.picker))})</p>`);
+      setHtml(el, `<h4>${t("y_shop_h", { s: Math.ceil(f.left), n: f.coins[me()] })}</h4><div class="cards">${Object.entries(SHOP).map(([id, c]) => `<button class="fac" type="button" data-a="buy" data-item="${id}" ${f.coins[me()] < c || f.perks.includes(id) || (id === "muddy" && !f.behind) ? "disabled" : ""}><b>${item(id)}</b>${t("y_coins_n", { n: c })}<small>${itemS(id)}</small></button>`).join("")}</div>
+        ${f.perks.length ? `<p class="small">${t("y_perks", { list: f.perks.map(item).join(", ") })}</p>` : ""}
+        <p class="small">${ui.esc(t("y_next_by", { name: roundName(f.game), variant: variantName(f.game, f.vi), who: nameOf(f.picker) }))}</p>`);
       return;
     }
     if (f.phase === "pick") {
       setHtml(el, f.picking
-        ? `<h4>You are last, so you choose: ${ui.esc(f.name)} · ${Math.ceil(f.left)} s</h4><div class="chips">${f.variants.map((v, i) => `<button class="chipbtn" type="button" data-a="variant" data-v="${i}" aria-pressed="${f.variant === v}">${ui.esc(v)}</button>`).join("")}</div>`
-        : `<h4>${ui.esc(nameOf(f.picker))} is choosing…</h4><p class="small" style="margin:0">Next: ${ui.esc(f.name)}. The last-placed player picks how it is played.</p>`);
+        ? `<h4>${t("y_you_choose", { name: roundName(f.game), s: Math.ceil(f.left) })}</h4><div class="chips">${f.variants.map((v, i) => `<button class="chipbtn" type="button" data-a="variant" data-v="${i}" aria-pressed="${f.vi === i}">${ui.esc(variantName(f.game, i))}</button>`).join("")}</div>`
+        : `<h4>${ui.esc(t("y_choosing", { name: nameOf(f.picker) }))}</h4><p class="small" style="margin:0">${t("y_choosing_s", { name: roundName(f.game) })}</p>`);
       return;
     }
-    if (f.phase === "standings") { setHtml(el, `<h4>Standings after round ${f.round - 1}</h4><div class="podium">${[...f.coins.keys()].sort((a, b) => f.coins[b] - f.coins[a]).map((s, i) => `<div class="pl ${i === 0 ? "first" : ""}">${ui.portrait(seats?.[s]?.character ?? "mei", "")}<b>${ui.esc(nameOf(s))}</b><span class="sc">${f.coins[s]}</span></div>`).join("")}</div>`); return; }
-    if (f.phase !== "round") { setHtml(el, `<p class="small">Get ready…</p>`); return; }
-    if (f.game === "shoal") setHtml(el, `<h4>Shoal Scramble</h4><p class="small" style="margin:0">Tap a school the moment it flashes up.${f.perks.includes("bigNet") ? " Big Net: your tap reaches further." : ""}</p>`);
-    if (f.game === "koi") setHtml(el, `<h4>Koi Chase</h4><p class="small" style="margin:0">Steer through the glowing gate, then the next. Touch the golden carp for 5.</p>`);
+    if (f.phase === "standings") { setHtml(el, `<h4>${t("y_standings", { n: f.round - 1 })}</h4><div class="podium">${[...f.coins.keys()].sort((a, b) => f.coins[b] - f.coins[a]).map((s, i) => `<div class="pl ${i === 0 ? "first" : ""}">${ui.portrait(seats?.[s]?.character ?? "mei", "")}<b>${ui.esc(nameOf(s))}</b><span class="sc">${f.coins[s]}</span></div>`).join("")}</div>`); return; }
+    if (f.phase !== "round") { setHtml(el, `<p class="small">${t("y_ready")}</p>`); return; }
+    if (f.game === "shoal") setHtml(el, `<h4>${roundName("shoal")}</h4><p class="small" style="margin:0">${t("y_shoal_p")}${f.perks.includes("bigNet") ? t("y_shoal_big") : ""}</p>`);
+    if (f.game === "koi") setHtml(el, `<h4>${roundName("koi")}</h4><p class="small" style="margin:0">${t("y_koi_p")}</p>`);
     if (f.game === "tug") {
       const rope = f.ropes.find((r) => r.seats.includes(me())), dir = rope?.seats[0] === me() ? 1 : -1, pos = rope ? rope.pos * dir : 0;
-      const vs = rope?.seats.length === 2 ? `against ${ui.esc(nameOf(rope.seats.find((x) => x !== me())))}` : "against the fish";
-      setHtml(el, `<h4>Tug of Line · ${vs}</h4><p class="small" style="margin:0">${pos > 0 ? "You are winning the line" : pos < 0 ? "The line is slipping away" : "Even"} (${pos > 0 ? "+" : ""}${pos} of 10) · REEL when the needle over the fish is in the green</p>`);
+      const vs = rope?.seats.length === 2 ? ui.esc(t("y_tug_vs", { name: nameOf(rope.seats.find((x) => x !== me())) })) : t("y_tug_vs_fish");
+      setHtml(el, `<h4>${roundName("tug")} · ${vs}</h4><p class="small" style="margin:0">${t("y_tug_p", { state: pos > 0 ? t("y_tug_win") : pos < 0 ? t("y_tug_slip") : t("y_tug_even"), pos: `${pos > 0 ? "+" : ""}${pos}` })}</p>`);
     }
-    if (f.game === "night") setHtml(el, `<h4>Lantern Night</h4><p class="small" style="margin:0">Lantern ${f.view < 140 ? `<b>shrunk to ${f.view} (muddy water)</b>` : f.view}. Drops left: ${f.dropsLeft}.</p><div class="pads"><button class="pad" type="button" data-a="cast">CAST</button><button class="pad red" type="button" data-a="drop" ${f.dropsLeft ? "" : "disabled"}>DROP LANTERN</button></div>`);
-    if (f.game === "last") setHtml(el, `<h4>Last Net · the school holds ${f.school}</h4><p class="small" style="margin:0">${f.lakeStart - f.lake > 0 ? `You started with ${f.lakeStart} fish in the lake; ${f.lake} are left. ` : ""}Pick in secret. ${f.picked.filter(Boolean).length} of ${f.picked.length} have picked.</p>
-      <div class="picks">${[3, 6, 10].map((n) => `<button class="pad ${n === 10 ? "red" : ""}" type="button" data-a="pick" data-size="${n}" ${f.myPick !== null ? "disabled" : ""} aria-pressed="${f.myPick === n}">${n === 3 ? "Small" : n === 6 ? "Medium" : "Huge"} ${n}</button>`).join("")}</div>`);
+    if (f.game === "night") setHtml(el, `<h4>${roundName("night")}</h4><p class="small" style="margin:0">${t("y_night_p", { view: f.view < 140 ? `<b>${t("y_night_muddy", { n: f.view })}</b>` : f.view, n: f.dropsLeft })}</p><div class="pads"><button class="pad" type="button" data-a="cast">${t("y_cast")}</button><button class="pad red" type="button" data-a="drop" ${f.dropsLeft ? "" : "disabled"}>${t("y_drop")}</button></div>`);
+    if (f.game === "last") setHtml(el, `<h4>${t("y_last_h", { n: f.school })}</h4><p class="small" style="margin:0">${f.lakeStart - f.lake > 0 ? t("y_last_lake", { start: f.lakeStart, left: f.lake }) : ""}${t("y_last_p", { n: f.picked.filter(Boolean).length, of: f.picked.length })}</p>
+      <div class="picks">${[3, 6, 10].map((n) => `<button class="pad ${n === 10 ? "red" : ""}" type="button" data-a="pick" data-size="${n}" ${f.myPick !== null ? "disabled" : ""} aria-pressed="${f.myPick === n}">${t(n === 3 ? "y_small" : n === 6 ? "y_medium" : "y_huge", { n })}</button>`).join("")}</div>`);
   }
 
   function events(ev) {
     for (const e of ev) {
-      if (e.k === "round") { ui.banner(`Round ${e.n}: ${e.name}`, e.game === "last" ? `the school holds ${e.school} · coins ×2` : e.variant, 2600); sound.big(); world.setNight(e.game === "night" ? 1 : 0); world.setCamera(e.game === "tug" ? [7, 18, 36] : [0, 44, 56], e.game === "tug" ? [7, 1, 5] : [0, 0, 2]); }
+      if (e.k === "round") { ui.banner(t("y_round_b", { n: e.n, name: roundName(e.game) }), e.game === "last" ? t("y_round_last_s", { n: e.school }) : variantName(e.game, e.vi), 2600); sound.big(); world.setNight(e.game === "night" ? 1 : 0); world.setCamera(e.game === "tug" ? [7, 18, 36] : [0, 44, 56], e.game === "tug" ? [7, 1, 5] : [0, 0, 2]); }
       if (e.k === "surface") world.ripple(e.x, e.y, "#ffd34d", 5, 1.5);
       if (e.k === "shoal") { world.floatText(e.x, e.y, `${nameOf(e.seat)} +${e.n}`, colorOf(e.seat)); world.netDrop(e.x, e.y, 55, colorOf(e.seat), .8); if (e.seat === me()) sound.catch(e.n); }
-      if (e.k === "miss") { world.floatText(e.x, e.y, "missed", "#b9b0c6"); sound.miss(); }
+      if (e.k === "miss") { world.floatText(e.x, e.y, t("y_missed"), "#b9b0c6"); sound.miss(); }
       if (e.k === "sank") world.ripple(e.x, e.y, "#5b6f88", 3, .8);
-      if (e.k === "gate") { world.floatText(e.x, e.y, "+1 gate", colorOf(e.seat)); if (e.seat === me()) sound.coin(); }
-      if (e.k === "koiCaught") { world.floatText(e.x, e.y, `${nameOf(e.seat)} caught the golden carp! +5`, "#ffd34d"); world.ripple(e.x, e.y, "#ffd34d", 8); if (e.seat === me()) { sound.big(); world.shake(); } }
+      if (e.k === "gate") { world.floatText(e.x, e.y, t("y_gate"), colorOf(e.seat)); if (e.seat === me()) sound.coin(); }
+      if (e.k === "koiCaught") { world.floatText(e.x, e.y, t("y_koi_caught", { name: nameOf(e.seat) }), "#ffd34d"); world.ripple(e.x, e.y, "#ffd34d", 8); if (e.seat === me()) { sound.big(); world.shake(); } }
       if (e.k === "reel" && e.seat === me()) e.ok ? sound.coin() : sound.miss();
-      if (e.k === "landed") { ui.banner(`${nameOf(e.seat)} landed the big fish`, `+${e.n} coins`); if (e.seat === me()) sound.big(); }
+      if (e.k === "landed") { ui.banner(t("y_landed", { name: nameOf(e.seat) }), t("y_landed_s", { n: e.n })); if (e.seat === me()) sound.big(); }
       if (e.k === "netted") { world.netDrop(e.x, e.y, 40, colorOf(e.seat), .7); if (e.n) world.floatText(e.x, e.y, `+${e.n}`, colorOf(e.seat)); if (e.seat === me()) e.n ? sound.catch(e.n) : sound.miss(); }
-      if (e.k === "drop") { world.ripple(e.x, e.y, "#ffb45a", 6); ui.banner(`${nameOf(e.seat)} dropped a lantern`, "it lights that spot for everyone for 10 s"); }
-      if (e.k === "lastNet") { ui.banner(e.broke ? "The school broke!" : "Every net came up full", `${e.picks.map((p, i) => `${nameOf(i)} ${p ?? "–"}`).join(" · ")} (school ${e.school})`, 4500); e.broke ? (sound.hit(), world.shake()) : sound.big(); }
+      if (e.k === "drop") { world.ripple(e.x, e.y, "#ffb45a", 6); ui.banner(t("y_dropped", { name: nameOf(e.seat) }), t("y_dropped_s")); }
+      if (e.k === "lastNet") { ui.banner(e.broke ? t("y_broke") : t("y_full"), `${e.picks.map((p, i) => `${nameOf(i)} ${p ?? "–"}`).join(" · ")} ${t("y_school", { n: e.school })}`, 4500); e.broke ? (sound.hit(), world.shake()) : sound.big(); }
       if (e.k === "standings") sound.horn();
-      if (e.k === "lastWarning") ui.banner("Before the last round", `the lake started with ${e.started} fish and has ${e.lake} left: Last Net's school is ${e.school}`, 5000);
-      if (e.k === "pick") ui.banner(e.picker === me() ? "You are last: you choose" : `${nameOf(e.picker)} is choosing…`, `how ${e.next} is played`, 2400);
-      if (e.k === "shop") ui.banner("Shop: 8 seconds", `next: ${e.next} · ${e.variant}`);
-      if (e.k === "bought" && e.seat === me()) { ui.banner(`${SHOP[e.item][0]} bought`, SHOP[e.item][2]); sound.coin(); }
+      if (e.k === "lastWarning") ui.banner(t("y_before_last"), t("y_before_last_s", { start: e.started, left: e.lake, n: e.school }), 5000);
+      if (e.k === "pick") ui.banner(e.picker === me() ? t("y_you_last") : t("y_choosing", { name: nameOf(e.picker) }), t("y_how_played", { name: roundName(e.nextGame) }), 2400);
+      if (e.k === "shop") ui.banner(t("y_shop_b"), t("y_shop_b_s", { name: roundName(e.nextGame), variant: variantName(e.nextGame, e.vi) }));
+      if (e.k === "bought" && e.seat === me()) { ui.banner(t("r_bought", { up: item(e.item) }), itemS(e.item)); sound.coin(); }
       if (e.k === "coins" && e.seat === me()) ui.did("scored");
       if (e.k === "end") sound.horn();
     }
   }
 
   function hudFrom(f) {
-    ui.setClock(f.left, f.phase === "round" ? `Round ${f.round}` : f.phase === "shop" ? "Shop" : "");
-    ui.goalEl.textContent = f.round >= 5 ? "Most coins wins · Last Net pays double" : "Most coins after five rounds wins";
-    $("y-title").textContent = `Round ${Math.min(f.round, 5)} of 5 · ${f.name}`;
-    $("y-how").textContent = f.phase === "round" ? `${HOW[f.game]} (${f.variant})` : f.phase === "shop" ? "Spend coins on the next round, or save them." : "";
+    ui.setClock(f.left, f.phase === "round" ? t("y_clock_round", { n: f.round }) : f.phase === "shop" ? t("y_clock_shop") : "");
+    ui.goalEl.textContent = f.round >= 5 ? t("y_goal_last") : t("y_goal");
+    $("y-title").textContent = t("y_title_name", { n: Math.min(f.round, 5), name: roundName(f.game) });
+    $("y-how").textContent = f.phase === "round" ? `${t(`y_how_${f.game}`)} (${variantName(f.game, f.vi)})` : f.phase === "shop" ? t("y_shop_how") : "";
     $("y-rounds").innerHTML = ["1", "2", "3", "4", "5"].map((n, i) => `<span class="round" aria-pressed="${i + 1 === f.round}">${n}</span>`).join("");
     $("y-board").innerHTML = [...f.coins.keys()].sort((a, b) => f.coins[b] - f.coins[a]).map((s) => `<div><span><span class="swatch" style="background:${colorOf(s)}"></span>${ui.esc(nameOf(s))}</span><b>${f.coins[s]}</b></div>`).join("");
-    $("y-lake").textContent = `The lake: ${f.lake} fish (started ${f.lakeStart}). Fish taken now are gone for later rounds.`;
+    $("y-lake").textContent = t("y_lake", { n: f.lake, start: f.lakeStart });
     panel(f);
     const tug = f.phase === "round" && f.game === "tug" && me() !== null;
     tugBar.hidden = !tug;
@@ -124,11 +120,11 @@ export function mount({ world, sound, ui, send, view }) {
   function coach() {
     if (!cur || cur.phase !== "round") return;
     ui.coach([
-      ["tap", "Tap the flashing school!", () => cur.game === "shoal"],
-      ["steer", "Tap the water to steer", () => cur.game === "koi" || cur.game === "night"],
-      ["reel", "Tap REEL when the needle is in the green", () => cur.game === "tug"],
-      ["cast", "Fish in your light: CAST", () => cur.game === "night" && cur.f.length > 0],
-      ["pick", "Pick a net size, in secret", () => cur.game === "last"],
+      ["tap", t("y_coach_tap"), () => cur.game === "shoal"],
+      ["steer", t("y_coach_steer"), () => cur.game === "koi" || cur.game === "night"],
+      ["reel", t("y_coach_reel"), () => cur.game === "tug"],
+      ["cast", t("y_coach_cast"), () => cur.game === "night" && cur.f.length > 0],
+      ["pick", t("y_coach_pick"), () => cur.game === "last"],
     ]);
   }
 

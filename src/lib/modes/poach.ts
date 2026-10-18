@@ -33,7 +33,7 @@ export interface PoachSim {
   rng: () => number; n: number; roles: Role[]; out: boolean[]; boats: Boat[]; fish: Fish[];
   fryStart: number; fryDead: number; health: number; quota: number; exiledInnocents: number;
   bayLoss: Record<Bay, number>; buoys: { seat: number; day: number; x: number; y: number; passed: number[] }[];
-  said: { seat: number; text: string; day: number }[]; votes: (number | null | undefined)[];
+  said: { seat: number; text: string; day: number; p: Phrase["p"]; bay?: string; target?: number; fry?: number }[]; votes: (number | null | undefined)[];
   history: { day: number; exiled: number | null; role: Role | null }[]; winner: "fishers" | "poacher" | null;
 }
 
@@ -142,7 +142,9 @@ function apply(s: PoachSim, seat: number, i: PoachInput, ev: GameEvent[]): void 
   if (i.k === "say") {
     const name = (t: number) => `{seat${t}}`;
     const text = i.p === "was" ? `I was in ${i.bay}.` : i.p === "inspected" ? `I inspected ${name(i.target)}: ${i.fry ? `${i.fry} fry` : "clean"}.` : i.p === "suspect" ? `I suspect ${name(i.target)}.` : i.p === "vouch" ? `I vouch for ${name(i.target)}.` : "Skip.";
-    s.said.push({ seat, text, day: s.day });
+    // the page words the phrase from its code, in each viewer's language (DESIGN.md "Languages")
+    const code = i.p === "was" ? { bay: i.bay.split(" ")[0].toLowerCase() } : i.p === "inspected" ? { target: i.target, fry: i.fry } : i.p === "suspect" || i.p === "vouch" ? { target: i.target } : {};
+    s.said.push({ seat, text, day: s.day, p: i.p, ...code });
     ev.push({ k: "said", seat, text });
   }
   if (i.k === "vote" && s.votes[seat] === undefined) { s.votes[seat] = i.target; ev.push({ k: "voted", seat }); }
@@ -302,7 +304,7 @@ function frameFor(s: PoachSim, seat: number) {
     b: s.boats.map((b) => [b.seat, Math.round(b.x), Math.round(b.y), Math.round(b.h * 100), s.out[b.seat] ? 1 : 0]),
     f: s.phase === "day" ? s.fish.map((f) => [Math.round(f.x), Math.round(f.y), Math.round(f.h * 100), f.adult ? 1 : 0]) : [],
     buoys: s.buoys.filter((u) => u.day === s.day).map((u) => ({ seat: u.seat, x: u.x, y: u.y, passed: s.phase === "day" ? [] : u.passed })),
-    said: s.said.filter((x) => x.day === s.day),
+    said: s.said.filter((x) => x.day === s.day).map(({ text: _text, ...code }) => code),
     voted: s.phase === "meeting" ? s.votes.map((v) => v !== undefined) : [], canSkip: s.day < Q.DAYS,
     history: s.history,
   };
@@ -318,9 +320,9 @@ function results(s: PoachSim): Results {
   const sharp = [...s.boats].sort((a, b) => b.inspections - a.inspections)[0];
   const exiled = s.history.filter((h) => h.exiled !== null);
   const highlights: Highlight[] = [
-    { title: "The poacher", text: `{name} poached with ${p.reduce((n, b) => n + b.fineCasts, 0)} fine-net casts`, seat: p[0].seat },
-    { title: "Sharpest eyes", text: sharp.inspections ? `{name} looked in ${sharp.inspections} baskets` : "nobody inspected a basket", seat: sharp.seat },
-    { title: "Closest call", text: exiled.length ? `day ${exiled[0].day}: the village exiled a ${exiled[0].role}` : `the lake ended at ${Math.round(s.health)}% (the line is ${Q.HEALTH_LINE}%)`, seat: exiled[0]?.exiled ?? p[0].seat },
+    { title: "The poacher", text: `{name} poached with ${p.reduce((n, b) => n + b.fineCasts, 0)} fine-net casts`, seat: p[0].seat, tkey: "hl_poach_poacher_t", key: "hl_poach_poacher", vars: { n: p.reduce((n, b) => n + b.fineCasts, 0) } },
+    { title: "Sharpest eyes", text: sharp.inspections ? `{name} looked in ${sharp.inspections} baskets` : "nobody inspected a basket", seat: sharp.seat, tkey: "hl_poach_eyes_t", key: sharp.inspections ? "hl_poach_eyes" : "hl_poach_eyes_none", vars: { n: sharp.inspections } },
+    { title: "Closest call", text: exiled.length ? `day ${exiled[0].day}: the village exiled a ${exiled[0].role}` : `the lake ended at ${Math.round(s.health)}% (the line is ${Q.HEALTH_LINE}%)`, seat: exiled[0]?.exiled ?? p[0].seat, tkey: "hl_poach_close_t", key: exiled.length ? "hl_poach_close" : "hl_poach_close_lake", vars: exiled.length ? { day: exiled[0].day, role: `@g_role_${exiled[0].role}` } : { health: Math.round(s.health), line: Q.HEALTH_LINE } },
   ];
   const adults = s.fish.filter((f) => f.adult).length, fry = s.fish.length - adults;
   return { seats, lakeLeft: Math.round((adults + fry * 0.5) * 220 / (Q.FISH + Q.FRY * 0.5)), highlights, winner: s.winner, roles: s.roles, health: s.health };

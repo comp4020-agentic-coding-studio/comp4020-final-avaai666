@@ -11,6 +11,7 @@ import type { GameStore } from "./lib/game-store.ts";
 import { PLAY_INPUT_RATE } from "./lib/game-constants.ts";
 import { log } from "./log.ts";
 import { lobbyPage, noRoomPage, roomPage } from "./play-pages.ts";
+import { langFrom } from "./lib/i18n.ts";
 
 const CODE = /^\/play\/([BCDFGHJKLMNPQRSTVWXZ]{4})(\/join|\/start|\/stop|\/mode|\/in|\/events|\/summary\.json)?$/;
 const COOKIE_MAX_AGE_S = 365 * 24 * 60 * 60;
@@ -81,7 +82,7 @@ export function createPlayRoutes(hub: GameHub, store: GameStore, staticDir: stri
     if (sub === undefined && method === "GET") {
       const view = hub.view(code, who?.seat ?? null);
       if (!view) { sendHtml(res, 404, noRoomPage(code)); return true; }
-      sendHtml(res, 200, roomPage(view));
+      sendHtml(res, 200, roomPage(view, undefined, langFrom(req.headers.cookie)));
       return true;
     }
     if (sub === "/join" && method === "POST") {
@@ -94,7 +95,7 @@ export function createPlayRoutes(hub: GameHub, store: GameStore, staticDir: stri
       }
       log({ event: "refused", action: "play_join", room: code, reason: r.reason });
       if (r.reason === "no_room") { redirect(res, "/play"); return true; }
-      sendHtml(res, 409, roomPage(hub.view(code, null)!, JOIN_MESSAGES[r.reason] ?? r.reason));
+      sendHtml(res, 409, roomPage(hub.view(code, null)!, JOIN_MESSAGES[r.reason] ?? r.reason, langFrom(req.headers.cookie)));
       return true;
     }
     if (sub === "/summary.json" && method === "GET") {

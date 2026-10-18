@@ -9,19 +9,24 @@ import { CREW, portrait } from "./art.js";
 const boot = JSON.parse(document.getElementById("boot").textContent);
 const cards = boot.cards;
 let view = boot.view;
+// every word comes from the dictionary the server embedded for this page's
+// language (src/lib/i18n.ts); "@key" vars are themselves words
+const words = boot.words;
+const t = (key, vars = {}) => (words[key] ?? key).replace(/\{(\w+)\}/g, (m, k) => (k in vars ? (String(vars[k]).startsWith("@") ? t(String(vars[k]).slice(1)) : String(vars[k])) : m));
+// a seat's name: a bot's is its character's, worded here; a person's is theirs
+const seatName = (s) => (!s ? null : s.bot ? t("bot_suffix", { name: t(`c_${s.character}`) }) : s.name);
 const code = view.code;
 const $ = (id) => document.getElementById(id);
 const stage = $("stage"), overlay = $("overlay"), hud = $("hud"), coachEl = $("coach"), bannerEl = $("banner");
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const crewOf = (id) => CREW.find((c) => c.id === id) ?? CREW[0];
 const cardOf = (id) => cards.find((c) => c.id === id);
-const ICON = { "Tap the water": "👆", "Tap": "👆", "Tap a hex": "⬡", "Pick a card": "🂠", "Tide": "🌊", "SHOP": "🛒", "PICK": "🤫", "DASH": "💨", "BUOY": "🎈", "Stay beside a boat": "👀" };
-const iconFor = (label) => ICON[label] ?? (label.startsWith("CAST") ? "🕸" : "•");
+const ICON = { rush: ["👆", "🕸", "💨"], poach: ["👆", "👀", "🎈"], party: ["👆", "🛒", "🤫"], hold: ["🂠", "⬡", "🌊"] };
 
 const world = createWorld($("gl"), stage);
-const sound = createSound($("sound"));
+const sound = createSound($("sound"), { on: t("g_sound_on"), off: t("g_sound_off") });
 const send = (body) => fetch(`/play/${code}/in`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), keepalive: true })
-  .then((r) => { if (r.status === 429) banner("Slow down", "too many inputs a second"); return r.json(); }).catch(() => ({ ok: false, reason: "offline" }));
+  .then((r) => { if (r.status === 429) banner(t("g_slow"), t("g_slow_s")); return r.json(); }).catch(() => ({ ok: false, reason: "offline" }));
 const post = (path, body) => fetch(`/play/${code}/${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json()).catch(() => ({ ok: false, reason: "offline" }));
 
 // ---- shared HUD pieces (C3, C4) ----
@@ -47,14 +52,14 @@ function coach(list) {
 const did = (id) => coachState.done.add(id);
 // a mark that matters later (after the first 20 s) can open the coach again, briefly
 const rearm = (ms = 8000) => { coachState.until = Math.max(coachState.until, performance.now() + ms); };
-const ui = { hud, banner, setClock, coach, did, rearm, esc, crewOf, portrait, overlay, stage, goalEl, sound };
+const ui = { hud, banner, setClock, coach, did, rearm, esc, crewOf, portrait, overlay, stage, goalEl, sound, t, seatName };
 
 // ---- phones: the HUD folds to one line; a tap opens it ----
 const toggle = $("hudtoggle");
-toggle.addEventListener("click", () => { const open = !document.body.classList.contains("hud-open"); document.body.classList.toggle("hud-open", open); toggle.setAttribute("aria-expanded", String(open)); toggle.textContent = open ? "Close ▴" : "Details ▾"; });
+toggle.addEventListener("click", () => { const open = !document.body.classList.contains("hud-open"); document.body.classList.toggle("hud-open", open); toggle.setAttribute("aria-expanded", String(open)); toggle.textContent = open ? t("g_close") : t("g_details"); });
 // ---- stop match: only the room's first player, only during a match ----
 const stopBtn = $("stopbtn");
-stopBtn.addEventListener("click", async () => { if (confirm("Stop this match for everyone? Nothing will be scored.")) { const r = await post("stop", {}); if (!r.ok) banner("Could not stop", r.reason); } });
+stopBtn.addEventListener("click", async () => { if (confirm(t("g_stop_confirm"))) { const r = await post("stop", {}); if (!r.ok) banner(t("g_stop_fail"), r.reason); } });
 const isFirst = () => view.me !== null && view.players[0]?.seat === view.me;
 
 // ---- the mode script ----
@@ -71,13 +76,13 @@ async function loadMode(id) {
 }
 
 // ---- overlays ----
-function whoHtml(players) { return `<div class="who">${players.map((p) => `<span class="p">${portrait(p.character, p.name)}${esc(p.name)}</span>`).join("") || "<small>Nobody yet</small>"}</div>`; }
+function whoHtml(players) { return `<div class="who">${players.map((p) => `<span class="p">${portrait(p.character, p.name)}${esc(p.name)}</span>`).join("") || `<small>${t("g_nobody")}</small>`}</div>`; }
 function lakeHtml() {
   const l = view.lake;
-  return `<div class="lakebar ${l.died ? "dead" : ""}"><span>${l.died ? "This lake died. The next match starts a new lake." : "This room's lake remembers:"}</span><div class="bar"><i style="width:${Math.min(100, l.fish / 2.2)}%"></i></div><b>${l.fish} fish</b></div>`;
+  return `<div class="lakebar ${l.died ? "dead" : ""}"><span>${l.died ? t("g_lake_died") : t("g_lake_remembers")}</span><div class="bar"><i style="width:${Math.min(100, l.fish / 2.2)}%"></i></div><b>${t("room_fish_n", { n: l.fish })}</b></div>`;
 }
 function switchHtml() {
-  return `<div><h4 class="section-h">Change game</h4><div class="switch">${cards.map((c) => `<button type="button" data-mode="${c.id}" aria-pressed="${c.id === view.mode}">${esc(c.name)} ${view.ready.includes(c.id) ? "" : `<small>coming ${esc(c.due)}</small>`}</button>`).join("")}</div></div>`;
+  return `<div><h4 class="section-h">${t("g_change")}</h4><div class="switch">${cards.map((c) => `<button type="button" data-mode="${c.id}" aria-pressed="${c.id === view.mode}">${esc(t(`${c.id}_name`))} ${view.ready.includes(c.id) ? "" : `<small>${t("coming_short", { date: esc(c.due) })}</small>`}</button>`).join("")}</div></div>`;
 }
 function startHtml(again) {
   const c = cardOf(view.mode), ready = view.ready.includes(view.mode);
@@ -85,21 +90,21 @@ function startHtml(again) {
   const botsDefault = n < 2;
   const can = view.me !== null;
   return `<div class="row-btns">${can ? (ready
-      ? `<button class="btn primary" id="startbtn" type="button">${again ? "Rematch" : "Start"}</button><label class="check"><input type="checkbox" id="bots" ${botsDefault ? "checked" : ""}/> bots fill empty seats</label>`
-      : `<span class="status soon">${esc(c.name)} is coming: ${esc(c.due)}. Pick a game that is ready.</span>`)
-    : `<span class="note">Join to play.</span>`}</div>`;
+      ? `<button class="btn primary" id="startbtn" type="button">${again ? t("g_rematch") : t("start")}</button><label class="check"><input type="checkbox" id="bots" ${botsDefault ? "checked" : ""}/> ${t("g_bots")}</label>`
+      : `<span class="status soon">${esc(t("g_coming", { game: t(`${c.id}_name`), date: c.due }))}</span>`)
+    : `<span class="note">${t("join_to_play")}</span>`}</div>`;
 }
 function cardHtml() {
   const c = cardOf(view.mode);
   return `<section class="sheet" id="c1">
-    <h2>${esc(c.name)}<span lang="zh">${c.zh}</span></h2>
-    <p class="goal"><b>How you win</b>${esc(c.goal)}</p>
-    <div class="icons3">${c.actions.map(([a, b]) => `<div><span class="ic" aria-hidden="true">${iconFor(a)}</span><b>${esc(a)}</b><small>${esc(b)}</small></div>`).join("")}</div>
-    <p class="choice"><b>The choice that matters:</b> ${esc(c.choice)}</p>
-    ${c.extra ? `<p class="small">${esc(c.extra)}</p>` : ""}
+    <h2>${esc(t(`${c.id}_name`))}<span lang="${boot.lang === "zh" ? "en" : "zh"}">${esc(boot.other[`${c.id}_name`])}</span></h2>
+    <p class="goal"><b>${t("goal")}</b>${esc(t(`${c.id}_goal`))}</p>
+    <div class="icons3">${[1, 2, 3].map((n, i) => `<div><span class="ic" aria-hidden="true">${ICON[c.id][i]}</span><b>${esc(t(`${c.id}_a${n}`))}</b><small>${esc(t(`${c.id}_a${n}s`))}</small></div>`).join("")}</div>
+    <p class="choice"><b>${t("the_choice")}</b> ${esc(t(`${c.id}_choice`))}</p>
+    ${c.id === "rush" ? `<p class="small">${esc(t("rush_extra"))}</p>` : ""}
     ${whoHtml(view.players)}
     ${lakeHtml()}
-    ${view.note ? `<p class="toast">${esc(view.note)}</p>` : ""}
+    ${view.note ? `<p class="toast">${esc(t(`g_note_${view.note}`))}</p>` : ""}
     ${startHtml(false)}
     <p class="toast" id="starterr" role="alert"></p>
     ${switchHtml()}
@@ -109,14 +114,18 @@ function resultsHtml() {
   const r = view.results;
   const seats = [...r.seats].sort((a, b) => a.place - b.place || b.score - a.score);
   const mine = seats.find((s) => s.seat === view.mySeat);
-  const unit = r.mode === "party" ? "coins" : r.mode === "hold" ? "points" : r.mode === "poach" ? "" : "fish";
-  const title = r.mode === "poach" ? (r.extra?.winner === "fishers" ? "The fishers win" : "The poacher wins") : mine ? (mine.place === 1 ? "You win!" : `You came ${["", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th"][mine.place]}`) : "Results";
+  const unit = r.mode === "poach" ? "" : t(`g_unit_${r.mode}`);
+  const place = (n) => (n <= 3 ? t(`g_place${n}`) : t("g_placeN", { n }));
+  const title = r.mode === "poach" ? (r.extra?.winner === "fishers" ? t("g_fishers_win") : t("g_poacher_wins")) : mine ? (mine.place === 1 ? t("g_you_win") : t("g_you_came", { place: place(mine.place) })) : t("g_results");
+  const nameOfSeat = (s) => seatName({ ...s, bot: s.bot ? "bot" : null }) ?? s.name;
+  // a highlight sent as a code is worded here; one stored before v4.0 has only its English
+  const hl = (h) => h.key ? [t(h.tkey), t(h.key, { ...h.vars, name: nameOfSeat(seats.find((s) => s.seat === h.seat) ?? { name: "" }) })] : [h.title, h.text];
   return `<section class="sheet" id="results">
     <h2>${esc(title)}</h2>
-    ${r.mode === "poach" && r.extra?.roles ? `<p class="roles">${seats.map((s) => `<span>${esc(s.name)}: <b>${esc(r.extra.roles[s.seat])}</b>${s.detail?.quota !== undefined ? ` · ${s.detail.quota} for the quota` : ""}</span>`).join("")}</p>` : ""}
-    <div class="podium">${seats.map((s) => `<div class="pl ${s.place === 1 ? "first" : ""}">${portrait(s.character, s.name)}<span class="place">${s.place === 1 ? "1st" : s.place === 2 ? "2nd" : s.place === 3 ? "3rd" : s.place + "th"}</span><b>${esc(s.name)}${s.seat === view.mySeat ? " (you)" : ""}</b>${unit || r.mode !== "poach" ? `<span class="sc">${s.score}</span> <small>${unit}</small>` : `<small>${s.score ? "won" : "lost"}</small>`}</div>`).join("")}</div>
-    <div class="highs">${r.highlights.map((h) => `<div><b>${esc(h.title)}</b>${esc(h.text)}</div>`).join("")}</div>
-    <div class="lakebar"><span>The lake: ${r.lakeBefore} fish before, ${r.lakeAfter} left.</span></div>
+    ${r.mode === "poach" && r.extra?.roles ? `<p class="roles">${seats.map((s) => `<span>${esc(nameOfSeat(s))}: <b>${esc(t(`g_role_${r.extra.roles[s.seat]}`))}</b>${s.detail?.quota !== undefined ? ` · ${t("g_for_quota", { n: s.detail.quota })}` : ""}</span>`).join("")}</p>` : ""}
+    <div class="podium">${seats.map((s) => `<div class="pl ${s.place === 1 ? "first" : ""}">${portrait(s.character, s.name)}<span class="place">${place(s.place)}</span><b>${esc(nameOfSeat(s))}${s.seat === view.mySeat ? t("g_you_tag") : ""}</b>${unit || r.mode !== "poach" ? `<span class="sc">${s.score}</span> <small>${unit}</small>` : `<small>${s.score ? t("g_won") : t("g_lost")}</small>`}</div>`).join("")}</div>
+    <div class="highs">${r.highlights.map((h) => { const [a, b] = hl(h); return `<div><b>${esc(a)}</b>${esc(b)}</div>`; }).join("")}</div>
+    <div class="lakebar"><span>${t("g_lake_line", { before: r.lakeBefore, after: r.lakeAfter })}</span></div>
     ${lakeHtml()}
     ${startHtml(true)}
     <p class="toast" id="starterr" role="alert"></p>
@@ -126,18 +135,18 @@ function resultsHtml() {
 function bindOverlay() {
   $("startbtn")?.addEventListener("click", async () => {
     const r = await post("start", { bots: $("bots")?.checked === true });
-    if (!r.ok) $("starterr").textContent = { need_players: "This game needs more players: tick \"bots fill empty seats\", or wait for friends.", coming_soon: "This game is not ready yet.", busy: "The server is full right now. Try again in a minute.", playing: "A match is already running." }[r.reason] ?? r.reason;
+    if (!r.ok) $("starterr").textContent = { need_players: t("g_need_players"), coming_soon: t("g_coming_soon"), busy: t("g_busy"), playing: t("g_playing") }[r.reason] ?? r.reason;
   });
   overlay.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", async () => {
     const r = await post("mode", { mode: b.dataset.mode });
-    if (!r.ok && $("starterr")) $("starterr").textContent = r.reason === "not_in_room" ? "Join to change the game." : r.reason;
+    if (!r.ok && $("starterr")) $("starterr").textContent = r.reason === "not_in_room" ? t("g_join_change") : r.reason;
   }));
 }
 
 // ---- the stream ----
 let countdownT = 0;
 function showRoom() {
-  goalEl.textContent = cardOf(view.mode).hud;
+  goalEl.textContent = t(`${view.mode}_hud`);
   stopBtn.hidden = !(view.state === "play" && isFirst());
   if (view.me === null && document.querySelector(".joinform")) { overlay.innerHTML = ""; return; }
   if (view.state === "lobby") { overlay.innerHTML = cardHtml(); bindOverlay(); setClock(0); clockEl.textContent = ""; }
@@ -158,8 +167,8 @@ function countdown(startedAt, serverNow) {
 const conn = $("conn");
 function connect() {
   const es = new EventSource(`/play/${code}/events`);
-  es.onopen = () => { conn.textContent = "live"; conn.classList.add("live"); };
-  es.onerror = () => { conn.textContent = "reconnecting…"; conn.classList.remove("live"); };
+  es.onopen = () => { conn.textContent = t("g_live"); conn.classList.add("live"); };
+  es.onerror = () => { conn.textContent = t("g_reconnecting"); conn.classList.remove("live"); };
   es.addEventListener("room", async (e) => {
     const was = view.mode;
     view = JSON.parse(e.data);

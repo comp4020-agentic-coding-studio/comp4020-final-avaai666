@@ -402,9 +402,9 @@ function results(s: RushSim): Results {
   const loss = [...s.boats].sort((a, b) => b.stats.lost - a.stats.lost)[0];
   const close = [...s.boats].sort((a, b) => a.stats.closest - b.stats.closest)[0];
   const highlights: Highlight[] = [
-    { title: "Best trip", text: best.stats.bestTrip ? `{name}: ${best.stats.bestTrip} fish home at once` : "nobody got a trip home", seat: best.seat },
-    { title: "Biggest loss", text: loss.stats.lost ? `{name}: lost ${loss.stats.lost} (rams and the horn)` : "nobody lost a fish", seat: loss.seat },
-    { title: "Closest call", text: close.stats.closest < 99 ? `{name}: a dash came within ${close.stats.closest} with a loaded hold` : "nobody was chased", seat: close.seat },
+    { title: "Best trip", text: best.stats.bestTrip ? `{name}: ${best.stats.bestTrip} fish home at once` : "nobody got a trip home", seat: best.seat, tkey: "hl_rush_best_t", key: best.stats.bestTrip ? "hl_rush_best" : "hl_rush_best_none", vars: { n: best.stats.bestTrip } },
+    { title: "Biggest loss", text: loss.stats.lost ? `{name}: lost ${loss.stats.lost} (rams and the horn)` : "nobody lost a fish", seat: loss.seat, tkey: "hl_rush_loss_t", key: loss.stats.lost ? "hl_rush_loss" : "hl_rush_loss_none", vars: { n: loss.stats.lost } },
+    { title: "Closest call", text: close.stats.closest < 99 ? `{name}: a dash came within ${close.stats.closest} with a loaded hold` : "nobody was chased", seat: close.seat, tkey: "hl_rush_close_t", key: close.stats.closest < 99 ? "hl_rush_close" : "hl_rush_close_none", vars: { n: close.stats.closest } },
   ];
   return { seats, lakeLeft: s.fish.length + s.loose.filter((l) => l.value === 1).length, highlights };
 }

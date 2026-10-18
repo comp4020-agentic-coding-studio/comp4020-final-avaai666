@@ -4,6 +4,7 @@
 // the choice that matters) are the C1 card's words too.
 import { esc } from "./pages.ts";
 import type { RoomView } from "./lib/game-hub.ts";
+import { DICT, type Lang } from "./lib/i18n.ts";
 import { CREW, ICONS, portrait } from "./static/play/art.js";
 
 export interface ModeCard {
@@ -111,7 +112,7 @@ export function noRoomPage(code: string): string {
   return page("No such room", `<main class="solo"><h1>No room ${esc(code)}</h1><p><a class="btn primary" href="/play">Back to the lobby</a></p></main>`, "play", "");
 }
 
-export function roomPage(view: RoomView, error?: string): string {
+export function roomPage(view: RoomView, error?: string, lang: Lang = "en"): string {
   const crew = CREW;
   const taken = new Set(view.players.map((p) => p.character));
   const firstFree = crew.find((c) => !taken.has(c.id as RoomView["players"][number]["character"]))?.id ?? "mei";
@@ -134,5 +135,5 @@ export function roomPage(view: RoomView, error?: string): string {
   </div>
   ${join}
 </div>
-<script type="application/json" id="boot">${JSON.stringify({ view, cards: MODE_CARDS }).replace(/</g, "\\u003c")}</script>`, "play in-room", `<script type="module" src="/static/play/room.js"></script>`);
+<script type="application/json" id="boot">${JSON.stringify({ view, cards: MODE_CARDS, lang, words: DICT[lang], other: Object.fromEntries(MODE_CARDS.map((m) => [`${m.id}_name`, DICT[lang === "en" ? "zh" : "en"][`${m.id}_name`]])) }).replace(/</g, "\\u003c")}</script>`, "play in-room", `<script type="module" src="/static/play/room.js"></script>`);
 }

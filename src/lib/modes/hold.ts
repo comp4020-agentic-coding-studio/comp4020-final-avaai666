@@ -222,9 +222,9 @@ function results(s: HoldSim): Results {
   const seats = s.harvest.map((h, p) => ({ seat: p, score: score[p], place: rank.indexOf(p) + 1, firstScoreS: s.firstScoreAt[p], tiles: held[p], harvest: h }));
   const robbed = s.stolen.indexOf(Math.max(...s.stolen));
   const highlights: Highlight[] = [
-    { title: "Best tide", text: s.bestTide ? `{name}: ${s.bestTide.n} fish in one tide` : "no net caught anything", seat: s.bestTide?.seat ?? 0 },
-    { title: "Biggest loss", text: s.stolen[robbed] ? `{name}: cormorants took ${s.stolen[robbed]}` : "no cormorant struck", seat: robbed },
-    { title: "Closest call", text: rank.length > 1 ? `{name} led by ${score[rank[0]] - score[rank[1]]}${score[rank[0]] === score[rank[1]] ? " (tie broken by harvest)" : ""}` : "a match of one", seat: rank[0] },
+    { title: "Best tide", text: s.bestTide ? `{name}: ${s.bestTide.n} fish in one tide` : "no net caught anything", seat: s.bestTide?.seat ?? 0, tkey: "hl_hold_best_t", key: s.bestTide ? "hl_hold_best" : "hl_hold_best_none", vars: { n: s.bestTide?.n ?? 0 } },
+    { title: "Biggest loss", text: s.stolen[robbed] ? `{name}: cormorants took ${s.stolen[robbed]}` : "no cormorant struck", seat: robbed, tkey: "hl_hold_loss_t", key: s.stolen[robbed] ? "hl_hold_loss" : "hl_hold_loss_none", vars: { n: s.stolen[robbed] } },
+    { title: "Closest call", text: rank.length > 1 ? `{name} led by ${score[rank[0]] - score[rank[1]]}${score[rank[0]] === score[rank[1]] ? " (tie broken by harvest)" : ""}` : "a match of one", seat: rank[0], tkey: "hl_hold_close_t", key: rank.length > 1 ? (score[rank[0]] === score[rank[1]] ? "hl_hold_close_tie" : "hl_hold_close") : "hl_hold_close_none", vars: { n: rank.length > 1 ? score[rank[0]] - score[rank[1]] : 0 } },
   ];
   return { seats, lakeLeft: s.schools.reduce((n, sc) => n + sc.fish, 0), highlights };
 }

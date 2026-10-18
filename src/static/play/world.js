@@ -335,10 +335,10 @@ export function createWorld(canvas, stage, opts = {}) {
 }
 
 // ---- sounds: a few tones, made here; off until the player turns them on ----
-export function createSound(button) {
+export function createSound(button, words = { on: "sound on", off: "sound off" }) {
   let ac = null, on = false;
   try { on = localStorage.getItem("play-sound") === "on"; } catch {}
-  const label = () => { if (button) button.textContent = on ? "sound on" : "sound off"; };
+  const label = () => { if (button) button.textContent = on ? words.on : words.off; };
   label();
   button?.addEventListener("click", () => { on = !on; try { localStorage.setItem("play-sound", on ? "on" : "off"); } catch {} if (on && !ac) ac = new AudioContext(); label(); });
   const ok = () => { if (!on) return false; if (!ac) { try { ac = new AudioContext(); } catch { return false; } } return true; };

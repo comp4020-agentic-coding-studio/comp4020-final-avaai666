@@ -62,7 +62,7 @@ export function createGameHub(store: GameStore, modes: Record<string, AnyMode>, 
     const room: Room = { id: r.id, code, state: "lobby", match: null, streams: new Set(), last: null, note: null };
     const lm = store.lastMatch(r.id);
     if (lm?.status === "done" && lm.summary) { room.state = "end"; room.last = lm; }
-    if (lm?.status === "interrupted") room.note = "The last match was interrupted by a server restart. Start again when you're ready.";
+    if (lm?.status === "interrupted") room.note = "interrupted"; // a code: the page words it (src/lib/i18n.ts g_note_*)
     rooms.set(code, room);
     return room;
   }
@@ -166,7 +166,7 @@ export function createGameHub(store: GameStore, modes: Record<string, AnyMode>, 
         id, mode, sim, seed, seats, startedAt, tick: 0, queue: [], pending: [], humanSeat: new Map(humans.map((p, i) => [p.seat, i])),
         counts: seats.map(() => ({})), lakeBefore: lake.fish, rematchBy,
       };
-      room.state = "play"; room.note = lake.fresh ? "The last lake died. This is a new lake." : null;
+      room.state = "play"; room.note = lake.fresh ? "fresh" : null;
       broadcastRoom(room);
       for (const s of room.streams) send(s, "go", { startedAt, serverNow: now(), frame: frameFor(room.match, s) });
       return { ok: true };
@@ -192,7 +192,7 @@ export function createGameHub(store: GameStore, modes: Record<string, AnyMode>, 
       if (store.players(room.id)[0]?.seat !== seat) return { ok: false, reason: "not_first" };
       store.endMatch(room.match.id, now(), "interrupted", null, null);
       room.match = null; room.state = "lobby"; room.last = null;
-      room.note = "The match was stopped. Nothing was scored, and the lake is as it was.";
+      room.note = "stopped";
       broadcastRoom(room);
       return { ok: true };
     },

@@ -103,7 +103,7 @@ function startRound(s: PartySim, ev: GameEvent[]): void {
     s.drops = []; s.dropsLeft = s.coins.map(() => (s.variant === 1 ? 3 : 1));
   }
   if (g === "last") { s.school = Math.max(1, Math.round(s.lake * Q.SCHOOL_SHARE)); s.picks = s.coins.map(() => null); }
-  ev.push({ k: "round", n: s.round + 1, game: g, name: NAMES[g], variant: Q.VARIANTS[g][s.variant], school: g === "last" ? s.school : undefined });
+  ev.push({ k: "round", n: s.round + 1, game: g, name: NAMES[g], variant: Q.VARIANTS[g][s.variant], vi: s.variant, school: g === "last" ? s.school : undefined });
 }
 
 function endRound(s: PartySim, ev: GameEvent[]): void {
@@ -250,8 +250,8 @@ function step(s: PartySim, inputs: { seat: number; i: PartyInput }[]): GameEvent
   s.tick++; s.t = Math.round(s.tick * Q.DT * 1000) / 1000; s.phaseT = Math.round((s.phaseT + Q.DT) * 1000) / 1000;
   if (s.phase === "intro" && s.phaseT >= Q.INTRO_S - 1e-9) startRound(s, ev);
   else if (s.phase === "round") { play(s, ev); if (s.phaseT >= Q.ROUND_S - 1e-9 || (s.game === "last" && s.picks.every((p) => p !== null) && s.phaseT > 2)) endRound(s, ev); }
-  else if (s.phase === "standings" && s.phaseT >= Q.STANDINGS_S - 1e-9) { s.phase = "pick"; s.phaseT = 0; ev.push({ k: "pick", picker: s.picker, next: NAMES[s.order[s.round]] }); ev.push({ k: "choose", variants: Q.VARIANTS[s.order[s.round]], to: [s.picker] }); }
-  else if (s.phase === "pick" && s.phaseT >= Q.PICK_S - 1e-9) { s.phase = "shop"; s.phaseT = 0; ev.push({ k: "shop", picker: s.picker, next: NAMES[s.order[s.round]], variant: Q.VARIANTS[s.order[s.round]][s.variant] }); }
+  else if (s.phase === "standings" && s.phaseT >= Q.STANDINGS_S - 1e-9) { s.phase = "pick"; s.phaseT = 0; ev.push({ k: "pick", picker: s.picker, next: NAMES[s.order[s.round]], nextGame: s.order[s.round] }); ev.push({ k: "choose", variants: Q.VARIANTS[s.order[s.round]], to: [s.picker] }); }
+  else if (s.phase === "pick" && s.phaseT >= Q.PICK_S - 1e-9) { s.phase = "shop"; s.phaseT = 0; ev.push({ k: "shop", picker: s.picker, next: NAMES[s.order[s.round]], variant: Q.VARIANTS[s.order[s.round]][s.variant], nextGame: s.order[s.round], vi: s.variant }); }
   else if (s.phase === "shop" && s.phaseT >= Q.SHOP_S - 1e-9) startRound(s, ev);
   return ev;
 }
@@ -293,7 +293,7 @@ function frameFor(s: PartySim, seat: number) {
   const g = s.phase === "round" ? s.game : null;
   return {
     t: s.t, phase: s.phase, round: s.round + 1, game: s.order[Math.min(s.round, 4)], name: NAMES[s.order[Math.min(s.round, 4)]],
-    variant: Q.VARIANTS[s.order[Math.min(s.round, 4)]][s.variant],
+    variant: Q.VARIANTS[s.order[Math.min(s.round, 4)]][s.variant], vi: s.variant,
     // the choice goes only to the last-placed player; everyone else is told who is choosing
     variants: s.phase !== "pick" || me === s.picker ? Q.VARIANTS[s.order[Math.min(s.round, 4)]] : [], picking: s.phase === "pick" && me === s.picker,
     left: Math.max(0, (s.phase === "round" ? Q.ROUND_S : s.phase === "shop" ? Q.SHOP_S : s.phase === "standings" ? Q.STANDINGS_S : s.phase === "pick" ? Q.PICK_S : Q.INTRO_S) - s.phaseT),
@@ -319,9 +319,9 @@ function results(s: PartySim): Results {
   const close = [...seats].sort((a, b) => a.place - b.place || b.score - a.score);
   const gap = close.length > 1 ? close[0].score - close[1].score : 0;
   const highlights: Highlight[] = [
-    { title: "Best round", text: s.best ? `{name}: ${s.best.coins} coins in ${NAMES[s.best.game]}` : "nobody scored", seat: s.best?.seat ?? 0 },
-    { title: "Biggest loss", text: `{name} finished on ${s.coins[worst]} coins`, seat: worst },
-    { title: "Closest call", text: close.length > 1 ? `{name} won by ${gap} coin${gap === 1 ? "" : "s"}` : "a match of one", seat: close[0].seat },
+    { title: "Best round", text: s.best ? `{name}: ${s.best.coins} coins in ${NAMES[s.best.game]}` : "nobody scored", seat: s.best?.seat ?? 0, tkey: "hl_party_best_t", key: s.best ? "hl_party_best" : "hl_party_best_none", vars: s.best ? { n: s.best.coins, round: `@y_round_${s.best.game}` } : {} },
+    { title: "Biggest loss", text: `{name} finished on ${s.coins[worst]} coins`, seat: worst, tkey: "hl_party_loss_t", key: "hl_party_loss", vars: { n: s.coins[worst] } },
+    { title: "Closest call", text: close.length > 1 ? `{name} won by ${gap} coin${gap === 1 ? "" : "s"}` : "a match of one", seat: close[0].seat, tkey: "hl_party_close_t", key: close.length > 1 ? (gap === 1 ? "hl_party_close1" : "hl_party_close") : "hl_party_close_none", vars: { n: gap } },
   ];
   return { seats, lakeLeft: s.lake, highlights };
 }

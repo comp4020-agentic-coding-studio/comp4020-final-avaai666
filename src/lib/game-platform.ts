@@ -15,7 +15,9 @@ export interface LakeMemory { fish: number }
 export interface GameEvent { k: string; to?: number[]; [key: string]: unknown }
 
 export interface SeatResult { seat: number; score: number; place: number; firstScoreS: number | null; [key: string]: unknown }
-export interface Highlight { title: string; text: string; seat?: number }
+// title and text are the English words (kept in stored summaries); tkey, key and vars
+// let each page word a highlight in its own language (src/lib/i18n.ts)
+export interface Highlight { title: string; text: string; seat?: number; tkey?: string; key?: string; vars?: Record<string, string | number> }
 export interface Results { seats: SeatResult[]; lakeLeft: number; highlights: Highlight[]; [key: string]: unknown }
 
 export interface Mode<S, I> {
