@@ -16,7 +16,10 @@ const lines: MatchLine[] = [{ endedAt: Date.UTC(2026, 9, 19, 9, 14), mode: "rush
 const PAGES: [string, (lang: Lang) => string][] = [
   ["/", (lang) => homePage(lang)],
   ["/how", (lang) => howPage(lang, "rush")],
+  ["/how/rush", (lang) => howPage(lang, "rush")],
+  ["/how/party", (lang) => howPage(lang, "party")],
   ["/how/poach", (lang) => howPage(lang, "poach")],
+  ["/how/hold", (lang) => howPage(lang, "hold")],
   ["/play/CODE", (lang) => roomSitePage(lang, room, lines, "https://example.test")],
   ["/readme/", (lang) => readmeSitePage(lang, "<h1>Next Year, No Fish</h1><h2>What good means here</h2>")],
   ["/making-of", (lang) => makingOfPage(lang)],
