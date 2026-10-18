@@ -1,73 +1,78 @@
 # Next Year, No Fish
 
-A fishing game for the people at one table. Each player is a family on one
-shared lake. The fish school, pair up and spawn in spring; their fry grow up
-over winter. Throw your net, fill your basket, build your house. A fine-mesh
-net catches more, fry included. Five years, about four minutes, and then
-what the lake will hold next year.
+One lake. Everyone fishes it. What you take today, someone else can't catch
+tomorrow. Open a room, send the link, pick one of four games. The room's lake
+remembers what the last game left.
 
 ## What good means here
 
-Here the other people are not an audience but the problem: this is an
-explainer of the tragedy of the commons that you play. It is good if:
+A commons is a dilemma only when someone else fishes the same water, so the
+game should be better because others play at once. It is good if:
 
-1. **The dilemma is real and visible.** Other families' nets change what
-   yours can catch, and you see why: a school someone reached first, fry
-   slipping through your mesh, fish too few to meet in spring.
-2. **The record is honest.** Every throw and haul is a public ledger row the
-   database will not change. One fish is caught once. After a season its
-   secret is revealed and anyone can replay it.
-3. **A table can play in two minutes, and argue.** Every word that carries
-   meaning is English. No chat: the players sit together. On screen they can
-   stamp a seal on each other and make one kind of promise.
-4. **It does not preach.** The goal on the first screen is your own house.
-   The lake, not the game, says greed was costly.
+1. **You feel the dilemma within a minute, in every game.** Each asks one
+   question born of sharing the lake: one more cast or home now
+   (Boat Rush); grab now or leave fish for the double round (Fishing Party);
+   who do you believe (Who's Poaching); net it now or breed it for later
+   (Lake Holdings). Greed costs you through other players, never a random
+   storm.
+2. **No one can cheat or peek.** The server decides every catch, coin and
+   vote, and sends each seat only what it may see.
+3. **No single move wins**, or nobody needs to think about others.
+4. **It reads at a glance, in English or Chinese**: one goal and one choice
+   per game.
+5. **The lake outlives the match**, through restarts and a day away.
 
 ## Where this comes from
 
-Hardin (1968) said a shared resource is doomed without privatisation or
-outside rule. Ostrom (1990) found commons that lasted centuries because their
-users made, watched and enforced their own rules; Ostrom, Walker and Gardner
-(1992) found that promises help, and promises with a way to answer cheaters
-help more. The promise and the seals are those two layers. The village's three
-rules are older still: no fine nets (Mencius), no fishing while fish spawn and
-spare the fry (Li Ge, in the Guoyu). The title is the Lüshi Chunqiu's: drain
-the lake for the fish, and next year there are no fish. The game leans on the
-room for the talking, as situated software does (Shirky 2004).
+Hardin (1968) called a shared resource doomed; Ostrom (1990) showed commons
+that lasted because users watched and punished each other. Fehr and Gächter
+(2000) found people pay to punish free riders: Who's Poaching is the
+inspection, the buoy and the vote. Milinski et al. (2008) showed groups
+failing to prevent a shared loss; Last Net is that experiment in one round.
+Salen and Zimmerman (2004) ask for discernible, integrated outcomes: one
+stated choice, visible feedback. The title is the Lüshi
+Chunqiu's: drain the lake for fish, and next year there are no fish.
 
 ## What I chose not to build
 
-Chat or free text beyond a name. Accounts. Leaderboards. Blame numbers.
-Restocking a dead lake.
+Chat (players talk aloud), accounts, cross-room leaderboards, restocking a
+dead lake, AI-generated content at run time.
 
 ## Enforced and judged
 
-Enforced, by checks that fail if it breaks:
+Enforced, by checks that fail if the claim breaks:
 
-- For the strategies in `sim/`, a fine net pays the first three families to
-  switch, and all four switching ruins the table (`spec/unit/dilemma.test.ts`).
-- Each rule, kept from year 2, saves a lake two fine nets kill
-  (`spec/unit/rules.test.ts`).
-- Two nets on one fish: the first thrown takes it, and the other is told who
-  (`spec/unit/lake-runner.test.ts`, `docs/decisions/0003-two-nets-one-fish.md`).
-- Replaying a ledger gives back every haul; the secret is in no row before
-  the end (`spec/unit/lake-runner.test.ts`).
-- The ledger refuses edits and deletions (`spec/unit/lake-store.test.ts`).
-- A throw reaches another open page within a second (`spec/lake-app.test.ts`).
+- Each seat's frames and events hold only what it may see, and a match
+  replays from its stored inputs (`spec/unit/game-platform.test.ts`).
+- No fisher is sent another's role before its reveal
+  (`spec/unit/poach.test.ts`).
+- The room's lake carries over and dies below 40
+  (`spec/unit/game-platform.test.ts`).
+- Two sessions with no shared cookies join one room over HTTP: the first sees
+  the second arrive and act within a second, the room's history survives a
+  restart, and each can use its own language (`spec/marker-path.test.ts`).
+- Both dictionaries have the same keys (`spec/unit/i18n.test.ts`), and every
+  page of the current site renders in both languages
+  (`spec/unit/site-pages.test.ts`).
 
-Judged, by playing with people: whether newcomers throw at a school untold;
-whether they talk about each other's nets and ask for promises; whether they
-want another game.
+Measured, not enforced, in 300 bot matches per game
+(`docs/checks/balance-2026-10-15.md`): no strategy won over 41% of four-seat
+Boat Rush, Party or Holdings games; poaching fishers who vote on buoy evidence
+won 67.7%, and 0% if they always skip. These are bots, not people.
+
+Judged, by watching people: whether they name the choice untold, change plans
+for others, and want a rematch.
 
 ## Known limits
 
-The bots follow scripts; they show what the rules allow, not how people
-behave. A slow connection loses ties for the same fish.
+Your boat moves on the server's next frame: slow connections feel late.
+Who's Poaching needs four people.
 
 ## References
 
+- Fehr, E. & Gächter, S. (2000). Cooperation and punishment in public goods experiments. *American Economic Review* 90(4).
 - Hardin, G. (1968). The tragedy of the commons. *Science* 162(3859).
+- Milinski, M. et al. (2008). The collective-risk social dilemma and the prevention of simulated dangerous climate change. *PNAS* 105(7).
 - Ostrom, E. (1990). *Governing the Commons*. Cambridge UP.
-- Ostrom, E., Walker, J. & Gardner, R. (1992). Covenants with and without a sword. *APSR* 86(2).
-- Shirky, C. (2004). Situated software.
-- *Guoyu*, "Lu Yu I"; *Mencius*, "Liang Hui Wang I"; *Lüshi Chunqiu*, "Yi Shang".
+- Salen, K. & Zimmerman, E. (2004). *Rules of Play*. MIT Press.
+- *Lüshi Chunqiu*, "Yi Shang".

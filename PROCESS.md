@@ -1,127 +1,152 @@
 # Process
 
-## Where this stands (crit 9)
+## Where this stands (crit 10)
 
-The app started as Common Pool, one shared pond where each tap caught a fish
-(crit 8, [`f71d6dd...82a90d7`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/compare/f71d6dd...82a90d7)).
-It is now Next Year, No Fish: a game for one table in which families fish a
-lake of fish that school, spawn and grow, with a server that runs each lake
-and streams it to every player ([`82a90d7...5f0fc7f`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/compare/82a90d7...5f0fc7f)).
-The design is `DESIGN.md` (v2.3), the rules `CLAUDE.md`, the checks `spec/`.
-Two pivots happened in between, and both are the story of this document.
+The app is one site with four multiplayer games on one shared lake. In Boat
+Rush you sail, net, ram and race home. Fishing Party is five different
+mini-games in a row. Who's Poaching is a hidden-role game about a secret
+poacher. Lake Holdings is a board where you build on the water. A room keeps
+its own lake between games. Every page is in English and Chinese. Design: `DESIGN.md` v4.0; rules: `CLAUDE.md`; checks: `spec/`.
+The earlier versions still run and are linked from /making-of:
+- the shared pond (crit 8);
+- the five-year lake (crit 9);
+- Quick Catch, the first boats.
+
+This is why it changed shape three times, and what the harness learned.
 
 ## How I work with the agent
 
-Every session is one prompt with the same shape: paste the real state of the
-repo, change it test-first, break one or two key tests on purpose to prove
-they can fail, and list what the design gets wrong without fixing it. I answer
-each listed point myself and the answers become the next version of
-`DESIGN.md`, with a changelog line.
+I design in chat and build a playable prototype as a single HTML file before
+any session. Then one prompt hands the work to the agent, always with the
+same shape:
+- paste the real state of the repo;
+- write the tests first and show them red;
+- break the key test on purpose, to show it can fail;
+- commit after each step;
+- end with a list of what is still wrong, without fixing it.
 
-Two habits were added after crit 8. I build a playable prototype in a single
-HTML file before I spend a session on a mechanic, and play it myself. And I
-have a second model review the design and the simulations, then check each
-of its claims before I act on it. The agent never decides what the game is;
-it is told, and it tells me where the telling is incomplete.
+Two rules turned out to matter most:
+- The agent stops when the design is silent or a rule would break, and asks
+  me instead of choosing.
+- A second model reviews my plans. I check each of its claims before acting
+  on it.
+
+The agent decides how, never what; it tells me where my "what" is incomplete.
 
 ## Stack
 
-One small Fly machine, one volume (`fly.toml`). Node 24 runs TypeScript
-directly, with `node:sqlite`, `node:http` and Server-Sent Events, and no
-client framework or build (`docs/decisions/0001-stack.md`). The game kept the
-stack and changed how it is used. A lake is simulated in memory by one runner,
-ten steps a second, and sent as a frame of fish positions five times a
-second. Fish positions are never stored: the ledger stores only what people
-and bots did, and a 256-bit secret seeds every random stream, so a season can
-be rebuilt by replaying its ledger. That is also how a lake survives a
-restart. SSE still fits: actions are plain POSTs, rows replay by id after a
-reconnect, and frames are simply not replayed.
+One Fly machine, Node running TypeScript, `node:sqlite`,
+`node:http` and Server-Sent Events, with no client framework and no build
+step (`docs/decisions/0001-stack.md`). The games kept that stack:
+- The server steps every match 20 times a second.
+- It sends each seat its own frame 10 times a second.
+- It stores only the seed and the inputs, so a match replays exactly.
+- A browser draws what it is sent with Three.js, one vendored file.
+
+The per-seat frame is the one real change: a hidden-role game cannot send
+everyone one picture.
 
 ## Art
 
-The six portraits are SVG and the 3D world (lake, boats, fish, lanterns,
-docks) is Three.js code, all written by Claude in chat for prototype v7 and
-moved into src/static/play/ in session 13. No image model was used, and
-nothing is generated at run time.
+The six portraits are SVG and the 3D world is Three.js code, written by
+Claude in chat for prototype v7 and moved into `src/static/play/` in
+session 13. No image model was used and nothing is generated at run time.
 
 ## Moments
 
-### A pond became a game
+### Green tests, bored people
 
-At crit 8 my tutor said the pond was an explainer and should be a game that
-three people at a table understand in two minutes. I did not add buttons to
-the pond. I went back to the model: if a net's catch depends on how many fish
-are left, buying a fine net becomes a social dilemma by itself. A simulation
-checked it before any code ([`0a7423a`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/0a7423a)),
-and the dilemma became a test ([`91021fa`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/91021fa)).
+At crit 9 the five-year lake had 222 passing tests, and classmates stopped
+playing after two minutes. It had one action, and nothing to decide about
+anyone else. No test could catch that. I rebuilt the core as boats, a
+hold and a trip home, and shipped it beside the old game, not over it
+([`7ca9660`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/7ca9660)).
 
-### The prototype said it was not fun
+### The harness stopped my own prompt
 
-I built that version as a prototype and played it. Tapping a timer while a
-number falls is not a game: where you threw did not matter, and other
-families could only be watched. Instead of adding features, I made the fish
-agents. Two grown fish must meet to spawn, so a thin lake fails to recover on
-its own (the Allee effect, seen instead of stated); fry live in the shallows
-and slip through a coarse net; a fine net takes them, and they were next
-year's fish. The re-run simulations ([`15185ac`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/15185ac))
-became `DESIGN.md` v2.0 ([`e23c32d`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/e23c32d)),
-and the TypeScript model must match the reference model step for step
-([`c979c36`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/c979c36)).
+My prompt for the boats said "do not touch `DESIGN.md`". `CLAUDE.md` says to
+stop when the design is silent. The agent stopped before writing any code,
+listed six conflicts and asked me to choose. I took its advice. The design
+was updated first, in a commit of its own. Four rules the boats could not
+follow became written exceptions, each with its reason
+([`7c6b8ca`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/7c6b8ca)).
+The rules bind me too.
 
-### A review overturned my proof
+### I narrowed the scope without asking
 
-The v2.0 tests said switching to a fine net always pays. A review pointed out
-that the simulation gave fine nets from the first throw, compared different
-seats, and left out the golden carp. Each point held. When each family is
-compared with itself, and nets are bought when a family can afford one,
-switching pays the first three families but not the fourth: by then the lake
-is already going ([`403ea6f`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/403ea6f)).
-I changed the claim rather than the parameters. The test no longer checks the
-fourth row, and `CLAUDE.md` now says simulation results are claims about the
-strategies and seeds in `sim/`, never about people
-([`584fd89`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/584fd89), [`7d92014`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/7d92014)).
-The agent's own list at the end of session 8 caught a mistake of mine: a
-32-bit seed whose SHA-256 I meant to publish could be found by trying every
-seed. The secret is now 256 bits.
+I asked for four games and said players should choose. The plan I handed
+the agent turned the party into "events", made the poaching game a "later
+candidate" and dropped the territory game. A second review caught it. The
+tests were green, because they only check that code matches the plan. I
+restored all four as promised and added a rule: no agent may drop, merge or
+postpone a mode. A blocked mode stops with evidence and alternatives
+([`779efa5`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/779efa5)).
 
-### Who gets the fish (crit 9)
+### Bots as an oracle for "no single move wins"
 
-Two families aiming at the same school is the game working. When their nets
-close on the same fish, the net thrown first takes it, and the other family
-is told who got there first. I chose this over splitting, nearest-centre and
-random draws because it is what the table sees, it never counts a fish twice,
-and it replays exactly from the ledger order. It costs a player on a slow
-connection some ties (`docs/decisions/0003-two-nets-one-fish.md`). A test
-builds two throws in one step over one school; reversing the order a step's
-throws are applied turns it red ([`ff3084c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/ff3084c)).
+A balance harness plays 300 bot matches per game (`scripts/balance.ts`).
+Before tuning:
+- Boat Rush's "Big Hold first" won 46.5% of four-seat matches.
+- Fishing Party's "always buy Fast Boat" won 53.3%.
+- In Who's Poaching, the bot poacher sank the lake on day 1 in 39 of 40
+  games, so no vote could matter.
 
-### Playing the page found what 222 green tests missed
+The fixes were numbers, not rules. "Always skip" still wins the fishers 0%:
+the game forces a vote. The report is about bots, never people
+([`370b17a`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/370b17a)).
 
-The server had 222 passing tests when the page first ran a whole season
-against it. Watching it, the bots' houses stopped growing after the first
-winter: a bot threw only on the exact step its net was dry again, and that
-step passed while the lake was frozen, so no bot threw again. The same season
-showed two meeting bugs: bots voted the moment winter began, so Mei could
-never follow a person's vote, and the tally counted only people's votes,
-treating Old Wang's ban as "no rule". Each test had checked a step in
-isolation; none had watched five years. Each got a test that fails first
-([`44fda84`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/44fda84)).
+### A rule changed, so a test changed
 
-### Corrections land in the harness
+Making the last meeting vote compulsory turned an old app test red. That
+test played a table where nobody ever votes, and that table no longer exists
+in the game. The agent stopped instead of editing it. I chose: a meeting now ends when
+everyone has voted, and the test's players vote. Every assertion stayed, and the commit says why
+([`72b7469`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/72b7469)).
 
-The markers read English, and my prototype still had Chinese-only labels.
-That became a rule in `CLAUDE.md`: every word that carries meaning is
-English; Chinese is decoration and always comes with its English. The bots
-became a rule too: their behaviour is a script and may never be cited as
-evidence about people. From crit 8, two older corrections still stand: a
-simulation threw out three promises before they were built
-([`8d15c9c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/8d15c9c)),
-and a measured 41 ms commit decided durability
-([`5ba1c16`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/5ba1c16)).
+### Tests caught leaks I could not see
+
+The four-browser poaching test found that the last frame sent every role
+before the "end" event. The fix went into the code, and a unit test now
+plays to the end
+([`884eb6c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/884eb6c)).
+
+### One front door
+
+By crit 10 the site was three games stacked on each other:
+- "/" was still the five-year lake;
+- the current game was linked from nowhere;
+- `DESIGN.md` described all three.
+
+I designed the site as a clickable mock. The agent then:
+- made "/" the current game, with one line saying what it is about;
+- added a how-to-play page for each game and a /making-of page;
+- moved the old designs into `docs/design-history/`
+  ([`5a42cbf`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/5a42cbf),
+  [`fe73b88`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/fe73b88)).
+
+The marker's route became a test. It reads /readme/, puts two separate
+profiles in one room within a second, restarts the server and finds the
+room's history, in two languages
+([`e015058`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/e015058)).
+
+## Corrections that landed in the harness
+
+- Scope belongs to me: the four modes are named in `CLAUDE.md`.
+- One front door; earlier versions are frozen but kept.
+- Two languages, and a missing key fails a test.
+- A secret is never sent to a seat that may not see it.
+- Simulation and bot results are claims about strategies and seeds, never
+  about people.
+- A test may change only when a rule I approved has changed, and the commit
+  says so.
 
 ## Next
 
-Playtests with people, not bots: two people with no bots, four people, and
-one person with bots, recording whether newcomers throw without being told,
-whether they talk about each other's nets, and whether they ask for promises.
-For crit 10, server-side logs that tell two people apart.
+Crit 10 is the first group playtest of all four games, on phones. I will
+watch:
+- whether people name the choice that matters without being told;
+- whether they change plans because of someone else;
+- whether they ask for a rematch.
+
+Each room's `summary.json` records actions, time to first score and the lake;
+I will compare it with what I saw.
