@@ -15,7 +15,7 @@ const t = (key, vars = {}) => (words[key] ?? key).replace(/\{(\w+)\}/g, (m, k) =
 const post = (path, body) => fetch(`/play/${code}/${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json()).catch(() => ({ ok: false, reason: "offline" }));
 
 const A_ICON = { rush: ["👆", "🕸", "💨"], poach: ["👆", "👀", "🎈"], party: ["👆", "🛒", "🤫"], hold: ["🂠", "⬡", "🌊"] };
-const LAKE_FULL = 220;
+const LAKE_FULL = boot.k;
 const whenFmt = new Intl.DateTimeFormat(boot.lang === "zh" ? "zh-CN" : "en-AU", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Australia/Sydney" });
 function logLine(m) {
   const game = t(`${m.mode}_name`);

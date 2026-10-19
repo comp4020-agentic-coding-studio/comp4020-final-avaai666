@@ -142,8 +142,6 @@ export const PLAY_MAX_SEATS = 8;
 export const PLAY_HEARTBEAT_MS = 15000;
 export const PLAY_INPUT_RATE = 30; // POSTs per second per player
 export const PLAY_COUNTDOWN_MS = 3000; // 3-2-1, everyone sees it
-export const LAKE_FULL = 220; // a new room's lake
-export const LAKE_REGROW = 0.15; // between matches, this share of the gap to full grows back
 export const LAKE_DEAD = 40; // below this, the lake has died
 export const PLAY_CHARACTERS = ["mei", "wang", "jin", "lu", "lian", "shitou"] as const;
 

@@ -327,6 +327,6 @@ function results(s: PartySim): Results {
 }
 
 export const party: Mode<PartySim, PartyInput> = {
-  id: "party", model: "party 1.0", seats: Q.SEATS,
+  id: "party", model: "party 1.0", seats: Q.SEATS, breeds: false,
   make, input, step, frameFor, over: (s) => s.phase === "end", results, bot,
 };

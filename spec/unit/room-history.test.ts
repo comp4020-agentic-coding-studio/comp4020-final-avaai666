@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import { createGameHub, type GameHub } from "../../src/lib/game-hub.ts";
 import { type Mode, streamOf } from "../../src/lib/game-platform.ts";
 import { type GameStore, openGameStore } from "../../src/lib/game-store.ts";
+import { A0, Y0 } from "../../src/lib/lake-world.ts";
 
 // "What happened here" (DESIGN.md "The site"): a room's finished matches,
 // from game_matches, with when, game, winner and the lake before and after.
@@ -12,7 +13,7 @@ import { type GameStore, openGameStore } from "../../src/lib/game-store.ts";
 
 interface Fake { tick: number; points: number[]; lake: number }
 const fake: Mode<Fake, { k: "dig" }> = {
-  id: "fake", model: "fake 1.0", seats: { min: 2, max: 3, botFill: 3 },
+  id: "fake", model: "fake 1.0", seats: { min: 2, max: 3, botFill: 3 }, breeds: false,
   make: (seed, seats, lake) => { streamOf(seed, "lake"); return { tick: 0, points: seats.map(() => 0), lake: lake.fish }; },
   input: (_s, _seat, raw) => ((raw as { k?: unknown })?.k === "dig" ? { k: "dig" } : null),
   step(s, inputs) { for (const { seat } of inputs) if (s.lake > 0) { s.points[seat]++; s.lake--; } s.tick++; return []; },
@@ -50,8 +51,8 @@ it("lists finished matches only, newest first, with the winner and the lake befo
   expect(lines.length).toBe(1);
   expect(lines[0].mode).toBe("fake");
   expect(lines[0].winner).toEqual({ kind: "seat", name: "Bo", character: "jin", bot: false });
-  expect(lines[0].lakeBefore).toBe(220);
-  expect(lines[0].lakeAfter).toBeLessThan(220);
+  expect(lines[0].lakeBefore).toBe(A0 + Y0);
+  expect(lines[0].lakeAfter).toBeLessThan(A0 + Y0);
   expect(typeof lines[0].endedAt).toBe("number");
 
   // a stopped match is not a line
@@ -81,5 +82,5 @@ it("the room's stream carries the history with each room event, so an open page 
   const last = rooms[rooms.length - 1];
   expect(last.state).toBe("end");
   expect(last.history.length).toBe(1);
-  expect(last.history[0].lakeBefore).toBe(220);
+  expect(last.history[0].lakeBefore).toBe(A0 + Y0);
 });

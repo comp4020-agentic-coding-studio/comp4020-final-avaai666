@@ -230,6 +230,6 @@ function results(s: HoldSim): Results {
 }
 
 export const hold: Mode<HoldSim, HoldInput> = {
-  id: "hold", model: "holdings 1.0", seats: Q.SEATS,
+  id: "hold", model: "holdings 1.0", seats: Q.SEATS, breeds: false,
   make, input, step, frameFor, over: (s) => s.tides >= Q.TIDES, results, bot,
 };

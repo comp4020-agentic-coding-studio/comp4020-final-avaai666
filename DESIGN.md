@@ -170,6 +170,11 @@ P7. **Thumbs away from the edges.**
   - K = 340.
   - Every mode reads the room's lake at its start and writes back next
     spring: adults = min(K, 0.8 × next) and young = 0.2 × next.
+  - Every game writes next spring, computed by `nextSpring()`; there is no
+    separate regrowth between matches. A mode whose own year already
+    breeds (Boat Rush 2.0's seasons) only has its result capped at K; one
+    that does not yet (Who's Poaching, Lake Holdings, Fishing Party, still
+    v4.0) has its leftover carried through `nextSpring()`.
   - Below 40 fish, the room says "This lake died" and the next match
     starts a new lake. This is unchanged from v4.
 - **Breeding:**
@@ -542,12 +547,18 @@ regrowth between matches: breeding is part of each mode's year (Boat Rush's
 rest, every season). Below 40 fish the room shows "This lake died" and the
 next match starts a new lake of 230 adults and 50 young.
 
-Reading note, for Ava to confirm: v4.0 regrew the room's lake by 15% of the
-gap to 220 between matches. The v5.0 draft says nothing about it and stores
-adults and young separately, so this text drops that rule. Poaching, Holdings
-and Party still follow v4.0 until parts B and C, and keep writing a single
-fish count; the room stores it as adults and young by the 0.8 / 0.2 split
-until they move.
+Confirmed by Ava (session 17 part A, reply to the reading note above):
+v4.0's 15%-regrowth-toward-220 rule is dropped outright, for every mode, not
+kept for the three still on v4.0. Next spring already is a year of breeding;
+stacking the old regrowth on top of it would count breeding twice. One
+function, `nextSpring()` (`src/lib/lake-world.ts`), is the single rule for
+all four games: split what is left 0.8/0.2 into adults and young, breed
+once, cap at K. Boat Rush 2.0 already breeds across its own seasons, so its
+result is only capped at K, never passed through `nextSpring()` again.
+Who's Poaching, Holdings and Party (still v4.0) write a raw leftover count
+with no in-match breeding, so the hub runs it through `nextSpring()` to get
+next spring. "Below 40 the lake died" is checked on the stored value either
+way.
 
 Playtest instruments: every match's summary stores, per seat, the count of
 each input kind, the seconds to the first scoring action, and the final

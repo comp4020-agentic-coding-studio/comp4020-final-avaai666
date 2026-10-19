@@ -11,7 +11,7 @@
 import { randomBytes } from "node:crypto";
 import type { ServerResponse } from "node:http";
 import { LAKE_DEAD, PLAY_COUNTDOWN_MS, PLAY_FRAME_EVERY, PLAY_HEARTBEAT_MS, PLAY_MAX_CATCHUP, PLAY_MAX_RUNNING, PLAY_TICK_MS } from "./game-constants.ts";
-import { type AnyMode, type Character, eventsFor, type GameEvent, lakeAtStart, lakeBetween, type Results, type Seat, tickOnce } from "./game-platform.ts";
+import { type AnyMode, type Character, eventsFor, type GameEvent, lakeAfterMatch, lakeAtStart, type Results, type Seat, tickOnce } from "./game-platform.ts";
 import type { GameJoin, GameStore, MatchRow, Summary } from "./game-store.ts";
 
 // Bots take characters nobody in the room has, in this order.
@@ -115,7 +115,7 @@ export function createGameHub(store: GameStore, modes: Record<string, AnyMode>, 
     };
     const { seats: _s, lakeLeft: _l, highlights: _h, ...extra } = res;
     if (Object.keys(extra).length) summary.extra = extra;
-    store.endMatch(m.id, now(), "done", summary, lakeBetween(left));
+    store.endMatch(m.id, now(), "done", summary, lakeAfterMatch(m.mode.breeds, left));
     room.last = store.match(m.id);
     room.state = "end"; room.match = null;
     broadcastRoom(room);
@@ -173,7 +173,7 @@ export function createGameHub(store: GameStore, modes: Record<string, AnyMode>, 
       const startedAt = now() + PLAY_COUNTDOWN_MS;
       const rematchBy = room.last ? me.name : null;
       const id = store.startMatch(room.id, mode.id, mode.model, seed, seats, lake.fish, startedAt, rematchBy);
-      const sim = mode.make(seed, seats, { fish: lake.fish });
+      const sim = mode.make(seed, seats, lake);
       room.match = {
         id, mode, sim, seed, seats, startedAt, tick: 0, queue: [], pending: [], humanSeat: new Map(humans.map((p, i) => [p.seat, i])),
         counts: seats.map(() => ({})), lakeBefore: lake.fish, rematchBy,

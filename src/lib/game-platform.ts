@@ -4,12 +4,18 @@
 // the inputs applied at each tick, so replay() gives the same match. Nothing
 // here reads the clock or Math.random.
 import { createHash } from "node:crypto";
-import { LAKE_DEAD, LAKE_FULL, LAKE_REGROW, type PLAY_CHARACTERS } from "./game-constants.ts";
+import { LAKE_DEAD, type PLAY_CHARACTERS } from "./game-constants.ts";
+import { A0, adultsYoungFromNext, K, nextSpring, Y0 } from "./lake-world.ts";
 import { sfc32 } from "./lake-sim.ts";
 
 export type Character = (typeof PLAY_CHARACTERS)[number];
 export interface Seat { seat: number; name: string; bot: string | null; character: Character }
-export interface LakeMemory { fish: number }
+// fish is the lake's total, what the three modes still on v4.0 read; adults
+// and young (lake-world.ts) are for a mode that tracks them separately (rush
+// 2.0 onward). The hub always fills in both from the room's stored total
+// (adultsYoungFromNext); they default to 0 for a mode or test that never
+// reads them.
+export interface LakeMemory { fish: number; adults?: number; young?: number }
 
 // An event goes to every seat unless `to` lists the seats that may see it.
 export interface GameEvent { k: string; to?: number[]; [key: string]: unknown }
@@ -24,6 +30,12 @@ export interface Mode<S, I> {
   id: string;
   model: string; // e.g. "rush 1.0"; a stored match is only replayed by its model
   seats: { min: number; max: number; botFill: number }; // botFill: how many boats "bots fill empty seats" makes
+  // true once the mode's own year already breeds (its results().lakeLeft is
+  // next spring, not a raw leftover): only rush 2.0, for now (DESIGN.md
+  // "Where each mode stands"). The hub runs a false mode's leftover through
+  // lake-world.ts's nextSpring(); a true mode's is only capped at K, so
+  // breeding is never counted twice.
+  breeds: boolean;
   make(seed: string, seats: Seat[], lake: LakeMemory): S;
   input(s: S, seat: number, raw: unknown): I | null; // validate, or drop
   step(s: S, inputs: { seat: number; i: I }[]): GameEvent[];
@@ -71,12 +83,16 @@ export function replay<S, I>(mode: Mode<S, I>, seed: string, seats: Seat[], lake
 }
 
 // ---- the lake remembers ----
-// Between matches the lake regrows LAKE_REGROW of the gap to full; a dead
-// lake (below LAKE_DEAD) does not regrow, and the next match starts a new one.
-export function lakeBetween(left: number): number {
-  if (left < LAKE_DEAD) return left;
-  return Math.min(LAKE_FULL, left + Math.round((LAKE_FULL - left) * LAKE_REGROW));
+// What a room writes back after a match: a mode that already breeds in its
+// own year (rush 2.0) only has its result capped at K; one that does not
+// (still on v4.0) has its leftover carried through nextSpring() (lake-world.ts)
+// to get next spring's count. There is no separate regrowth between matches.
+export function lakeAfterMatch(breeds: boolean, left: number): number {
+  return breeds ? Math.min(K, left) : nextSpring(left);
 }
-export function lakeAtStart(roomFish: number): { fish: number; fresh: boolean } {
-  return roomFish < LAKE_DEAD ? { fish: LAKE_FULL, fresh: true } : { fish: roomFish, fresh: false };
+// A room's lake is adults and young fish (lake-world.ts); a fresh room, or
+// one below LAKE_DEAD, starts over at A0 adults and Y0 young.
+export function lakeAtStart(roomFish: number): { fish: number; adults: number; young: number; fresh: boolean } {
+  if (roomFish < LAKE_DEAD) return { fish: A0 + Y0, adults: A0, young: Y0, fresh: true };
+  return { fish: roomFish, ...adultsYoungFromNext(roomFish), fresh: false };
 }

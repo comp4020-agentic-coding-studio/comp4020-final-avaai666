@@ -1,5 +1,6 @@
 import { expect, inject, it } from "vitest";
 import { openRoom, joinRoom, post, openStream } from "./play-helpers.ts";
+import { A0, K, Y0 } from "../src/lib/lake-world.ts";
 
 // Boat Rush on /play over HTTP, against the RUNNING app (never production):
 // two people open a room from the lobby, join with their own cookies, play a
@@ -15,7 +16,7 @@ it("rush 1. two people play Boat Rush from the lobby to the results and a rematc
   const sb = openStream(baseUrl, `/play/${code}/events`, b);
   const room = JSON.parse((await sb.next((e) => e.event === "room" && JSON.parse(e.data).players.length === 2)).data);
   expect(room.mode).toBe("rush");
-  expect(room.lake.fish).toBe(220);
+  expect(room.lake.fish).toBe(A0 + Y0);
 
   expect((await post(baseUrl, code, "start", a, { bots: false })).status).toBe(200);
   const go = JSON.parse((await sb.next((e) => e.event === "go")).data);
@@ -38,7 +39,7 @@ it("rush 1. two people play Boat Rush from the lobby to the results and a rematc
   const results = JSON.parse(end.data).results;
   expect(results.seats.length).toBe(2);
   expect(results.highlights.length).toBe(3);
-  expect(results.lakeBefore).toBe(220);
+  expect(results.lakeBefore).toBe(A0 + Y0);
   expect(results.seats[0].inputs.steer).toBeGreaterThanOrEqual(1);
   const lakeNow = JSON.parse(end.data).lake.fish;
 
@@ -51,8 +52,8 @@ it("rush 1. two people play Boat Rush from the lobby to the results and a rematc
   expect(summary.matches.length).toBe(2);
   expect(summary.matches[1].summary).toBeNull(); // still running
   expect(summary.matches[1].seed).toBeNull(); // no seed for an unfinished match
-  expect(summary.matches[0].summary.lakeAfter).toBeGreaterThan(0); // what the match left (fish breed in a match, so it can pass 220)
-  expect(lakeNow).toBeLessThanOrEqual(220); // between matches the lake never holds more than full
+  expect(summary.matches[0].summary.lakeAfter).toBeGreaterThan(0); // what the match left
+  expect(lakeNow).toBeLessThanOrEqual(K); // next spring never holds more than K
   expect(JSON.stringify(summary)).not.toContain(a.split("=")[1]); // no tokens
   expect(summary.matches[1].summary).toBeNull();
   // clean up: the room's first player stops the rematch, so it does not keep running on the server

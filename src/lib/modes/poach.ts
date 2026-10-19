@@ -329,6 +329,6 @@ function results(s: PoachSim): Results {
 }
 
 export const poach: Mode<PoachSim, PoachInput> = {
-  id: "poach", model: "poach 1.0", seats: Q.SEATS,
+  id: "poach", model: "poach 1.0", seats: Q.SEATS, breeds: false,
   make, input, step, frameFor, over: (s) => s.phase === "end", results, bot,
 };

@@ -3,8 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createGameHub, type GameHub } from "../../src/lib/game-hub.ts";
-import { eventsFor, lakeAtStart, lakeBetween, type Mode, replay, type Seat, streamOf } from "../../src/lib/game-platform.ts";
+import { eventsFor, lakeAfterMatch, lakeAtStart, type Mode, replay, type Seat, streamOf } from "../../src/lib/game-platform.ts";
 import { type GameStore, openGameStore } from "../../src/lib/game-store.ts";
+import { A0, K, Y0 } from "../../src/lib/lake-world.ts";
 
 // The /play platform (DESIGN.md "One lake, four games"), with a fake mode
 // that has a secret per seat. No server: a real store in a temporary file,
@@ -13,7 +14,7 @@ import { type GameStore, openGameStore } from "../../src/lib/game-store.ts";
 interface Fake { tick: number; secrets: string[]; points: number[]; lake: number; firstAt: (number | null)[] }
 type FakeInput = { k: "dig" } | { k: "peek"; at: number };
 const fake: Mode<Fake, FakeInput> = {
-  id: "fake", model: "fake 1.0", seats: { min: 2, max: 3, botFill: 3 },
+  id: "fake", model: "fake 1.0", seats: { min: 2, max: 3, botFill: 3 }, breeds: false,
   make(seed, seats, lake) {
     const r = streamOf(seed, "lake");
     return { tick: 0, secrets: seats.map(() => `secret-${Math.floor(r() * 1e9)}`), points: seats.map(() => 0), lake: lake.fish, firstAt: seats.map(() => null) };
@@ -135,35 +136,53 @@ describe("a match is its seed and its inputs", () => {
   });
 });
 
+// DESIGN.md v5.0, the regrowth-rule change (session 17 part A): there is no
+// separate regrowth between matches. A room's lake is adults and young fish;
+// a new room starts at A0 + Y0. A mode still on v4.0 (breeds: false) writes
+// back next spring by lake-world.ts's nextSpring() (0.8/0.2 split, one
+// breed, capped at K); a mode whose own year already breeds (breeds: true,
+// none yet in this part) is only capped at K, so breeding is never counted
+// twice.
 describe("the lake remembers", () => {
-  it("a new room's lake holds 220; between matches it regrows 15% of the gap", () => {
-    expect(lakeAtStart(220)).toEqual({ fish: 220, fresh: false });
-    expect(lakeBetween(120)).toBe(135);
-    expect(lakeBetween(219)).toBe(219);
-    expect(lakeBetween(220)).toBe(220);
+  it("a genuinely new room (below LAKE_DEAD) starts at A0 adults and Y0 young", () => {
+    expect(lakeAtStart(0)).toEqual({ fish: A0 + Y0, adults: A0, young: Y0, fresh: true });
   });
 
-  it("below 40 the lake has died: it does not regrow, and the next match starts a new lake", () => {
-    expect(lakeBetween(39)).toBe(39);
-    expect(lakeAtStart(39)).toEqual({ fish: 220, fresh: true });
-    expect(lakeAtStart(40)).toEqual({ fish: 40, fresh: false });
+  it("a room already holding A0 + Y0 fish is read as adults and young by the 0.8/0.2 split, not reset to A0/Y0", () => {
+    expect(lakeAtStart(A0 + Y0).fish).toBe(A0 + Y0);
+    expect(lakeAtStart(A0 + Y0).fresh).toBe(false);
   });
 
-  it("a match starts from the room's lake and writes back what it left, regrown", () => {
+  it("below 40 the lake has died: the next match starts a new lake", () => {
+    expect(lakeAtStart(39)).toEqual({ fish: A0 + Y0, adults: A0, young: Y0, fresh: true });
+    expect(lakeAtStart(40).fresh).toBe(false);
+  });
+
+  it("a mode still on v4.0 writes back next spring, computed by nextSpring(), not a raw leftover", () => {
+    expect(lakeAfterMatch(false, 120)).toBeGreaterThan(120); // breeding grows it
+    expect(lakeAfterMatch(false, 500)).toBe(K); // never past K
+  });
+
+  it("a mode whose own year already breeds is only capped at K, never run through nextSpring() again", () => {
+    expect(lakeAfterMatch(true, 120)).toBe(120); // its own result stands
+    expect(lakeAfterMatch(true, 500)).toBe(K);
+  });
+
+  it("a match starts from the room's lake and writes back next spring", () => {
     const { code } = hub.createRoom("fake");
     const a = hub.join(code, "Ava", "mei"), b = hub.join(code, "Bo", "jin");
     if (!a.ok || !b.ok) throw new Error("join failed");
-    expect(hub.view(code, null)!.lake).toEqual({ fish: 220, died: false });
+    expect(hub.view(code, null)!.lake).toEqual({ fish: A0 + Y0, died: false });
     hub.start(code, a.seat, { bots: false });
     clock = hub.view(code, a.seat)!.startedAt! + 10;
     for (let i = 0; i < 400; i++) { clock += 25; hub.input(code, a.seat, { k: "dig" }); hub.input(code, b.seat, { k: "dig" }); hub.tick(); }
     const m1 = store.lastMatch(store.roomByCode(code)!.id)!;
-    expect(m1.lakeBefore).toBe(220);
+    expect(m1.lakeBefore).toBe(A0 + Y0);
     const left = m1.summary!.lakeAfter;
-    expect(left).toBeLessThan(220);
-    expect(hub.view(code, null)!.lake.fish).toBe(lakeBetween(left));
+    expect(left).toBeLessThan(A0 + Y0);
+    expect(hub.view(code, null)!.lake.fish).toBe(lakeAfterMatch(false, left));
     expect(hub.start(code, b.seat, { bots: false })).toEqual({ ok: true }); // a rematch
-    expect(store.lastMatch(store.roomByCode(code)!.id)!.lakeBefore).toBe(lakeBetween(left));
+    expect(store.lastMatch(store.roomByCode(code)!.id)!.lakeBefore).toBe(lakeAfterMatch(false, left));
   });
 });
 
@@ -231,7 +250,7 @@ describe("stop match", () => {
     expect(m.status).toBe("interrupted");
     expect(m.summary).toBeNull();
     expect(hub.view(code, a.seat)!.state).toBe("lobby");
-    expect(store.roomByCode(code)!.lakeFish).toBe(220); // a stopped match writes no lake back
+    expect(store.roomByCode(code)!.lakeFish).toBe(A0 + Y0); // a stopped match writes no lake back
     expect(hub.stop(code, a.seat)).toEqual({ ok: false, reason: "not_playing" });
   });
 });

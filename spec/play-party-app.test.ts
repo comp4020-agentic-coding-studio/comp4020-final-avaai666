@@ -1,5 +1,6 @@
 import { expect, inject, it } from "vitest";
 import { joinRoom, openRoom, openStream, post } from "./play-helpers.ts";
+import { A0, Y0 } from "../src/lib/lake-world.ts";
 
 // Fishing Party on /play over HTTP, against the RUNNING app (never
 // production): two people play all five rounds (each a different game), use
@@ -50,7 +51,7 @@ it("party 1. two people play Fishing Party from the lobby to the results and a r
   const end = JSON.parse((await sa.next((e) => e.event === "room" && JSON.parse(e.data).state === "end", 60_000)).data);
   expect(end.results.seats.length).toBe(2);
   expect(end.results.highlights.length).toBe(3);
-  expect(end.results.lakeAfter).toBeLessThan(220);
+  expect(end.results.lakeAfter).toBeLessThan(A0 + Y0);
 
   expect((await post(baseUrl, code, "start", b, { bots: false })).status).toBe(200);
   await sb.next((e) => e.event === "go");

@@ -410,6 +410,6 @@ function results(s: RushSim): Results {
 }
 
 export const rush: Mode<RushSim, RushInput> = {
-  id: "rush", model: "rush 1.0", seats: Q.SEATS,
+  id: "rush", model: "rush 1.0", seats: Q.SEATS, breeds: false,
   make, input, step, frameFor, over: (s) => s.t >= Q.SECONDS, results, bot,
 };

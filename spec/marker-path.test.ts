@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { JSDOM } from "jsdom";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { openStream, post } from "./play-helpers.ts";
+import { A0, Y0 } from "../src/lib/lake-world.ts";
 
 // The marker's path (the course's "How it's marked"), as one test: start at
 // /readme/, then /, two people in separate cookie jars in one room, a Boat
@@ -92,7 +93,7 @@ it("the marker's path: /readme/, two profiles in one room under 1 s, a match, a 
   const pageA = await page(`/play/${code}`, a), pageB = await page(`/play/${code}`, b);
   expect(line(pageA)).toBeTruthy();
   expect(line(pageB)).toBe(line(pageA));
-  expect(text(pageA)).toContain(`220 → ${end.results.lakeAfter}`);
+  expect(text(pageA)).toContain(`${A0 + Y0} → ${end.results.lakeAfter}`);
   await sa.close(); await sb.close();
 
   // 5. restart the app: the room, its lake and that line are still there
@@ -100,7 +101,7 @@ it("the marker's path: /readme/, two profiles in one room under 1 s, a match, a 
   await start();
   const after = await page(`/play/${code}`, a);
   expect(text(after)).toContain(code);
-  expect(text(after)).toContain(`220 → ${end.results.lakeAfter}`);
+  expect(text(after)).toContain(`${A0 + Y0} → ${end.results.lakeAfter}`);
   expect(line(after)).toBe(line(pageA));
   const lakeAfter = new JSDOM(after).window.document.getElementById("lakefish")!.textContent!;
   expect(lakeAfter.startsWith(`${lakeNow} `)).toBe(true);

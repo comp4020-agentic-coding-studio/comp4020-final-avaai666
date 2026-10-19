@@ -6,8 +6,9 @@
 import { randomBytes, randomInt } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { NAME_MAX_GRAPHEMES } from "./constants.ts";
-import { LAKE_FULL, PLAY_CHARACTERS, PLAY_MAX_SEATS } from "./game-constants.ts";
+import { PLAY_CHARACTERS, PLAY_MAX_SEATS } from "./game-constants.ts";
 import type { Character, Results, Seat } from "./game-platform.ts";
+import { A0, Y0 } from "./lake-world.ts";
 
 export type Clock = () => number;
 const CODE_ALPHABET = "BCDFGHJKLMNPQRSTVWXZ";
@@ -118,7 +119,7 @@ export function openGameStore(file: string, now: Clock): GameStore {
           let code = "";
           for (let i = 0; i < 4; i++) code += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
           if (q.roomCode.get(code)) continue;
-          const r = q.insRoom.run(code, mode, LAKE_FULL, now());
+          const r = q.insRoom.run(code, mode, A0 + Y0, now());
           return { id: Number(r.lastInsertRowid), code };
         }
         throw new Error("no free room code");

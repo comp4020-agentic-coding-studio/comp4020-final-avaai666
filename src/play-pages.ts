@@ -5,6 +5,7 @@
 import { esc } from "./pages.ts";
 import type { RoomView } from "./lib/game-hub.ts";
 import { DICT, t, type Lang } from "./lib/i18n.ts";
+import { worldForPage } from "./lib/lake-world.ts";
 import { CREW, ICONS, portrait } from "./static/play/art.js";
 
 export interface ModeCard {
@@ -135,6 +136,6 @@ export function roomPage(view: RoomView, error?: string, lang: Lang = "en"): str
   </div>
   ${join}
 </div>
-<script type="application/json" id="boot">${JSON.stringify({ view, cards: MODE_CARDS, lang, words: DICT[lang], other: Object.fromEntries(MODE_CARDS.map((m) => [`${m.id}_name`, DICT[lang === "en" ? "zh" : "en"][`${m.id}_name`]])) }).replace(/</g, "\\u003c")}</script>`;
+<script type="application/json" id="boot">${JSON.stringify({ view, cards: MODE_CARDS, lang, words: DICT[lang], other: Object.fromEntries(MODE_CARDS.map((m) => [`${m.id}_name`, DICT[lang === "en" ? "zh" : "en"][`${m.id}_name`]])), world: worldForPage() }).replace(/</g, "\\u003c")}</script>`;
   return page(`Room ${view.code} · ${card.name}`, shell, "play in-room", `<script type="module" src="/static/play/room.js"></script>`);
 }

@@ -5,7 +5,7 @@
 import { esc } from "./pages.ts";
 import type { RoomView } from "./lib/game-hub.ts";
 import { DICT, GAMES, t, type Lang } from "./lib/i18n.ts";
-import { LAKE_FULL } from "./lib/game-constants.ts";
+import { A0, K, Y0 } from "./lib/lake-world.ts";
 import { ICON, PIC, SCENE } from "./site-art.ts";
 import { CREW, portrait } from "./static/play/art.js";
 
@@ -109,9 +109,9 @@ export function homePage(lang: Lang, error?: string): string {
     <section class="memory">
       <div><h2>${esc(t(lang, "mem_h"))}</h2><p>${esc(t(lang, "mem_p"))}</p></div>
       <div class="panel"><h3>${esc(t(lang, "room_lake"))}</h3>
-        <div class="row spread"><span class="fishn">${LAKE_FULL} <small>${esc(t(lang, "room_lake_of", { n: LAKE_FULL }))}</small></span></div>
-        <div class="lakebar"><i style="width:100%"></i></div>
-        <p class="muted small">${esc(t(lang, "mem_new", { n: LAKE_FULL }))}</p>
+        <div class="row spread"><span class="fishn">${A0 + Y0} <small>${esc(t(lang, "room_lake_of", { n: K }))}</small></span></div>
+        <div class="lakebar"><i style="width:${Math.round(((A0 + Y0) / K) * 100)}%"></i></div>
+        <p class="muted small">${esc(t(lang, "mem_new", { n: A0 + Y0 }))}</p>
       </div>
     </section>`;
   return sitePage(lang, { title: null, nav: "play", here: "/", body, bodyClass: "page-home" });
@@ -181,13 +181,13 @@ export function roomSitePage(lang: Lang, view: RoomView, lines: MatchLine[], ori
         ${view.state === "play" ? `<p><a class="btn primary" href="/play/${esc(view.code)}/game">${esc(t(lang, "g_to_game"))}</a></p>` : ""}
       </div>
       <div class="panel"><h2 class="h3">${esc(t(lang, "room_lake"))}</h2>
-        <div class="row spread"><span class="fishn" id="lakefish">${view.lake.fish} <small>${esc(t(lang, "room_lake_of", { n: LAKE_FULL }))}</small></span></div>
-        <div class="lakebar"><i id="lakebar" style="width:${Math.min(100, (view.lake.fish / LAKE_FULL) * 100).toFixed(1)}%"></i></div>
+        <div class="row spread"><span class="fishn" id="lakefish">${view.lake.fish} <small>${esc(t(lang, "room_lake_of", { n: K }))}</small></span></div>
+        <div class="lakebar"><i id="lakebar" style="width:${Math.min(100, (view.lake.fish / K) * 100).toFixed(1)}%"></i></div>
         <h2 class="h3 mt small-h">${esc(t(lang, "log_h"))}</h2>
         <ul class="log" id="log">${lines.length ? lines.map((m) => logLine(lang, m)).join("") : `<li class="none">${esc(t(lang, "log_none"))}</li>`}</ul>
       </div>
     </div>
-    <script type="application/json" id="boot">${JSON.stringify({ view, lang, words: DICT[lang] }).replace(/</g, "\\u003c")}</script>
+    <script type="application/json" id="boot">${JSON.stringify({ view, lang, words: DICT[lang], k: K }).replace(/</g, "\\u003c")}</script>
     <script type="module" src="/static/play/roomlive.js"></script>`;
   return sitePage(lang, { title: t(lang, "room_title", { code: view.code }), nav: "play", here: `/play/${view.code}`, body, bodyClass: "page-room" });
 }
