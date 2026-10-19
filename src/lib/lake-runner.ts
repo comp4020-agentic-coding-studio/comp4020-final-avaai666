@@ -329,13 +329,15 @@ class RunnerImpl implements Runner {
   advance(now: number): boolean {
     if (this.ended) return false;
     const target = stepAt(this.startedAt, now);
-    let lastProcessed = -1;
+    // A frame is due every second step. A late tick can run several steps at
+    // once, so it is due if ANY step this call ran was even, not only the last.
+    let frameDue = false;
     while (this.step < target && !this.ended) {
       this.processStep(this.step, true);
-      lastProcessed = this.step;
+      if (this.step % 2 === 0) frameDue = true;
       this.step++;
     }
-    return lastProcessed >= 0 && lastProcessed % 2 === 0;
+    return frameDue;
   }
 
   // Steps on to `now` with bots silent: fish still move, age and spawn, a

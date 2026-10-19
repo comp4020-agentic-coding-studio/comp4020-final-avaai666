@@ -22,6 +22,8 @@ Tests
 - Unit tests (spec/unit/) must pass with no server running. Run
   `pnpm test:unit` after every change to src/lib; run `pnpm check` with the
   app running before any commit that touches the server.
+- A test that fails and then passes on a rerun is a bug. Do not push past it:
+  find the cause, or stop and report it with the failing output.
 - Never edit or delete a test to make it pass. If a test looks wrong, stop and
   tell me why.
 - Before saying "done", paste the real output of every script from Step 0 (b)

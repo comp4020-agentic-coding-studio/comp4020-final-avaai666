@@ -309,3 +309,24 @@ describe("the secret", () => {
     expect(JSON.stringify(runner.snapshot())).toContain(secret);
   });
 });
+
+describe("a frame is due whenever a tick ran an even step, however late the tick was", () => {
+  it("a late tick that ran steps 6 and 7 still sends the frame of step 6", () => {
+    // The timer ticks every 100 ms, but a busy event loop delivers ticks
+    // late, so one advance() can run several steps. A frame is a snapshot of
+    // the lake, due every second step (0.2 s). It must go out for any tick
+    // that ran an even step, not only when the tick's LAST step was even.
+    const run = (marks: number[]): boolean[] => {
+      const { runner, startedAt } = setup(["Ava"], 0);
+      return marks.map((m) => runner.advance(atStep(startedAt, m)));
+    };
+    // on time: steps 0 | 1,2 | 3 | 4,5... frames at the ticks that ran 0, 2, 4
+    expect(run([1, 2, 3, 4, 5])).toEqual([true, false, true, false, true]);
+    // late: the tick that ran steps 6 and 7 ends on an odd step
+    expect(run([6, 8])).toEqual([true, true]);
+    // late: 1,2 then 3 then 4,5,6 then 7
+    expect(run([1, 3, 4, 7, 8])).toEqual([true, true, false, true, false]);
+    // a tick that ran only an odd step has nothing to send (steps 0,1,2 | 3)
+    expect(run([3, 4])).toEqual([true, false]);
+  });
+});
