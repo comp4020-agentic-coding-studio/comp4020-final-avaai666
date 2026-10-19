@@ -94,9 +94,9 @@ assertion is word for word what it was; the only line that differs is the one
 that reads the server's address.
 
 Twenty runs of that project, each overlapping a `rules.test.ts` run, were all
-green. That is weak evidence. On the shared setup the test failed in 3 of 128
-runs (about 2%), so 20 clean runs would be likely (about two in three) even if
-the change did nothing. The change removes two things that could matter (a
+green. That is weak evidence. On the shared setup the test failed in 4 of 128
+runs (4 of 128, about 3%), so 20 clean runs would still happen about half the
+time (0.97 to the 20th is 0.53) even if the change did nothing. The change removes two things that could matter (a
 server shared with other tests' lakes, and starting inside another file's
 timing), but the cause was not found, and this report does not claim it is
 fixed. If the test fails again on its own server, that is new evidence and
