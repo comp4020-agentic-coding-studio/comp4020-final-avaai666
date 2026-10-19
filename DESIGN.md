@@ -507,6 +507,24 @@ cards); state and scoring (fish, coins, suspicion and roles, tiles); pace
 (real time, seasons, rounds, day and meeting, turns); and the picture
 (the same lake, but each mode has its own camera, light and HUD).
 
+The move to the v5 world is one mode at a time, not a rescale of the old
+scene. `src/static/play/world.js` (the 1000 × 700 ellipse) and
+`src/static/play/world5.js` (the 92 × 64 lobed lake of "The world (shared)",
+built from `lake-world.ts`'s boot JSON) run side by side while the four
+modes move: Who's Poaching, Lake Holdings and Fishing Party send sim
+coordinates straight into `world.js`'s drawing calls, so rescaling its
+`toWorld` for the new shape would put their boats and fish somewhere that
+makes no sense in it (on the new island, say, which their space has no room
+for). A mode switches from `world.js` to `world5.js` only when it is itself
+rebuilt to v5.0 (Boat Rush next, then Who's Poaching in part B, Holdings and
+Party in part C) and its own client script is rewritten to world5.js's API
+(`setCameraMode(mode, target)`, not world.js's `setCamera(pos, look)`) —
+`src/static/play/world-select.js`'s `WORLD5_MODES` list says which modes
+have moved, and starts empty. `world.js` is deleted only once no mode uses
+it. The room's game page keeps one canvas per world, lazily created the
+first time a match needs it, so switching games mid-room (DESIGN.md's
+"Change game") never tears either down.
+
 ### frameFor(sim, seat)
 
 /b sends every viewer the same frame. Who's Poaching (secret roles, and from

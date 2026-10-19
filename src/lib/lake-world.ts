@@ -113,11 +113,20 @@ export function nextSpring(left: number): number {
 // the other way: what a stored lake is worth as a count
 export const lakeTotal = (adults: number, young: number): number => adults + young;
 
+// the shore, sampled at n points right round the lake, at k of the way out
+// (k=1 the shore itself); the client draws from these points, not shapeR()
+export function outline(k = 1, n = 180): [number, number][] {
+  const pts: [number, number][] = [];
+  for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2; pts.push([Math.cos(a) * LAKE_X * shapeR(a) * k, Math.sin(a) * LAKE_Y * shapeR(a) * k]); }
+  return pts;
+}
+
 // what the page needs, sent in its boot JSON; the client keeps no copy
 export function worldForPage() {
   return {
     lake: { x: LAKE_X, y: LAKE_Y }, island: ISLAND, k: K, a0: A0, y0: Y0, allee: ALLEE, breedR: BREED_R, iceK: ICE_K, iceDockOpen: ICE_DOCK_OPEN, reedSlow: REED_SLOW,
     dockAngles: DOCK_ANGLES, floorFish: FLOOR_FISH, maxFloors: MAX_FLOORS, tiers: TIERS,
     zones: { reeds: ZONES.reeds, lotus: ZONES.lotus, river: ZONES.river, deep: DEEP }, bays: BAYS,
+    outline: outline(1, 180), outlineBank: outline(1.075, 180),
   };
 }

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { roomPage } from "../../src/play-pages.ts";
 import { roomSitePage } from "../../src/site-pages.ts";
 import type { RoomView } from "../../src/lib/game-hub.ts";
+import { WORLD5_MODES, worldModuleFor } from "../../src/static/play/world-select.js";
 
 // The room page is a page and the game is full screen (DESIGN.md "UI rules").
 // There is no layout engine here, so these check what decides who gets a tap:
@@ -62,6 +63,18 @@ describe("the game page during a match", () => {
     expect(d.body.className).toMatch(/in-room/);
   });
 
+  it("has both #gl (world.js) and #gl5 (world5.js), with exactly one shown for the room's mode", () => {
+    for (const mode of ["rush", "poach", "party", "hold"]) {
+      const dm = doc(roomPage({ ...view, mode }, undefined, "en"));
+      const gl = dm.querySelector("#gl")!, gl5 = dm.querySelector("#gl5")!;
+      expect(gl).not.toBeNull(); expect(gl5).not.toBeNull();
+      const glShown = !gl.hasAttribute("hidden"), gl5Shown = !gl5.hasAttribute("hidden");
+      expect(glShown).toBe(!WORLD5_MODES.includes(mode));
+      expect(gl5Shown).toBe(WORLD5_MODES.includes(mode));
+      expect(glShown).not.toBe(gl5Shown); // exactly one visible, never both or neither
+    }
+  });
+
   it("has a host menu with Stop match inside it, not a loose Stop button", () => {
     expect(d.querySelector("#stopbtn")).toBeNull();
     const menu = d.querySelector("#hostmenu");
@@ -96,6 +109,34 @@ describe("nothing that only informs takes a tap", () => {
   it("the overlay lets taps through to the game except on what needs a choice", () => {
     expect(play).toMatch(/\.overlay\s*\{[^}]*pointer-events:\s*none/);
     expect(play).toMatch(/\.overlay\s*>\s*\*\s*\{[^}]*pointer-events:\s*auto/);
+  });
+});
+
+describe("worldModuleFor(): each /play mode loads exactly one world module, and the right one", () => {
+  it("every mode still on v4.0 (rush 1.0, poach, party, hold) loads world.js, not world5.js", () => {
+    // rush moves to WORLD5_MODES only in the same commit that rewrites rush.js to world5.js's
+    // API (setCameraMode, not world.js's setCamera): a real browser check (scripts/browser-check.ts)
+    // caught this exact mismatch (world.setCamera is not a function) when rush was added here early.
+    for (const mode of ["rush", "poach", "party", "hold"]) expect(worldModuleFor(mode)).toBe("world.js");
+  });
+
+  it("a mode listed in WORLD5_MODES loads world5.js", () => {
+    expect(worldModuleFor("some-future-mode")).toBe("world.js");
+    const WAS = [...WORLD5_MODES];
+    WORLD5_MODES.push("some-future-mode");
+    try { expect(worldModuleFor("some-future-mode")).toBe("world5.js"); } finally { WORLD5_MODES.length = 0; WORLD5_MODES.push(...WAS); }
+  });
+});
+
+describe("P7: the pads sit at least 22px, and the safe area, above the bottom edge", () => {
+  it("the phone dock pads' bottom offset is at least 22px (plus the safe area)", () => {
+    const play = css("play/play.css");
+    const m = play.match(/\.room \.hud \.pads\.dock\s*\{([^}]*)\}/);
+    expect(m, ".pads.dock is not styled").not.toBeNull();
+    const bottom = m![1].match(/bottom:\s*max\((\d+)px/);
+    expect(bottom, "no bottom: max(Npx, ...) on .pads.dock").not.toBeNull();
+    expect(Number(bottom![1])).toBeGreaterThanOrEqual(22);
+    expect(m![1]).toMatch(/env\(safe-area-inset-bottom/);
   });
 });
 

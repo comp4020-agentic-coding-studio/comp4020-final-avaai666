@@ -19,6 +19,8 @@ const COOKIE_MAX_AGE_S = 365 * 24 * 60 * 60;
 // the files /play may load: one per mode, the shared ones, and three
 const FILES: Record<string, string> = {
   "play/world.js": "text/javascript; charset=utf-8",
+  "play/world5.js": "text/javascript; charset=utf-8",
+  "play/world-select.js": "text/javascript; charset=utf-8",
   "play/art.js": "text/javascript; charset=utf-8",
   "play/room.js": "text/javascript; charset=utf-8",
   "play/roomlive.js": "text/javascript; charset=utf-8",

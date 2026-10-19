@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  ALLEE, DOCK_ANGLES, ICE_K, ISLAND, K, LAKE_X, LAKE_Y, TIERS, adultsYoungFromNext, blockedAt, breed, dockPos, forecast, iceBlocks, nextSpring, nr, shapeR, shape, tierOf,
+  ALLEE, DOCK_ANGLES, ICE_K, ISLAND, K, LAKE_X, LAKE_Y, TIERS, adultsYoungFromNext, blockedAt, breed, dockPos, forecast, iceBlocks, nextSpring, nr, outline, shapeR, shape, tierOf, worldForPage,
 } from "../../src/lib/lake-world.ts";
 
 // The lake every /play mode shares (DESIGN.md v5.0, "The world"): its outline,
@@ -27,6 +27,21 @@ describe("the shape", () => {
     expect(nr(x, y)).toBeCloseTo(1, 6);
     const [x2, y2] = shape(200, 0.5);
     expect(nr(x2, y2)).toBeCloseTo(0.5, 6);
+  });
+
+  it("outline() samples n points right round the shore, each at nr() = k, so the client draws the real shape and keeps no formula", () => {
+    const pts = outline(1, 72);
+    expect(pts.length).toBe(72);
+    for (const [x, y] of pts) expect(nr(x, y)).toBeCloseTo(1, 6);
+    const bank = outline(1.075, 40);
+    for (const [x, y] of bank) expect(nr(x, y)).toBeCloseTo(1.075, 6);
+  });
+
+  it("worldForPage() sends the outline so the client never re-derives shapeR()", () => {
+    const w = worldForPage();
+    expect(w.outline.length).toBe(180);
+    expect(w.outlineBank.length).toBe(180);
+    for (const [x, y] of w.outline) expect(nr(x, y)).toBeCloseTo(1, 6);
   });
 });
 

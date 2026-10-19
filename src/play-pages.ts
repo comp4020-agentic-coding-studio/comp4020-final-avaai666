@@ -7,6 +7,7 @@ import type { RoomView } from "./lib/game-hub.ts";
 import { DICT, t, type Lang } from "./lib/i18n.ts";
 import { worldForPage } from "./lib/lake-world.ts";
 import { CREW, ICONS, portrait } from "./static/play/art.js";
+import { WORLD5_MODES } from "./static/play/world-select.js";
 
 export interface ModeCard {
   id: string; name: string; zh: string; tag: string; players: string; len: string; due: string;
@@ -125,7 +126,12 @@ export function roomPage(view: RoomView, error?: string, lang: Lang = "en"): str
     </form>` : "";
   const w = (k: string) => esc(t(lang, k));
   const shell = `<div class="app room" id="app" data-room="${esc(view.code)}">
-  <div class="stage" id="stage"><canvas id="gl" tabindex="0" aria-label="${w("g_lake_3d")}"></canvas><div class="tags" id="tags"></div><div class="floats" id="floats"></div>
+  <div class="stage" id="stage">
+    <canvas id="gl" tabindex="0" aria-label="${w("g_lake_3d")}"${WORLD5_MODES.includes(view.mode) ? " hidden" : ""}></canvas>
+    <canvas id="gl5" tabindex="0" aria-label="${w("g_lake_3d")}"${WORLD5_MODES.includes(view.mode) ? "" : " hidden"}></canvas>
+    <div class="tags" id="tags"></div><div class="floats" id="floats"></div>
+    <div class="tags" id="tags5"></div><div class="floats" id="floats5"></div>
+    <canvas id="mini" aria-hidden="true"${WORLD5_MODES.includes(view.mode) ? "" : " hidden"}></canvas>
     <div class="topbar" id="topbar"><a class="mini-seal" href="/play/${esc(view.code)}" aria-label="${w("g_back_room")}">${seal}</a><div class="goalclock"><b id="goal">${w(`${view.mode}_hud`)}</b><span id="clock"></span></div><span class="conn" id="conn">${w("g_connecting")}</span><button class="tiny" id="sound" type="button">${w("g_sound_off")}</button>
       <div class="hostmenu" id="hostmenu" hidden><button class="tiny" id="hostbtn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="${w("g_host_menu")}">⋯</button><div class="menu-list" id="hostlist" hidden><button type="button" class="danger" data-stop>${w("g_stop")}</button></div></div></div>
     <button class="hudtoggle" id="hudtoggle" type="button" aria-expanded="false" aria-controls="hud">${w("g_details")}</button>
@@ -136,6 +142,10 @@ export function roomPage(view: RoomView, error?: string, lang: Lang = "en"): str
   </div>
   ${join}
 </div>
-<script type="application/json" id="boot">${JSON.stringify({ view, cards: MODE_CARDS, lang, words: DICT[lang], other: Object.fromEntries(MODE_CARDS.map((m) => [`${m.id}_name`, DICT[lang === "en" ? "zh" : "en"][`${m.id}_name`]])), world: worldForPage() }).replace(/</g, "\\u003c")}</script>`;
+  <script type="application/json" id="boot">${JSON.stringify({
+    view, cards: MODE_CARDS, lang, words: DICT[lang],
+    other: Object.fromEntries([...MODE_CARDS.map((m) => `${m.id}_name`), "cer_v_rich", "cer_v_fair", "cer_v_lean", "cer_v_none"].map((k) => [k, DICT[lang === "en" ? "zh" : "en"][k]])),
+    world: worldForPage(),
+  }).replace(/</g, "\\u003c")}</script>`;
   return page(`Room ${view.code} · ${card.name}`, shell, "play in-room", `<script type="module" src="/static/play/room.js"></script>`);
 }

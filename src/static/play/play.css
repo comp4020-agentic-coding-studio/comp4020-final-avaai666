@@ -24,7 +24,16 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--gold);
 
 .app { position: relative; height: 100%; }
 .stage { position: fixed; inset: 0; overflow: hidden; background: var(--ink); }
-#gl { display: block; width: 100%; height: 100%; touch-action: none; }
+#gl, #gl5 { display: block; width: 100%; height: 100%; touch-action: none; }
+#gl[hidden], #gl5[hidden] { display: none; }
+/* the minimap, world5.js's overview of the whole lake (DESIGN.md "The camera") */
+#mini { position: absolute; z-index: 5; top: max(10px, env(safe-area-inset-top, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); width: min(150px, 28vw); height: min(112px, 21vw); border-radius: 10px; border: 1px solid var(--line); background: rgba(18,14,24,.6); pointer-events: none; }
+#mini[hidden] { display: none; }
+/* a thumb stick for sailing (P7): appears where the thumb went down */
+.joy { position: fixed; z-index: 6; width: 108px; height: 108px; margin: -54px; border-radius: 50%; border: 2px solid var(--line); background: rgba(18,14,24,.35); pointer-events: none; }
+.joy i { position: absolute; inset: 0; margin: 28px; border-radius: 50%; background: var(--paper); opacity: .85; }
+/* an arrow pointing at a place on the lake, pinned to the screen edge when off screen */
+.world-arrow { position: absolute; z-index: 5; width: 36px; height: 36px; color: var(--gold); pointer-events: none; filter: drop-shadow(0 2px 4px rgba(0,0,0,.5)); }
 
 .ui {
   position: absolute; top: 0; left: 0; bottom: 0; width: 430px; overflow-y: auto; z-index: 3;
@@ -246,6 +255,35 @@ body.play.in-room { overflow: hidden; }
 .highs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
 .highs div { background: var(--chip); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 13.5px; }
 .highs b { display: block; color: var(--gold); font-family: var(--display); font-size: 13px; letter-spacing: .6px; text-transform: uppercase; }
+
+/* the ceremony (src/static/play/ceremony.js, DESIGN.md "The ceremony") */
+.sheet.narrow { max-width: 480px; margin-inline: auto; }
+.cer-dots { display: flex; gap: 6px; }
+.cer-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line); display: block; }
+.cer-dots i.on { background: var(--gold); }
+.cer-verdict { display: grid; gap: 12px; justify-items: center; text-align: center; }
+.cer-stamp { font-family: var(--brush); font-size: 15px; line-height: 1.3; display: flex; flex-direction: column; align-items: center; }
+.cer-stamp span { font-size: 30px; }
+.cer-stamp b { font-family: var(--display); font-weight: 800; font-size: 16px; margin-top: 4px; }
+.cer-big { font-family: var(--display); font-weight: 800; font-size: 34px; }
+.cer-arrow { font-size: 26px; color: var(--mist); }
+.cer-mult { margin: 0; font-size: 14px; color: var(--mist); }
+.cer-legend { display: flex; gap: 14px; font-size: 12.5px; flex-wrap: wrap; }
+.cer-legend span { display: flex; align-items: center; gap: 5px; }
+.cer-legend span::before { content: ""; width: 10px; height: 10px; border-radius: 3px; background: var(--c); display: block; }
+.cer-ledger { display: grid; gap: 10px; }
+.cer-lrow { display: flex; gap: 10px; align-items: center; }
+.cer-lrow .pf { flex: none; width: 36px; height: 42px; }
+.cer-lbl { display: flex; justify-content: space-between; gap: 8px; font-size: 13.5px; margin-bottom: 4px; }
+.cer-lbl em { font-style: normal; color: #ff9a86; }
+.cer-ok { color: var(--jade); }
+.cer-bars { position: relative; height: 10px; border-radius: 999px; background: var(--chip); overflow: visible; }
+.cer-bars i { position: absolute; top: 0; height: 100%; border-radius: 999px; }
+.cer-fairline { position: absolute; top: -3px; width: 2px; height: 16px; background: var(--gold); }
+.cer-what { background: var(--chip); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; }
+.cer-titles { display: grid; gap: 6px; }
+.cer-ttl { background: var(--chip); border-radius: 10px; padding: 6px 10px; font-size: 13px; }
+.cer-ttl b { color: var(--gold); margin-right: 6px; }
 .joinform { position: fixed; z-index: 12; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100% - 28px)); display: grid; gap: 8px; }
 .joinform h3 { margin: 0; font-family: var(--display); font-size: 22px; }
 .joinform input[type=text], .joinform input:not([type]) , .joinform #name { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--ink-2); color: var(--paper); }
@@ -269,7 +307,7 @@ body.play.in-room { overflow: hidden; }
   .conn { display: none; }
 }
 @media (max-width: 860px) {
-  .room .hud .pads.dock { position: fixed; left: max(10px, env(safe-area-inset-left, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); bottom: max(10px, env(safe-area-inset-bottom, 0px)); z-index: 6; }
+  .room .hud .pads.dock { position: fixed; left: max(10px, env(safe-area-inset-left, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); bottom: max(22px, env(safe-area-inset-bottom, 0px)); z-index: 6; }
   .room .hud .pads.dock .pad { padding: 14px 6px; font-size: 18px; }
   .room .hud .card.mine .small { display: none; }
   .room .hud .fac small { display: none; }

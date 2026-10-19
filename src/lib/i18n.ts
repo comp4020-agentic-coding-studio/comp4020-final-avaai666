@@ -167,6 +167,21 @@ const en = {
   hl_hold_loss_t: "Biggest loss", hl_hold_loss: "{name}: cormorants took {n}", hl_hold_loss_none: "no cormorant struck",
   hl_hold_close_t: "Closest call", hl_hold_close: "{name} led by {n}", hl_hold_close_tie: "{name} led by {n} (tie broken by harvest)", hl_hold_close_none: "a match of one",
 
+  // ---- the ceremony (DESIGN.md "The ceremony (every mode)") ----
+  cer_v_rich: "Bountiful", cer_v_fair: "Fair", cer_v_lean: "Lean", cer_v_none: "No fish",
+  cer_step1_title: "The year is over", cer_step1_sub: "Winter comes. In spring, the lake has only the fish you all left.",
+  cer_left: "Left in the lake", cer_nextyear: "Next spring", cer_fish: "fish", cer_young: "young",
+  cer_step2_title: "Who took what", cer_lg_home: "Fish brought home", cer_lg_young: "Young fish killed", cer_lg_spared: "Young fish spared", cer_fair_share: "fair share",
+  cer_what_same: "If everyone had taken one fish in five fewer, next year would still be {tier}.",
+  cer_what: "If everyone had taken one fish in five fewer, next year would hold {alt} ({tier}) instead of {real}.",
+  cer_step3_mult: "Fish home × {mult} ({tier})",
+  cer_next_same: "Next year: same lake ({n} fish)", cer_back_village: "Back to the village",
+  cer_t_king: "King of the Lake", cer_t_king_s: "{name}: most fish home ({n})",
+  cer_t_keeper: "Keeper", cer_t_keeper_s: "{name}: spared {n} young fish",
+  cer_t_mesh: "Fine Mesh", cer_t_mesh_s: "{name}: killed {n} young fish",
+  cer_t_ram: "Rammer", cer_t_ram_s: "{name}: {n} rams",
+  cer_t_koi: "Golden Luck", cer_t_koi_s: "{name}: caught the golden carp",
+
   // ---- the six fishers ----
   c_mei: "Mei", c_wang: "Old Wang", c_jin: "Jin", c_lu: "Lu", c_lian: "Lian", c_shitou: "Shitou",
   c_mei_line: "Quick hands, quicker temper. Never goes home early.",
@@ -454,6 +469,20 @@ const zh: Record<Key, string> = {
   hl_hold_best_t: "最佳结算", hl_hold_best: "{name}：一次结算捞了 {n} 条鱼", hl_hold_best_none: "没有渔网捞到鱼",
   hl_hold_loss_t: "损失最大", hl_hold_loss: "{name}：被鸬鹚偷了 {n} 条", hl_hold_loss_none: "鸬鹚没有出手",
   hl_hold_close_t: "最险的一刻", hl_hold_close: "{name} 领先 {n}", hl_hold_close_tie: "{name} 领先 {n}（平分时按收获定胜负）", hl_hold_close_none: "只有一个人的比赛",
+
+  cer_v_rich: "丰收年", cer_v_fair: "平年", cer_v_lean: "歉收年", cer_v_none: "无鱼年",
+  cer_step1_title: "一年结束了", cer_step1_sub: "冬天来了。到了春天，湖里只有你们留下的鱼。",
+  cer_left: "湖里还剩", cer_nextyear: "明年春天", cer_fish: "鱼", cer_young: "小鱼",
+  cer_step2_title: "谁拿了多少", cer_lg_home: "运回家的鱼", cer_lg_young: "捞死的小鱼", cer_lg_spared: "放过的小鱼", cer_fair_share: "公平份额",
+  cer_what_same: "如果每人少拿五分之一条鱼，明年还是{tier}。",
+  cer_what: "如果每人少拿五分之一条鱼，明年会是 {alt}（{tier}），而不是 {real}。",
+  cer_step3_mult: "到家的鱼 × {mult}（{tier}）",
+  cer_next_same: "明年继续：同一片湖（{n} 条鱼）", cer_back_village: "回村口",
+  cer_t_king: "渔王", cer_t_king_s: "{name}：运回家最多（{n} 条）",
+  cer_t_keeper: "守湖人", cer_t_keeper_s: "{name}：放过了 {n} 条小鱼",
+  cer_t_mesh: "细网手", cer_t_mesh_s: "{name}：捞死了 {n} 条小鱼",
+  cer_t_ram: "撞船王", cer_t_ram_s: "{name}：撞了 {n} 次",
+  cer_t_koi: "锦鲤运", cer_t_koi_s: "{name}：网到了金色锦鲤",
 
   c_mei: "阿梅", c_wang: "老王", c_jin: "阿金", c_lu: "小鹭", c_lian: "莲娘", c_shitou: "石头",
   c_mei_line: "手快，脾气更快。从不早回家。",

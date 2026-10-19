@@ -4,7 +4,9 @@
 // which gets each frame the server built for this seat. Nothing here decides
 // an outcome.
 import { createSound, createWorld } from "./world.js";
+import { createWorld5 } from "./world5.js";
 import { CREW, portrait } from "./art.js";
+import { worldModuleFor } from "./world-select.js";
 
 const boot = JSON.parse(document.getElementById("boot").textContent);
 const cards = boot.cards;
@@ -22,7 +24,16 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 const crewOf = (id) => CREW.find((c) => c.id === id) ?? CREW[0];
 const cardOf = (id) => cards.find((c) => c.id === id);
 
-const world = createWorld($("gl"), stage);
+// Two 3D worlds can live on this page (DESIGN.md "What is shared, and what
+// is not"): world.js (the old 1000 x 700 space, poach/party/hold) and
+// world5.js (the v5 lake, rush 2.0 onward). Each is built only the first
+// time a match needs it, then kept alive — switching games mid-room never
+// tears either down, it only shows the other canvas.
+let worldOld = null, world5 = null;
+function worldFor(moduleName) {
+  if (moduleName === "world5.js") return (world5 ??= createWorld5($("gl5"), stage, boot.world, { minimap: $("mini") }));
+  return (worldOld ??= createWorld($("gl"), stage));
+}
 const sound = createSound($("sound"), { on: t("g_sound_on"), off: t("g_sound_off") });
 const send = (body) => fetch(`/play/${code}/in`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), keepalive: true })
   .then((r) => { if (r.status === 429) banner(t("g_slow"), t("g_slow_s")); return r.json(); }).catch(() => ({ ok: false, reason: "offline" }));
@@ -77,6 +88,9 @@ let mode = null, modeId = null, modeApi = null;
 async function loadMode(id) {
   if (modeId === id && modeApi) return modeApi;
   modeApi?.end?.();
+  const moduleName = worldModuleFor(id), world = worldFor(moduleName);
+  $("gl").hidden = moduleName !== "world.js"; $("gl5").hidden = moduleName !== "world5.js";
+  if ($("mini")) $("mini").hidden = moduleName !== "world5.js";
   world.clearBoats(); world.clearProps(); world.setFish([], 0); world.setKoi(null, 0); world.setNight(0); world.setLanterns([]);
   hud.innerHTML = "";
   mode = await import(`/static/play/${id}.js`);
