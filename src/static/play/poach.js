@@ -163,16 +163,16 @@ export function mount({ world, sound, ui, send, view }) {
     end() { canvas.removeEventListener("pointerdown", onDown); canvas.removeEventListener("pointermove", onMove); removeEventListener("pointerup", onUp); removeEventListener("keydown", onKey); clearInterval(hold); meetingEl.remove(); },
   };
 
-  function draw(dt, t) {
+  function draw(dt, time) {
     if (!cur) return;
     const k = Math.min(1, (performance.now() - curAt) / 100), lerp = (a, b) => a + (b - a) * k;
     world.setNight(cur.phase === "day" ? .15 : .8);
     for (const b of cur.b) {
       const p = prev.b[b[0]] ?? b, bt = world.boat(b[0], colorOf(b[0]), `${nameOf(b[0])}${b[4] ? t("p_boat_out") : ""}${b[0] === target ? " ◎" : ""}`);
       bt.tag.classList.toggle("me", b[0] === me());
-      world.drawBoat(bt, lerp(p[1], b[1]), lerp(p[2], b[2]), b[3] / 100, t, { visible: !b[4], hold: 0, lantern: cur.phase !== "day" });
+      world.drawBoat(bt, lerp(p[1], b[1]), lerp(p[2], b[2]), b[3] / 100, time, { visible: !b[4], hold: 0, lantern: cur.phase !== "day" });
     }
-    world.setFish(cur.f.map((f) => [f[0], f[1], f[2] / 100, f[3] ? 1 : .55]), t);
+    world.setFish(cur.f.map((f) => [f[0], f[1], f[2] / 100, f[3] ? 1 : .55]), time);
     for (const u of cur.buoys) { const m = world.prop(`buoy${u.seat}`, () => { const g = world.makeLantern(.5); return g; }); m.position.set((u.x - 500) / 10, 1 + Math.sin(t * 2) * .2, (u.y - 350) / 10); }
     world.sweepProps();
   }

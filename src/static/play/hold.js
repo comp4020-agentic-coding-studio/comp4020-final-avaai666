@@ -26,10 +26,10 @@ export function mount({ world, sound, ui, send, view }) {
   const nearest = (p) => { if (!cur) return null; let best = null, bd = 40; for (const t of cur.tiles) { const d = Math.hypot(t[1] - p[0], t[2] - p[1]); if (d < bd) { bd = d; best = t; } } return best; };
   const onDown = (e) => {
     const p = world.screenToSim(e.clientX, e.clientY); if (!p || !cur || me() === null) return;
-    const t = nearest(p); if (!t) return;
-    hover = t[0]; help();
+    const tl = nearest(p); if (!tl) return;
+    hover = tl[0]; help();
     if (!card) { ui.banner(t("h_pick_first"), t("h_pick_first_s")); return; }
-    send({ k: "play", card, tile: t[0], ...(card === "fence" ? { dir: fenceDir } : {}) });
+    send({ k: "play", card, tile: tl[0], ...(card === "fence" ? { dir: fenceDir } : {}) });
     ui.did("place"); if (card === "claim") ui.did("claim");
     card = null; renderHand(); labels();
   };
