@@ -17,6 +17,11 @@ export default defineConfig({
           name: "unit",
           include: ["spec/unit/**/*.test.ts"],
           exclude: [...configDefaults.exclude, ...PLAY_UNIT],
+          // The slowest short unit tests take 3 to 7 s alone (lake-runner's
+          // throwNet refusals 3-4 s, boat-sim 3-4 s) and doubled under load
+          // in a full run, past vitest's 5 s default. The files that need
+          // minutes set their own timeout in the file.
+          testTimeout: 30_000,
           sequence: { groupOrder: 0 },
         },
       },
@@ -32,9 +37,21 @@ export default defineConfig({
         test: {
           name: "app",
           include: ["spec/**/*.test.ts"],
-          exclude: [...configDefaults.exclude, "spec/unit/**"],
+          exclude: [...configDefaults.exclude, "spec/unit/**", "spec/lake-frames.test.ts"],
           globalSetup: ["./spec/global-setup.ts"],
           sequence: { groupOrder: 2 },
+        },
+      },
+      {
+        // test 3 of the lake (frames per second) on a server of its own, one
+        // file at a time, after the shared-app tests: environmental, see
+        // docs/checks/flaky-lake-app.md
+        test: {
+          name: "app-own-server",
+          include: ["spec/lake-frames.test.ts"],
+          globalSetup: ["./spec/global-setup-own-server.ts"],
+          fileParallelism: false,
+          sequence: { groupOrder: 3 },
         },
       },
     ],

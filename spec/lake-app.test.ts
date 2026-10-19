@@ -132,37 +132,6 @@ it("2. two clients join, one starts, and the game is running", async () => {
   expect(page).toContain("Bo");
 });
 
-it("3. the second client's stream sees the first client's throw row within 1 s, and at least four frames in the next second", async () => {
-  const code = await openLake();
-  const ava = await joinOk(code, "Ava");
-  const bo = await joinOk(code, "Bo");
-  expect((await start(code, ava)).status).toBe(303);
-
-  const stream = openStream(code, { cookie: bo });
-  try {
-    await stream.next((e) => e.event === "snapshot");
-    const sent = performance.now();
-    const { status, body } = await throwNet(code, ava, { x: 500, y: 350, net: "coarse", key: randomUUID() });
-    expect(status).toBe(200);
-    expect(body).toEqual({ ok: true });
-    const row = await stream.next((e) => e.event === "row" && JSON.parse(e.data).kind === "throw");
-    const latency = row.arrived - sent;
-    console.log(`lake live latency, POST sent -> row event arrived: ${latency.toFixed(1)} ms`);
-    expect(latency).toBeLessThan(1000);
-    const data = JSON.parse(row.data);
-    expect(data).not.toHaveProperty("token");
-    expect(data).not.toHaveProperty("key");
-    expect(data.data).not.toHaveProperty("secret");
-
-    const before = stream.events.filter((e) => e.event === "frame").length;
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    const after = stream.events.filter((e) => e.event === "frame").length;
-    expect(after - before).toBeGreaterThanOrEqual(4);
-  } finally {
-    await stream.close();
-  }
-});
-
 it("4. the same throw key twice gives the same answer and one row", async () => {
   const code = await openLake();
   const ava = await joinOk(code, "Ava");

@@ -8,7 +8,9 @@ import { DICT, t } from "../../src/lib/i18n.ts";
 // frames, to catch the kind of mistake the server tests cannot: a script that
 // throws while drawing. They decide nothing and check no rule.
 
-const THREE = await import("../../src/static/vendor/three.module.js");
+// the browser modules are plain JS with no declarations: type them loosely, here, where they are loaded
+const importJs = (path: string): Promise<any> => import(/* @vite-ignore */ path);
+const THREE = await importJs("../../src/static/vendor/three.module.js");
 
 function dom() {
   const d = new JSDOM(`<!doctype html><canvas id="gl"></canvas><div id="stage"></div><div id="hud"></div><div id="goal"></div>`, { pretendToBeVisual: true });
@@ -44,7 +46,7 @@ describe("Lake Holdings", () => {
   beforeEach(() => { dom(); });
 
   it("tapping the board before a card is picked shows the banner, in either language, and does not throw", async () => {
-    const hold = await import("../../src/static/play/hold.js");
+    const hold = await importJs("../../src/static/play/hold.js");
     for (const lang of ["en", "zh"] as const) {
       dom();
       const { api, banners } = ui(lang);
@@ -66,7 +68,7 @@ describe("Who's Poaching", () => {
   beforeEach(() => { dom(); });
 
   it("drawing a frame in which a boat is out does not throw (the label for a boat that is out is worded from the dictionary)", async () => {
-    const poach = await import("../../src/static/play/poach.js");
+    const poach = await importJs("../../src/static/play/poach.js");
     dom();
     const { api } = ui("en");
     const world = fakeWorld();
