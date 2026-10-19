@@ -49,7 +49,7 @@ it("lists finished matches only, newest first, with the winner and the lake befo
   const lines = hub.history(code)!;
   expect(lines.length).toBe(1);
   expect(lines[0].mode).toBe("fake");
-  expect(lines[0].winner).toEqual({ kind: "seat", name: "Bo" });
+  expect(lines[0].winner).toEqual({ kind: "seat", name: "Bo", character: "jin", bot: false });
   expect(lines[0].lakeBefore).toBe(220);
   expect(lines[0].lakeAfter).toBeLessThan(220);
   expect(typeof lines[0].endedAt).toBe("number");

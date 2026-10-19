@@ -1,0 +1,112 @@
+import { readFileSync } from "node:fs";
+import { JSDOM } from "jsdom";
+import { describe, expect, it } from "vitest";
+import { roomPage } from "../../src/play-pages.ts";
+import { roomSitePage } from "../../src/site-pages.ts";
+import type { RoomView } from "../../src/lib/game-hub.ts";
+
+// The room page is a page and the game is full screen (DESIGN.md "UI rules").
+// There is no layout engine here, so these check what decides who gets a tap:
+// what is in the markup, and which stylesheet rules take pointer events. The
+// real 390x844 hit test is in docs/checks/2026-10-19-site/, run in a browser.
+
+const view: RoomView = { code: "MZHB", mode: "rush", state: "lobby", me: 0, mySeat: null, players: [{ seat: 0, name: "Ava", character: "mei" }], seats: null, startedAt: null, lake: { fish: 220, died: false }, results: null, note: null, ready: ["rush", "poach", "party", "hold"], history: [] };
+const doc = (html: string) => new JSDOM(html).window.document;
+const css = (f: string) => readFileSync(new URL(`../../src/static/${f}`, import.meta.url), "utf8");
+
+describe("the room page before a match", () => {
+  const d = doc(roomSitePage("en", view, [], "https://example.test"));
+
+  it("has nothing of the game on it: no canvas, no pads, no HUD, no overlay, no game script", () => {
+    for (const sel of ["canvas", ".pads", ".pad", "#hud", ".hud", "#overlay", ".overlay", "#stage", ".stage", ".banner", ".coach", ".topbar", "script[src*='room.js']", "script[src*='rush.js']"]) {
+      expect(d.querySelector(sel), sel).toBeNull();
+    }
+    // the room page has its own small boot data (the view and the words); the game's (cards, the mode scripts' data) is not here
+    expect(JSON.parse(d.querySelector("#boot")!.textContent!)).not.toHaveProperty("cards");
+  });
+
+  it("has the pick-a-game buttons and Start, and the page is not a fixed full-screen layer", () => {
+    expect(d.querySelectorAll("#pick [data-pick]").length).toBe(4);
+    expect(d.querySelector("#tostart, #startbtn")).not.toBeNull();
+    const html = new JSDOM(roomSitePage("en", view, [], "https://example.test")).serialize();
+    expect(html).not.toMatch(/class="[^"]*game-stage/);
+  });
+
+  it("links to the game page once a match runs; it never embeds it", () => {
+    const running = doc(roomSitePage("en", { ...view, state: "play" }, [], "https://example.test"));
+    expect(running.querySelector('a[href="/play/MZHB/game"]')).not.toBeNull();
+    expect(d.querySelector("iframe, canvas, .game-stage")).toBeNull();
+  });
+
+  it("shows the card before the start (C1): the goal, three actions and the choice that matters", () => {
+    const c1 = d.querySelector("#c1")!;
+    expect(c1.textContent).toContain("How you win");
+    expect(c1.querySelectorAll(".icons3 > div").length).toBe(3);
+    expect(c1.textContent).toContain("The choice that matters:");
+  });
+
+  it("loads the small live script, not the game's", () => {
+    const srcs = [...d.querySelectorAll("script[src]")].map((s) => s.getAttribute("src"));
+    expect(srcs).toContain("/static/play/roomlive.js");
+    expect(srcs.some((s) => /\/(room|rush|poach|party|hold|world)\.js$/.test(s ?? ""))).toBe(false);
+  });
+});
+
+describe("the game page during a match", () => {
+  const d = doc(roomPage(view, undefined, "en"));
+
+  it("is full screen with the site header hidden: it has no site top bar and nothing else to click", () => {
+    expect(d.querySelector("header.top, .top .wrap, nav.links")).toBeNull();
+    expect(d.querySelector("canvas#gl")).not.toBeNull();
+    expect(d.querySelector("#hud")).not.toBeNull();
+    expect(d.body.className).toMatch(/in-room/);
+  });
+
+  it("has a host menu with Stop match inside it, not a loose Stop button", () => {
+    expect(d.querySelector("#stopbtn")).toBeNull();
+    const menu = d.querySelector("#hostmenu");
+    expect(menu).not.toBeNull();
+    expect(menu!.querySelector("[data-stop]")).not.toBeNull();
+    expect(d.querySelector("#hostbtn")?.textContent).toContain("⋯");
+  });
+
+  it("offers Back to the room as a link to the room page", () => {
+    const html = readFileSync(new URL("../../src/static/play/room.js", import.meta.url), "utf8");
+    expect(html).toContain("/play/${code}");
+    expect(html).toMatch(/g_back_room/);
+  });
+});
+
+describe("nothing that only informs takes a tap", () => {
+  const play = css("play/play.css");
+  const rule = (sel: string): string => {
+    const m = play.match(new RegExp(`(^|\\n)${sel.replace(/[.\\[\\]]/g, "\\$&")}\\s*\\{([^}]*)\\}`));
+    return m ? m[2] : "";
+  };
+
+  // the layers that float over the stage and only inform; the HUD, top bar, overlay sheets, meeting, tug bar and pads are controls and take taps
+  for (const sel of [".tags", ".floats", ".tag3d", ".float", ".pin", ".hint", ".coach", ".banner", ".count"]) {
+    it(`${sel} has pointer-events: none`, () => {
+      const joined = play.split("\n").filter((l) => new RegExp(`^${sel.replace(/[.]/g, "\\.")}(,| |\\{|\\.)`).test(l) || l.startsWith(`${sel},`) || new RegExp(`(^|, )${sel.replace(/[.]/g, "\\.")}[ ,{]`).test(l.split("{")[0])).join("\n");
+      expect(joined, `${sel} is not styled`).not.toBe("");
+      expect(joined).toMatch(/pointer-events:\s*none/);
+    });
+  }
+
+  it("the overlay lets taps through to the game except on what needs a choice", () => {
+    expect(play).toMatch(/\.overlay\s*\{[^}]*pointer-events:\s*none/);
+    expect(play).toMatch(/\.overlay\s*>\s*\*\s*\{[^}]*pointer-events:\s*auto/);
+  });
+});
+
+describe("every page scrolls", () => {
+  it("no site page locks the document's scroll; only the full-screen game page does", () => {
+    const site = css("site.css");
+    expect(site).not.toMatch(/body\.page-room\.playing\s*\{[^}]*overflow:\s*hidden/);
+    expect(site).not.toMatch(/\bbody\s*\{[^}]*overflow:\s*hidden/);
+    expect(site).not.toMatch(/\.site\s*\{[^}]*overflow:\s*hidden/);
+    const play = css("play/play.css");
+    // the game page is the only place where the body is fixed, and it is the game
+    expect(play).toMatch(/body\s*\{[^}]*overflow:\s*hidden/);
+  });
+});

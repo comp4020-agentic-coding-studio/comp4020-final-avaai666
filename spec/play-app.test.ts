@@ -34,6 +34,10 @@ it("play 4. the vendored three.js keeps its MIT header, and only listed files ar
   expect(three.headers.get("content-type")).toMatch(/javascript/);
   expect((await three.text()).slice(0, 200)).toContain("SPDX-License-Identifier: MIT");
   expect((await fetch(at("/static/play/world.js"))).status).toBe(200);
+  // every script the pages load is served (the room page's live script was missing once, so Start did nothing)
+  for (const f of ["room", "roomlive", "lobby", "rush", "poach", "party", "hold", "art", "world"]) expect((await fetch(at(`/static/play/${f}.js`))).status, f).toBe(200);
+  expect((await fetch(at("/static/site.js"))).status).toBe(200);
+  expect((await fetch(at("/static/site.css"))).status).toBe(200);
   expect((await fetch(at("/static/play/../../server.ts"))).status).toBe(404);
   expect((await fetch(at("/static/vendor/nope.js"))).status).not.toBe(200);
 });

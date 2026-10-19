@@ -52,9 +52,9 @@ html[lang="zh"] .brand b { font-family: var(--zh); font-weight: 700; }
 .menu summary::-webkit-details-marker { display: none; }
 
 main.wrap { padding-block: 28px 64px; }
-main.wrap :is(h1, h2, h3):not(.game-stage *), .site .h3 { font-family: var(--display); line-height: 1.08; margin: 0; text-wrap: balance; }
-html[lang="zh"] main.wrap :is(h1, h2, h3, .h3):not(.game-stage *) { font-family: var(--zh); font-weight: 700; letter-spacing: .5px; }
-main.wrap h1:not(.game-stage *) { font-size: clamp(32px, 5vw, 46px); }
+main.wrap :is(h1, h2, h3), .site .h3 { font-family: var(--display); line-height: 1.08; margin: 0; text-wrap: balance; }
+html[lang="zh"] main.wrap :is(h1, h2, h3, .h3) { font-family: var(--zh); font-weight: 700; letter-spacing: .5px; }
+main.wrap h1 { font-size: clamp(32px, 5vw, 46px); }
 .site .h3 { font-size: 18px; margin-bottom: 8px; }
 .eyebrow { font-family: var(--body) !important; font-size: 12px !important; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--mist); margin: 0 0 8px !important; }
 html[lang="zh"] .eyebrow { letter-spacing: 2px; }
@@ -167,12 +167,6 @@ form.inline { display: inline; margin: 0; }
 .page-room .joinform h3 { margin: 0; font-family: var(--display); font-size: 22px; }
 .page-room .joinform #name { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--ink-2); color: var(--paper); }
 
-/* the game's own stage sits below the room's panels; during a match it takes the screen */
-.game-stage { position: relative; margin-top: 22px; height: min(78vh, 720px); border-radius: 18px; overflow: hidden; border: 1px solid var(--line); background: var(--ink); }
-.page-room .game-stage .app.room { position: absolute; inset: 0; height: 100%; }
-.page-room .game-stage .room .stage { position: absolute; inset: 0; }
-body.page-room.playing { overflow: hidden; }
-body.page-room.playing .game-stage { position: fixed; inset: 0; margin: 0; height: auto; border-radius: 0; border: 0; z-index: 40; }
 
 /* making of */
 .timeline { list-style: none; padding: 0; margin: 24px 0 0; position: relative; }
@@ -213,10 +207,20 @@ footer nav { display: flex; gap: 14px; flex-wrap: wrap; }
   .steps .pic svg { width: 62px; height: 46px; }
   .howhead { grid-template-columns: 1fr; }
   .code { font-size: 36px; letter-spacing: 4px; }
-  .game-stage { height: 70vh; }
 }
 @media (max-width: 420px) { .pick { grid-template-columns: 1fr; } .game { grid-template-columns: 1fr; } .game .ico { width: 52px; height: 52px; } .roster { grid-template-columns: repeat(3, 1fr); } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 
 /* the 3D tag on your own boat, in the page's language */
-html[lang="zh"] .tag3d.me::before { content: "你 · "; }
+
+/* C1: the card before the start, on the room page */
+.c1 { margin-top: 14px; display: grid; gap: 10px; }
+.c1 .goalline { margin: 0; border-left: 3px solid var(--gold); padding-left: 10px; }
+.c1 .goalline b { color: var(--gold); }
+.icons3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.icons3 > div { background: var(--ink-2); border: 1px solid var(--line); border-radius: 12px; padding: 8px; display: grid; gap: 2px; justify-items: center; text-align: center; min-width: 0; }
+.icons3 > div > span { font-size: 22px; }
+.icons3 b { font-size: 14px; }
+.icons3 small { color: var(--mist); font-size: 12px; }
+.check { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--mist); }
+@media (max-width: 420px) { .icons3 { grid-template-columns: 1fr; } }

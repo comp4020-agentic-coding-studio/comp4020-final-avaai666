@@ -107,6 +107,10 @@ Scope
 - README.md stays English (the course reads it at /readme/). A Chinese
   page may show it with a one-line note that it is in English.
 - Test names are English too.
+- The game is full screen on its own page and is never embedded under a page.
+  Every other page scrolls. Nothing that only informs (floating text, tags,
+  banners, coach marks, hints) takes pointer events. "Stop match" is in the
+  host menu, behind a confirmation. Player-facing pages carry no course text.
 
 ## Frozen: /classic, /l, /p, /b (no new features; keep them running)
 

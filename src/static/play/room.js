@@ -21,7 +21,6 @@ const stage = $("stage"), overlay = $("overlay"), hud = $("hud"), coachEl = $("c
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const crewOf = (id) => CREW.find((c) => c.id === id) ?? CREW[0];
 const cardOf = (id) => cards.find((c) => c.id === id);
-const ICON = { rush: ["👆", "🕸", "💨"], poach: ["👆", "👀", "🎈"], party: ["👆", "🛒", "🤫"], hold: ["🂠", "⬡", "🌊"] };
 
 const world = createWorld($("gl"), stage);
 const sound = createSound($("sound"), { on: t("g_sound_on"), off: t("g_sound_off") });
@@ -58,8 +57,19 @@ const ui = { hud, banner, setClock, coach, did, rearm, esc, crewOf, portrait, ov
 const toggle = $("hudtoggle");
 toggle.addEventListener("click", () => { const open = !document.body.classList.contains("hud-open"); document.body.classList.toggle("hud-open", open); toggle.setAttribute("aria-expanded", String(open)); toggle.textContent = open ? t("g_close") : t("g_details"); });
 // ---- stop match: only the room's first player, only during a match ----
-const stopBtn = $("stopbtn");
-stopBtn.addEventListener("click", async () => { if (confirm(t("g_stop_confirm"))) { const r = await post("stop", {}); if (!r.ok) banner(t("g_stop_fail"), r.reason); } });
+const hostMenu = $("hostmenu"), hostBtn = $("hostbtn"), hostList = $("hostlist");
+const openHost = (on) => { hostList.hidden = !on; hostBtn.setAttribute("aria-expanded", String(on)); };
+hostBtn.addEventListener("click", () => { if (hostList.querySelector(".confirm-row")) return; openHost(hostList.hidden); });
+hostList.addEventListener("click", async (e) => {
+  if (e.target.closest("[data-stop]")) {
+    hostList.innerHTML = `<div class="confirm-row"><p>${esc(t("g_stop_confirm"))}</p><div class="row-btns"><button type="button" class="btn primary" data-yes>${esc(t("g_stop"))}</button><button type="button" class="btn ghost" data-no>${esc(t("g_cancel"))}</button></div></div>`;
+  } else if (e.target.closest("[data-no]")) {
+    hostList.innerHTML = `<button type="button" class="danger" data-stop>${esc(t("g_stop"))}</button>`; openHost(false);
+  } else if (e.target.closest("[data-yes]")) {
+    hostList.innerHTML = `<button type="button" class="danger" data-stop>${esc(t("g_stop"))}</button>`; openHost(false);
+    const r = await post("stop", {}); if (!r.ok) banner(t("g_stop_fail"), r.reason);
+  }
+});
 const isFirst = () => view.me !== null && view.players[0]?.seat === view.me;
 
 // ---- the mode script ----
@@ -76,7 +86,6 @@ async function loadMode(id) {
 }
 
 // ---- overlays ----
-function whoHtml(players) { return `<div class="who">${players.map((p) => `<span class="p">${portrait(p.character, p.name)}${esc(p.name)}</span>`).join("") || `<small>${t("g_nobody")}</small>`}</div>`; }
 function lakeHtml() {
   const l = view.lake;
   return `<div class="lakebar ${l.died ? "dead" : ""}"><span>${l.died ? t("g_lake_died") : t("g_lake_remembers")}</span><div class="bar"><i style="width:${Math.min(100, l.fish / 2.2)}%"></i></div><b>${t("room_fish_n", { n: l.fish })}</b></div>`;
@@ -93,22 +102,6 @@ function startHtml(again) {
       ? `<button class="btn primary" id="startbtn" type="button">${again ? t("g_rematch") : t("start")}</button><label class="check"><input type="checkbox" id="bots" ${botsDefault ? "checked" : ""}/> ${t("g_bots")}</label>`
       : `<span class="status soon">${esc(t("g_coming", { game: t(`${c.id}_name`), date: c.due }))}</span>`)
     : `<span class="note">${t("join_to_play")}</span>`}</div>`;
-}
-function cardHtml() {
-  const c = cardOf(view.mode);
-  return `<section class="sheet" id="c1">
-    <h2>${esc(t(`${c.id}_name`))}<span lang="${boot.lang === "zh" ? "en" : "zh"}">${esc(boot.other[`${c.id}_name`])}</span></h2>
-    <p class="goal"><b>${t("goal")}</b>${esc(t(`${c.id}_goal`))}</p>
-    <div class="icons3">${[1, 2, 3].map((n, i) => `<div><span class="ic" aria-hidden="true">${ICON[c.id][i]}</span><b>${esc(t(`${c.id}_a${n}`))}</b><small>${esc(t(`${c.id}_a${n}s`))}</small></div>`).join("")}</div>
-    <p class="choice"><b>${t("the_choice")}</b> ${esc(t(`${c.id}_choice`))}</p>
-    ${c.id === "rush" ? `<p class="small">${esc(t("rush_extra"))}</p>` : ""}
-    ${whoHtml(view.players)}
-    ${lakeHtml()}
-    ${view.note ? `<p class="toast">${esc(t(`g_note_${view.note}`))}</p>` : ""}
-    ${startHtml(false)}
-    <p class="toast" id="starterr" role="alert"></p>
-    ${switchHtml()}
-  </section>`;
 }
 function resultsHtml() {
   const r = view.results;
@@ -130,6 +123,7 @@ function resultsHtml() {
     ${startHtml(true)}
     <p class="toast" id="starterr" role="alert"></p>
     ${switchHtml()}
+    <p><a class="btn ghost" href="/play/${code}" id="backroom">${esc(t("g_back_room"))}</a></p>
   </section>`;
 }
 function bindOverlay() {
@@ -143,41 +137,14 @@ function bindOverlay() {
   }));
 }
 
-// ---- the site's panels around the stage (src/site-pages.ts): who is here,
-// the picked game, this room's lake and what happened here, kept live from
-// the room's stream; a match takes the whole screen ----
-const LAKE_FULL = 220;
-const whenFmt = new Intl.DateTimeFormat(boot.lang === "zh" ? "zh-CN" : "en-AU", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Australia/Sydney" });
-function logLine(m) {
-  const game = t(`${m.mode}_name`);
-  const what = m.winner.kind === "seat" ? t("log_won", { game, name: m.winner.name }) : m.winner.kind === "fishers" ? t("log_fishers", { game }) : m.winner.kind === "poacher" ? t("log_poacher", { game }) : t("log_nobody", { game });
-  return `<li><time datetime="${new Date(m.endedAt).toISOString()}">${esc(whenFmt.format(m.endedAt))}</time><span>${esc(what)}</span><span class="fish">${m.lakeBefore} → ${m.lakeAfter}</span></li>`;
-}
-function sitePanels() {
-  const people = $("people");
-  if (people) people.innerHTML = view.players.map((p) => `<div class="person on"><div class="f">${portrait(p.character, p.name)}</div><span class="dot"></span>${esc(p.name)}</div>`).join("") + `<div class="person empty"><div class="f">+</div>${esc(t("waiting"))}</div>`;
-  const fish = $("lakefish"); if (fish) fish.innerHTML = `${view.lake.fish} <small>${esc(t("room_lake_of", { n: LAKE_FULL }))}</small>`;
-  const bar = $("lakebar"); if (bar) bar.style.width = `${Math.min(100, (view.lake.fish / LAKE_FULL) * 100).toFixed(1)}%`;
-  const log = $("log"); if (log) log.innerHTML = view.history.length ? view.history.map(logLine).join("") : `<li class="none">${esc(t("log_none"))}</li>`;
-  document.querySelectorAll("#pick [data-pick]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.pick === view.mode)));
-  const pn = $("pickname"); if (pn) pn.textContent = t(`${view.mode}_name`);
-  const pr = $("pickrules"); if (pr) pr.setAttribute("href", `/how/${view.mode}`);
-  document.body.classList.toggle("playing", view.state === "play");
-}
-$("pick")?.addEventListener("click", async (e) => {
-  const b = e.target.closest("[data-pick]"); if (!b) return;
-  const r = await post("mode", { mode: b.dataset.pick });
-  if (!r.ok) banner(r.reason === "not_in_room" ? t("g_join_change") : r.reason);
-});
-
 // ---- the stream ----
 let countdownT = 0;
 function showRoom() {
-  sitePanels();
   goalEl.textContent = t(`${view.mode}_hud`);
-  stopBtn.hidden = !(view.state === "play" && isFirst());
+  hostMenu.hidden = !(view.state === "play" && isFirst());
+  if (hostMenu.hidden) openHost(false);
   if (view.me === null && document.querySelector(".joinform")) { overlay.innerHTML = ""; return; }
-  if (view.state === "lobby") { overlay.innerHTML = cardHtml(); bindOverlay(); setClock(0); clockEl.textContent = ""; }
+  if (view.state === "lobby") { location.replace(`/play/${code}`); return; }
   if (view.state === "end" && view.results) { overlay.innerHTML = resultsHtml(); bindOverlay(); }
   if (view.state === "play") { /* the countdown or the match */ }
 }

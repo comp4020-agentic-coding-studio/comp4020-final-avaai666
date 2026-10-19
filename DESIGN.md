@@ -1,4 +1,4 @@
-# Next Year, No Fish (明年无鱼): design v4.0
+# Next Year, No Fish (明年无鱼): design v4.0.1
 
 ## What it is
 
@@ -29,7 +29,8 @@ words are those of the site plan v8 mock (site-plan-v8.html), without its
 |---|---|
 | / | The one-line idea, "Play with friends" (opens a room), "Join with a code", the three steps, the four game cards (one line, players, minutes, "The choice that matters", Play, How to play), "The lake remembers". |
 | /how, /how/MODE | One page per game (/how is Boat Rush's): how you win, the choice that matters, five numbered steps with a small picture each, controls for phone and laptop, what the shared lake does. |
-| /play/CODE | The room: the code and a Copy link button, who is here (live, from the room's stream), pick a game, Start, this room's lake, and "What happened here": the room's finished matches from game_matches (when, game, winner, lake before → after; no seeds, no tokens). During a match, the game. |
+| /play/CODE | The room, a normal page that scrolls and has nothing of the game on it (no canvas, pads or HUD): the code and a Copy link button, who is here (live, from the room's stream), pick a game with the card for it (C1), Start, this room's lake, and "What happened here": the room's finished matches from game_matches (when, game, winner, lake before → after; no seeds, no tokens). When a match starts, every seat's browser goes to /play/CODE/game. |
+| /play/CODE/game | The game, full screen: no site header and nothing else to click. The 3-2-1, the match, then the results with Rematch, Change game and "Back to the room". With no match and no results it sends the player back to the room. |
 | /readme/ | README.md, inside the same top bar. |
 | /making-of | The four versions, why each one changed, and a link to each one that still runs. |
 | /classic | The five-year lake's home page, moved from "/". |
@@ -38,6 +39,15 @@ words are those of the site plan v8 mock (site-plan-v8.html), without its
 linked only from /making-of (and from /classic, which is the five-year
 lake's own home). GET /play, the lobby of v3, keeps working for links made
 before v4.0: it shows the four games and the six fishers and opens a room.
+
+## UI rules
+
+- The game is full screen on its own page (/play/CODE/game) and is never embedded under another page.
+- Every other page scrolls. Only the game page fixes the body.
+- Nothing that only informs (floating text, boat tags, banners, coach marks, hints, the 3-2-1) takes pointer events. Only a screen that needs a choice (the start and results sheets, the meeting) covers the game, and only its own controls take taps.
+- "Stop match" is in the host menu (⋯, shown to the room's first player during a match) and asks for a confirmation on the page, not a browser dialog.
+- Player-facing pages (/, /how/*, the room, the game) carry no course text. /readme/ and /making-of may name the project's history, in plain words. The footer is the game's own line, "明年无鱼 · Next Year, No Fish", in both languages.
+- Quoted words in Chinese use 「」. A place reads 1st, 2nd, 3rd, 4th in English and 第 N 名 in Chinese. A bot is named through the dictionary: Jin (bot), 阿金（机器人）.
 
 ## Languages
 
@@ -406,6 +416,7 @@ decides.
 
 ## Changelog
 
+- v4.0.1 (19 Oct): the UI rules. The room is a page and the game is its own full-screen page; the host menu holds Stop match; informing layers take no taps; no course text on player pages; Chinese corrections. No game rule changed. (Boat Rush seasons and the shared closing ceremony are not in this version.)
 - v4.0 (19 Oct): one site, two languages. "/" is the current game's home
   (the site plan v8: /, /how, /how/MODE, the room, /readme/, /making-of);
   the five-year lake's home moves to /classic; every page in English and

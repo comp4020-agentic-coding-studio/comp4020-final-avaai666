@@ -11,7 +11,7 @@ import { CREW, portrait } from "./static/play/art.js";
 
 export type Nav = "play" | "how" | "about" | "making" | null;
 // one finished match, as "What happened here" shows it (no seed, no token)
-export interface MatchLine { endedAt: number; mode: string; winner: { kind: "seat"; name: string } | { kind: "fishers" | "poacher" | "none" }; lakeBefore: number; lakeAfter: number }
+export interface MatchLine { endedAt: number; mode: string; winner: { kind: "seat"; name: string; character: string; bot: boolean } | { kind: "fishers" | "poacher" | "none" }; lakeBefore: number; lakeAfter: number }
 
 const seal = `<span class="seal" aria-hidden="true"><span>明</span><span>年</span><span>无</span><span>鱼</span></span>`;
 const other = (lang: Lang): Lang => (lang === "en" ? "zh" : "en");
@@ -136,9 +136,19 @@ export function howPage(lang: Lang, id: string): string {
 const when = (lang: Lang, ms: number) =>
   new Intl.DateTimeFormat(lang === "zh" ? "zh-CN" : "en-AU", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Australia/Sydney" }).format(ms);
 
+// C1 (DESIGN.md "Clarity"): before the start, one card: the goal in one
+// sentence, three icons for the three main actions, and the choice that matters.
+const A_ICON: Record<string, string[]> = { rush: ["👆", "🕸", "💨"], poach: ["👆", "👀", "🎈"], party: ["👆", "🛒", "🤫"], hold: ["🂠", "⬡", "🌊"] };
+export function c1Html(lang: Lang, id: string): string {
+  const k = (s: string) => esc(t(lang, `${id}_${s}`));
+  return `<p class="goalline"><b>${esc(t(lang, "goal"))}</b> ${k("goal")}</p>
+    <div class="icons3">${[1, 2, 3].map((n, i) => `<div><span aria-hidden="true">${A_ICON[id][i]}</span><b>${k(`a${n}`)}</b><small>${k(`a${n}s`)}</small></div>`).join("")}</div>
+    <p class="choice"><b>${esc(t(lang, "the_choice"))}</b> ${k("choice")}</p>${id === "rush" ? `<p class="small muted">${esc(t(lang, "rush_extra"))}</p>` : ""}`;
+}
+
 export function logLine(lang: Lang, m: MatchLine): string {
   const game = gameName(lang, m.mode);
-  const what = m.winner.kind === "seat" ? t(lang, "log_won", { game, name: m.winner.name })
+  const what = m.winner.kind === "seat" ? t(lang, "log_won", { game, name: m.winner.bot ? t(lang, "bot_suffix", { name: t(lang, `c_${m.winner.character}`) }) : m.winner.name })
     : m.winner.kind === "fishers" ? t(lang, "log_fishers", { game }) : m.winner.kind === "poacher" ? t(lang, "log_poacher", { game }) : t(lang, "log_nobody", { game });
   return `<li><time datetime="${new Date(m.endedAt).toISOString()}">${esc(when(lang, m.endedAt))}</time><span>${esc(what)}</span><span class="fish">${m.lakeBefore} → ${m.lakeAfter}</span></li>`;
 }
@@ -146,7 +156,7 @@ export function logLine(lang: Lang, m: MatchLine): string {
 // The room's page: the share bar, who is here (live), pick a game, Start,
 // this room's lake and what happened here, around the game's own stage.
 // room.js keeps "who's here", the lake and the log live from the stream.
-export function roomSitePage(lang: Lang, view: RoomView, lines: MatchLine[], origin: string, roomShell = "", error?: string): string {
+export function roomSitePage(lang: Lang, view: RoomView, lines: MatchLine[], origin: string, error?: string): string {
   const url = `${origin}/play/${view.code}`;
   const people = view.players.map((p) => `<div class="person on"><div class="f">${portrait(p.character, p.name)}</div><span class="dot"></span>${esc(p.name)}</div>`).join("");
   const join = view.me === null ? `<form class="joinform panel" method="post" action="/play/${esc(view.code)}/join">
@@ -165,7 +175,10 @@ export function roomSitePage(lang: Lang, view: RoomView, lines: MatchLine[], ori
         <div class="people" id="people">${people}<div class="person empty"><div class="f">+</div>${esc(t(lang, "waiting"))}</div></div>
         <h2 class="h3 mt">${esc(t(lang, "pickgame"))}</h2>
         <div class="pick" id="pick">${GAMES.map((g) => `<button class="pickb" type="button" data-pick="${g.id}" aria-pressed="${g.id === view.mode}"><b>${esc(gameName(lang, g.id))}</b><span>${g.players} ${esc(t(lang, "players"))} · ${g.min} ${esc(t(lang, "min"))} · ${esc(t(lang, `${g.id}_choice`))}</span></button>`).join("")}</div>
-        <div class="row mt"><a class="btn primary" href="#game" id="tostart">${esc(t(lang, "start"))}: <span id="pickname">${esc(gameName(lang, view.mode))}</span></a><a class="btn ghost small" href="/how/${esc(view.mode)}" id="pickrules">${esc(t(lang, "rules"))}</a></div>
+        <section class="c1" id="c1" aria-live="polite">${c1Html(lang, view.mode)}</section>
+        <div class="row mt"><button class="btn primary" type="button" id="startbtn"${view.me === null ? " hidden" : ""}>${esc(t(lang, "start"))}: <span id="pickname">${esc(gameName(lang, view.mode))}</span></button><label class="check"><input type="checkbox" id="bots" ${view.players.length < 2 ? "checked" : ""}/> ${esc(t(lang, "g_bots"))}</label><a class="btn ghost small" href="/how/${esc(view.mode)}" id="pickrules">${esc(t(lang, "rules"))}</a></div>
+        <p class="toast" id="starterr" role="alert"></p><p class="toast" id="roomnote">${view.note ? esc(t(lang, `g_note_${view.note}`)) : ""}</p>
+        ${view.state === "play" ? `<p><a class="btn primary" href="/play/${esc(view.code)}/game">${esc(t(lang, "g_to_game"))}</a></p>` : ""}
       </div>
       <div class="panel"><h2 class="h3">${esc(t(lang, "room_lake"))}</h2>
         <div class="row spread"><span class="fishn" id="lakefish">${view.lake.fish} <small>${esc(t(lang, "room_lake_of", { n: LAKE_FULL }))}</small></span></div>
@@ -174,8 +187,9 @@ export function roomSitePage(lang: Lang, view: RoomView, lines: MatchLine[], ori
         <ul class="log" id="log">${lines.length ? lines.map((m) => logLine(lang, m)).join("") : `<li class="none">${esc(t(lang, "log_none"))}</li>`}</ul>
       </div>
     </div>
-    <section class="game-stage" id="game" aria-label="${esc(gameName(lang, view.mode))}">${roomShell}</section>`;
-  return sitePage(lang, { title: t(lang, "room_title", { code: view.code }), nav: "play", here: `/play/${view.code}`, body, bodyClass: "page-room", head: `<link rel="stylesheet" href="/static/play/play.css" />\n    <script type="importmap">{ "imports": { "three": "/static/vendor/three.module.js" } }</script>` });
+    <script type="application/json" id="boot">${JSON.stringify({ view, lang, words: DICT[lang] }).replace(/</g, "\\u003c")}</script>
+    <script type="module" src="/static/play/roomlive.js"></script>`;
+  return sitePage(lang, { title: t(lang, "room_title", { code: view.code }), nav: "play", here: `/play/${view.code}`, body, bodyClass: "page-room" });
 }
 
 export function noRoomSitePage(lang: Lang, code: string): string {

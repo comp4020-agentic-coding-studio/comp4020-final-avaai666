@@ -11,7 +11,7 @@ const title = (html: string) => doc(html).title;
 const textOf = (html: string) => doc(html).body.textContent ?? "";
 
 const room = { code: "MZHB", mode: "rush", state: "lobby" as const, me: null, mySeat: null, players: [{ seat: 0, name: "Ava", character: "mei" as const }], seats: null, startedAt: null, lake: { fish: 168, died: false }, results: null, note: null, ready: ["rush", "poach", "party", "hold"], history: [] };
-const lines: MatchLine[] = [{ endedAt: Date.UTC(2026, 9, 19, 9, 14), mode: "rush", winner: { kind: "seat", name: "Ava" }, lakeBefore: 220, lakeAfter: 151 }];
+const lines: MatchLine[] = [{ endedAt: Date.UTC(2026, 9, 19, 9, 14), mode: "rush", winner: { kind: "seat", name: "Ava", character: "mei", bot: false }, lakeBefore: 220, lakeAfter: 151 }];
 
 const PAGES: [string, (lang: Lang) => string][] = [
   ["/", (lang) => homePage(lang)],
@@ -125,5 +125,15 @@ describe("/readme/ and /making-of", () => {
   it("the not-found page and the classic note are worded too", () => {
     expect(title(notFoundPage("zh"))).toContain("明年无鱼");
     expect(classicNote()).toContain("/making-of");
+  });
+});
+
+describe("a bot that won is named in the reader's language", () => {
+  const botLine: MatchLine[] = [{ endedAt: Date.UTC(2026, 9, 19, 9, 14), mode: "party", winner: { kind: "seat", name: "Jin (bot)", character: "jin", bot: true }, lakeBefore: 171, lakeAfter: 118 }];
+  it("Jin (bot) in English, 阿金（机器人） in Chinese, in What happened here", () => {
+    expect(textOf(roomSitePage("en", room, botLine, "https://example.test"))).toContain("Fishing Party · Jin (bot) won");
+    const zh = textOf(roomSitePage("zh", room, botLine, "https://example.test"));
+    expect(zh).toContain("钓鱼派对 · 阿金（机器人） 赢");
+    expect(zh).not.toContain("(bot)");
   });
 });

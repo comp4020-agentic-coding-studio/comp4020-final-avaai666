@@ -88,7 +88,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--gold);
 /* stage overlays */
 .tags, .floats { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
 .tag3d { position: absolute; left: 0; top: 0; font-family: var(--display); font-weight: 800; font-size: 13px; white-space: nowrap; padding: 1px 8px; border-radius: 999px; background: rgba(18,14,24,.72); border: 1.5px solid var(--c, var(--paper)); color: var(--paper); line-height: 1.4; font-variant-numeric: tabular-nums; }
-.tag3d.me::before { content: "YOU · "; color: var(--gold); }
+.tag3d.me { color: var(--gold); }
 .float { position: absolute; left: 0; top: 0; font-family: var(--display); font-weight: 800; font-size: 20px; text-shadow: 0 2px 0 rgba(0,0,0,.55); animation: rise 1.3s ease-out forwards; white-space: nowrap; }
 @keyframes rise { from { opacity: 1; margin-top: 0; } to { opacity: 0; margin-top: -46px; } }
 
@@ -335,3 +335,22 @@ body.play.in-room { overflow: hidden; }
   .room .hudtoggle { top: calc(max(10px, env(safe-area-inset-top, 0px)) + 48px); }
   .room .hud { top: calc(max(10px, env(safe-area-inset-top, 0px)) + 86px); }
 }
+
+/* nothing that only informs takes a tap (DESIGN.md "UI rules"): floating text, tags, hints, coach marks, banners and the 3-2-1 sit over the game and let every tap through to it */
+.tags, .floats, .tag3d, .float, .pin, .hint, .coach, .banner, .count { pointer-events: none; }
+.overlay { pointer-events: none; }
+.overlay > * { pointer-events: auto; }
+.overlay > .count { pointer-events: none; }
+/* the host menu: Stop match lives behind a ⋯ button */
+.hostmenu { position: relative; }
+.hostmenu .menu-list { position: absolute; right: 0; top: calc(100% + 6px); z-index: 12; min-width: 180px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px; display: grid; gap: 4px; }
+.hostmenu .menu-list button { text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: 8px; font-weight: 700; }
+.hostmenu .menu-list button:hover { background: var(--chip); }
+.hostmenu .menu-list .danger { color: #ff8a7a; }
+.confirm-row { display: grid; gap: 6px; padding: 6px; }
+.confirm-row p { margin: 0; font-size: 13px; }
+.confirm-row .row-btns { display: flex; gap: 6px; }
+
+/* the seal in the game's top bar is a link back to the room: a 38 px version of the brand seal, not a box in a box */
+.mini-seal { flex: none; width: 38px; height: 38px; display: block; }
+.mini-seal .seal { width: 38px; height: 38px; font-size: 14px; padding: 3px; }

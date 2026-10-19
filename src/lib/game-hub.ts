@@ -33,7 +33,7 @@ export interface RoomView {
   history: HistoryLine[]; // the room's finished matches, for "What happened here"
 }
 // one finished match, for the room's "What happened here" (no seed, no token)
-export interface HistoryLine { endedAt: number; mode: string; winner: { kind: "seat"; name: string } | { kind: "fishers" | "poacher" | "none" }; lakeBefore: number; lakeAfter: number }
+export interface HistoryLine { endedAt: number; mode: string; winner: { kind: "seat"; name: string; character: string; bot: boolean } | { kind: "fishers" | "poacher" | "none" }; lakeBefore: number; lakeAfter: number }
 export interface GameHub {
   createRoom(mode: string): { code: string }; // throws for a mode it does not know
   view(code: string, me: number | null): RoomView | null;
@@ -93,7 +93,7 @@ export function createGameHub(store: GameStore, modes: Record<string, AnyMode>, 
       const s = m.summary!, w = (s.extra as { winner?: string } | undefined)?.winner;
       const first = s.seats.filter((x) => x.place === 1);
       const winner: HistoryLine["winner"] = w === "fishers" || w === "poacher" ? { kind: w }
-        : first.length === 1 ? { kind: "seat", name: first[0].name } : { kind: "none" };
+        : first.length === 1 ? { kind: "seat", name: first[0].name, character: first[0].character, bot: first[0].bot } : { kind: "none" };
       return { endedAt: m.endedAt!, mode: m.mode, winner, lakeBefore: s.lakeBefore, lakeAfter: s.lakeAfter };
     });
   const broadcastRoom = (room: Room): void => { for (const s of room.streams) send(s, "room", viewOf(room, s.seat)); };

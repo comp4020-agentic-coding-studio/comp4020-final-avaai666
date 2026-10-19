@@ -51,3 +51,50 @@ describe("the lang cookie", () => {
     expect(langFrom("xlang=zh")).toBe("en");
   });
 });
+
+describe("what a player reads", () => {
+  // The player-facing pages (/, /how/*, the room, the games) carry no course
+  // text. /readme/ and /making-of may name the project's history, but in plain
+  // words, so one rule covers every key of both dictionaries.
+  const BANNED = [/COMP/, /crit/i, /课程/, /README/, /测试/, /\bcourse\b/i, /\btests?\b/i];
+
+  it("no key in either language contains course text", () => {
+    const hits: string[] = [];
+    for (const lang of ["en", "zh"] as const) for (const [k, v] of Object.entries(DICT[lang])) {
+      if (k === "about_p" || k === "readme_en_note" || k === "nav_about" || k === "about_title" || k === "about_h") continue; // the About page IS the README: it may say so
+      for (const re of BANNED) if (re.test(v)) hits.push(`${lang}.${k}: ${v}`);
+    }
+    expect(hits).toEqual([]);
+  });
+
+  it("the About page's own words say what it is without naming tests or the course", () => {
+    for (const lang of ["en", "zh"] as const) {
+      expect(DICT[lang].about_p).not.toMatch(/COMP|crit|课程|测试|\bcourse\b|\btests?\b/i);
+      expect(DICT[lang].readme_en_note).not.toMatch(/COMP|crit|课程|\bcourse\b/i);
+    }
+    expect(DICT.zh.readme_en_note).toBe("README 只有英文版。");
+  });
+
+  it("the footer is the game's own line, the same in both languages, with no year", () => {
+    expect(DICT.en.foot).toBe("明年无鱼 · Next Year, No Fish");
+    expect(DICT.zh.foot).toBe("明年无鱼 · Next Year, No Fish");
+  });
+
+  it("Chinese uses 「」 for quoted words, never straight double quotes", () => {
+    expect(Object.entries(DICT.zh).filter(([, v]) => /"/.test(v)).map(([k]) => k)).toEqual([]);
+  });
+
+  it("the Chinese place has its 名, and English places read 1st 2nd 3rd 4th", () => {
+    expect(t("zh", "g_you_came", { place: t("zh", "g_place3") })).toBe("你是第 3 名");
+    expect(t("zh", "g_you_came", { place: t("zh", "g_placeN", { n: 4 }) })).toBe("你是第 4 名");
+    expect(["g_place1", "g_place2", "g_place3"].map((k) => t("en", k))).toEqual(["1st", "2nd", "3rd"]);
+    expect(t("en", "g_placeN", { n: 4 })).toBe("4th");
+    expect(t("en", "g_placeN", { n: 8 })).toBe("8th");
+  });
+
+  it("a bot is named through the dictionary: 阿金（机器人） in Chinese, Jin (bot) in English", () => {
+    expect(t("zh", "bot_suffix", { name: t("zh", "c_jin") })).toBe("阿金（机器人）");
+    expect(t("en", "bot_suffix", { name: t("en", "c_jin") })).toBe("Jin (bot)");
+    expect(t("zh", "bot_suffix", { name: t("zh", "c_wang") })).toBe("老王（机器人）");
+  });
+});

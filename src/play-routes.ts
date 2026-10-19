@@ -14,13 +14,14 @@ import { lobbyPage, roomPage } from "./play-pages.ts";
 import { langFrom, t } from "./lib/i18n.ts";
 import { noRoomSitePage, roomSitePage } from "./site-pages.ts";
 
-const CODE = /^\/play\/([BCDFGHJKLMNPQRSTVWXZ]{4})(\/join|\/start|\/stop|\/mode|\/in|\/events|\/summary\.json)?$/;
+const CODE = /^\/play\/([BCDFGHJKLMNPQRSTVWXZ]{4})(\/game|\/join|\/start|\/stop|\/mode|\/in|\/events|\/summary\.json)?$/;
 const COOKIE_MAX_AGE_S = 365 * 24 * 60 * 60;
 // the files /play may load: one per mode, the shared ones, and three
 const FILES: Record<string, string> = {
   "play/world.js": "text/javascript; charset=utf-8",
   "play/art.js": "text/javascript; charset=utf-8",
   "play/room.js": "text/javascript; charset=utf-8",
+  "play/roomlive.js": "text/javascript; charset=utf-8",
   "play/lobby.js": "text/javascript; charset=utf-8",
   "play/rush.js": "text/javascript; charset=utf-8",
   "play/poach.js": "text/javascript; charset=utf-8",
@@ -85,7 +86,14 @@ export function createPlayRoutes(hub: GameHub, store: GameStore, staticDir: stri
       const view = hub.view(code, who?.seat ?? null);
       const lang = langFrom(req.headers.cookie);
       if (!view) { sendHtml(res, 404, noRoomSitePage(lang, code)); return true; }
-      sendHtml(res, 200, roomSitePage(lang, view, hub.history(code) ?? [], originOf(req), roomPage(view, undefined, lang, true)));
+      sendHtml(res, 200, roomSitePage(lang, view, hub.history(code) ?? [], originOf(req)));
+      return true;
+    }
+    // the full-screen game: no site header, nothing else to click
+    if (sub === "/game" && method === "GET") {
+      const lang = langFrom(req.headers.cookie), view = hub.view(code, who?.seat ?? null);
+      if (!view) { sendHtml(res, 404, noRoomSitePage(lang, code)); return true; }
+      sendHtml(res, 200, roomPage(view, undefined, lang));
       return true;
     }
     if (sub === "/join" && method === "POST") {
@@ -99,7 +107,7 @@ export function createPlayRoutes(hub: GameHub, store: GameStore, staticDir: stri
       log({ event: "refused", action: "play_join", room: code, reason: r.reason });
       if (r.reason === "no_room") { redirect(res, "/play"); return true; }
       const lang = langFrom(req.headers.cookie), view = hub.view(code, null)!;
-      sendHtml(res, 409, roomSitePage(lang, view, hub.history(code) ?? [], originOf(req), roomPage(view, undefined, lang, true), t(lang, `join_${r.reason}`)));
+      sendHtml(res, 409, roomSitePage(lang, view, hub.history(code) ?? [], originOf(req), t(lang, `join_${r.reason}`)));
       return true;
     }
     if (sub === "/summary.json" && method === "GET") {

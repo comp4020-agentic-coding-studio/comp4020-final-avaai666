@@ -110,12 +110,12 @@ export function lobbyPage(ready: string[], error?: string): string {
 
 // inner: only the game's stage, its boot data and its script, for the site's
 // room page (src/site-pages.ts), which has the join form and the top bar
-export function roomPage(view: RoomView, error?: string, lang: Lang = "en", inner = false): string {
+export function roomPage(view: RoomView, error?: string, lang: Lang = "en"): string {
   const crew = CREW;
   const taken = new Set(view.players.map((p) => p.character));
   const firstFree = crew.find((c) => !taken.has(c.id as RoomView["players"][number]["character"]))?.id ?? "mei";
   const card = cardOf(view.mode);
-  const join = view.me === null && !inner ? `<form class="joinform card" method="post" action="/play/${esc(view.code)}/join">
+  const join = view.me === null ? `<form class="joinform card" method="post" action="/play/${esc(view.code)}/join">
       <h3>Join room ${esc(view.code)}</h3>
       <label for="name">Your name</label><input id="name" name="name" maxlength="24" required autocomplete="nickname" />
       <div class="roster small">${crew.map((c) => `<label class="face-btn" title="${esc(c.name)}"><input type="radio" name="character" value="${c.id}" ${c.id === firstFree ? "checked" : ""} />${portrait(c.id, c.name)}</label>`).join("")}</div>
@@ -125,7 +125,8 @@ export function roomPage(view: RoomView, error?: string, lang: Lang = "en", inne
   const w = (k: string) => esc(t(lang, k));
   const shell = `<div class="app room" id="app" data-room="${esc(view.code)}">
   <div class="stage" id="stage"><canvas id="gl" tabindex="0" aria-label="${w("g_lake_3d")}"></canvas><div class="tags" id="tags"></div><div class="floats" id="floats"></div>
-    <div class="topbar" id="topbar"><a class="seal mini" href="/" aria-label="${w("g_lobby")}">${seal}</a><div class="goalclock"><b id="goal">${w(`${view.mode}_hud`)}</b><span id="clock"></span></div><span class="conn" id="conn">${w("g_connecting")}</span><button class="tiny" id="stopbtn" type="button" hidden>${w("g_stop")}</button><button class="tiny" id="sound" type="button">${w("g_sound_off")}</button></div>
+    <div class="topbar" id="topbar"><a class="mini-seal" href="/play/${esc(view.code)}" aria-label="${w("g_back_room")}">${seal}</a><div class="goalclock"><b id="goal">${w(`${view.mode}_hud`)}</b><span id="clock"></span></div><span class="conn" id="conn">${w("g_connecting")}</span><button class="tiny" id="sound" type="button">${w("g_sound_off")}</button>
+      <div class="hostmenu" id="hostmenu" hidden><button class="tiny" id="hostbtn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="${w("g_host_menu")}">⋯</button><div class="menu-list" id="hostlist" hidden><button type="button" class="danger" data-stop>${w("g_stop")}</button></div></div></div>
     <button class="hudtoggle" id="hudtoggle" type="button" aria-expanded="false" aria-controls="hud">${w("g_details")}</button>
     <div class="hud" id="hud"></div>
     <p class="coach" id="coach" hidden></p>
@@ -135,6 +136,5 @@ export function roomPage(view: RoomView, error?: string, lang: Lang = "en", inne
   ${join}
 </div>
 <script type="application/json" id="boot">${JSON.stringify({ view, cards: MODE_CARDS, lang, words: DICT[lang], other: Object.fromEntries(MODE_CARDS.map((m) => [`${m.id}_name`, DICT[lang === "en" ? "zh" : "en"][`${m.id}_name`]])) }).replace(/</g, "\\u003c")}</script>`;
-  if (inner) return `${shell}\n<script type="module" src="/static/play/room.js"></script>`;
   return page(`Room ${view.code} · ${card.name}`, shell, "play in-room", `<script type="module" src="/static/play/room.js"></script>`);
 }
