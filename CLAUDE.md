@@ -73,8 +73,19 @@ Authority
   never computes where a fish is, what a net takes, or any outcome. It draws
   what the server sent, and may only move a fish smoothly between two frames
   it received.
+- The one exception is Boat Rush's practice run: a 30-second teaching run the
+  browser simulates alone, with no clock. It is never sent, stored or scored
+  and it decides nothing about any match (DESIGN.md "Practice runs in the
+  browser only").
 - Model and game constants live only in src/lib/constants.ts and
-  src/lib/game-constants.ts.
+  src/lib/game-constants.ts. The lake's shape, island, places, docks, K, the
+  breeding formula and the tiers are in one server module (src/lib/lake-world.ts);
+  the page gets them in its boot JSON and keeps no copy.
+- Who's Poaching 2.0: a seat's frame holds no boat, fish or evidence outside
+  its lantern's view (24 units of its boat, and its own buoy's circle). The
+  server does not send what that seat may not see, and a test checks it.
+- Boat Rush 2.0: no frame or event shows another seat's market pick before the
+  market closes.
 - Events, frames and snapshots never contain an idempotency key, a net
   id, a family token, or (before the season's end row) the seed.
 
@@ -92,8 +103,11 @@ Scope
   from start to results and rematch. Unfinished modes show their date and are
   never hidden.
 - /play may load one vendored file, src/static/vendor/three.module.js (three
-  0.160.0, MIT, header kept), as an ES module, plus one script per mode and
-  one shared script. Still no framework and no build step.
+  0.160.0, MIT, header kept), as an ES module. It may also have shared client
+  modules under src/static/play/ (world, ui, art, roomlive and the like) that
+  the mode scripts import. Each mode keeps one script of its own. Every module
+  a page loads must be served: spec/play-app.test.ts checks it. Still no
+  framework and no build step.
 - Art is SVG and Three.js code in this repo, written by Claude in chat or in
   a session, and said so in PROCESS.md. Nothing is generated at run time and
   no image model is used.
@@ -108,11 +122,21 @@ Scope
   page may show it with a one-line note that it is in English.
 - Test names are English too.
 - The game is full screen on its own page and is never embedded under a page.
-  Every other page scrolls. Nothing that only informs (floating text, tags,
-  banners, coach marks, hints) takes pointer events. "Stop match" is in the
-  host menu, behind a confirmation. Player-facing pages carry no course text.
+  Every other page scrolls. "Stop match" is in the host menu, behind a
+  confirmation. Player-facing pages carry no course text.
+- P6. Nothing that only informs takes a tap. Toasts, banners, floating text,
+  coach marks, tags and the fog all have pointer-events: none. Only a screen
+  that needs a choice (rules, market, meeting, shop, ceremony) covers the game.
+- P7. Thumbs away from the edges. Pads sit at least 22 px, and the safe area,
+  above the bottom edge. On phones you sail by dragging on the left side with a
+  stick that appears under the thumb; on laptops WASD or the arrows, Space and
+  Shift, and clicking the water.
 
 ## Frozen: /classic, /l, /p, /b (no new features; keep them running)
+
+Crash fixes only. Frozen versions may take a fix for a crash, and only a crash.
+The fix comes with a test, changes no rule or behaviour a player relies on,
+and its commit says "crash fix in frozen code".
 
 Authority (the five-year lake, /l)
 - The fish are moved, born, aged and caught only by step() in

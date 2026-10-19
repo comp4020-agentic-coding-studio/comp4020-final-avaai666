@@ -1,4 +1,4 @@
-# Next Year, No Fish (明年无鱼): design v4.0.1
+# Next Year, No Fish (明年无鱼): design v5.0
 
 ## What it is
 
@@ -64,21 +64,141 @@ README.md stays English (the course reads it at /readme/). In Chinese,
 /readme/ shows it with a one-line note that it is in English. The frozen
 versions stay English.
 
-## One lake, four games
 
-This part translates Ava's plan of 15 October ("第五次修正：四个模式都要",
-sections 1 to 6) and the session-13 depth and clarity rules. Where the two
-differ, the session-13 rules are newer and win; the plan's number is kept in
-brackets.
+## Where each mode stands
 
-### The goal
+DESIGN v5.0 is the target for all four modes. It is built one mode at a time,
+and until a mode is built, the live game still follows its v4.0 text
+(docs/design-history/four-games-v4.0.md). The tests, not this table, say what
+runs.
 
-One multiplayer lake game with four genuinely different ways to play. A
-player picks a different game, not the same game with other numbers. Each
-mode has several actions that affect each other. The theme stays: everyone
-shares one lake, and the harder you fish today, the fewer fish there are
-later. Each mode makes that dilemma appear in its own way, never by a storm
-that makes everyone lose.
+| Mode | Follows | Built in |
+|---|---|---|
+| Boat Rush | v5.0 (rush 2.0) | session 17, part A |
+| Who's Poaching | v4.0 (poach 1.0) | part B |
+| Lake Holdings | v4.0 (holdings 1.0) | part C |
+| Fishing Party | v4.0 (party 1.0) | part C |
+
+## One lake, four games (v5.0)
+
+### Why v5
+
+Ava played every mode on a phone and a laptop on 19 October.
+- Boat Rush was the only mode she could follow.
+- Fishing Party, Who's Poaching and Lake Holdings were "impossible to
+  understand".
+- Lake Holdings did not work at all: a client error on the first tap.
+
+What she asked for:
+- a complete flow at every step;
+- a bigger and more varied scene;
+- controls that do not sit next to things you can hit by mistake;
+- the standard of real games.
+
+The four modes stay, with the scope Ava set. Each one now has a step-by-step
+flow, and all four share one world and one ending.
+
+
+### Principles (every mode)
+
+P1. **One sentence, one verb, before you play.** Each mode opens with a
+rules card. Each round of the party opens with an intro card. A card has:
+- three pictures, one sentence each;
+- "the choice that matters";
+- the controls for this device.
+
+P2. **Teach by doing.** Boat Rush has a 30-second practice. The party lets
+everyone try a round before it counts. Coach marks point at the next thing
+to do and disappear once it is done.
+
+P3. **One new thing at a time.** Boat Rush adds one change per season. Lake
+Holdings shows a preview before anything is placed.
+
+P4. **Every action answers.** A float, a sound, a ripple. A shake for a hit.
+A banner for a big moment.
+
+P5. **The ending tells the story.** Every mode ends with the same three-step
+ceremony about next year's lake.
+
+P6. **Nothing that only informs takes a tap.** Toasts, banners, floats,
+coach marks, tags and the fog all have `pointer-events: none`. Only a
+screen that needs a choice covers the game: rules, market, meeting, shop,
+ceremony.
+
+P7. **Thumbs away from the edges.**
+- The pads sit at least 22 px, and the safe area, above the bottom edge.
+- On phones you sail by dragging anywhere on the left side, with a stick
+  that appears under your thumb.
+- On laptops: WASD or the arrow keys, Space and Shift, plus clicking the
+  water.
+
+
+### The world (shared)
+
+- **The lake** is a lobed oval about twice the old size: 92 × 64 units.
+  The radius at angle a is
+  `1 + .09 sin(2a+.6) + .06 sin(3a+2.1) + .035 sin(5a+.3)`.
+- **The island** sits at (10, -15), radius 7.5, with a pagoda. Boats and
+  fish go round it. The deep water around it is the 深潭.
+- **Named places:**
+  - the reed bed 芦苇荡, west-north-west: the nursery, where young fish live
+    and boats move at 0.62 speed;
+  - the lotus pond 荷花塘, north-west;
+  - the river mouth 河口, north-east, with a stone bridge;
+  - the island 湖心岛;
+  - four bays: 北湾, 东湾, 南湾, 西湾.
+
+  Meeting phrases and labels use these places.
+- **The village** is on the south shore: up to six docks, at 66°, 114°,
+  42°, 138°, 90° and 18°. Each dock has a house that gains a floor for
+  every 18 fish brought home, up to 6.
+- **Seasons change the scene:** spring blossom, summer lotus, autumn red
+  leaves, winter snow. Each has its own palette and falling particles.
+  Winter puts ice on the water where the shore distance is above 0.86,
+  except within 14 units of a dock. Boats cannot cross ice.
+- **The camera:**
+  - It follows your boat when you sail. The span is about 118 units wide
+    on a laptop, 64 on a phone held upright and 90 on a phone held
+    sideways.
+  - It shows the whole lake for boards, meetings and the ceremony.
+  - A minimap in the top-right corner shows the whole lake. Each mode
+    decides what the minimap shows: in Who's Poaching it shows only what
+    you know.
+- **The lake remembers.**
+  - A room's lake is stored as adults and young fish. A new room starts
+    with 230 adults and 50 young fish.
+  - K = 340.
+  - Every mode reads the room's lake at its start and writes back next
+    spring: adults = min(K, 0.8 × next) and young = 0.2 × next.
+  - Below 40 fish, the room says "This lake died" and the next match
+    starts a new lake. This is unchanged from v4.
+- **Breeding:**
+  - `born = adults < 36 ? round(adults × 0.1) : round(1.55 × adults × max(0, 1 − (adults+young)/K) × (1 + bonus))`.
+  - Next spring = adults + young + round(0.6 × born).
+- **Tiers on next spring as a share of K:**
+  - ≥ 0.6: Bountiful 丰收年 ×1.2;
+  - ≥ 0.35: Fair 平年 ×1;
+  - ≥ 0.15: Lean 歉收年 ×0.8;
+  - otherwise: No fish 无鱼年 ×0.5.
+
+  The HUD shows the live tier during play.
+
+### The ceremony (every mode)
+
+1. **Verdict.** The title, then what is left in the lake → next spring,
+   counted up. A tier stamp follows: the Chinese characters, with the
+   English label under them when the page is in English. Then "everyone's
+   catch ×N".
+2. **Who took what.** One bar per player, in each mode's own unit (fish or
+   coins), with young fish killed in red and a gold fair-share line.
+   - Boat Rush adds the counterfactual: "If everyone had taken one fish in
+     five fewer, next spring would hold N (tier) instead of M". The server
+     computes N by replaying the year's seasons with each catch × 0.8.
+   - Then titles, only when someone earned them: 渔王, 守湖人, 细网手,
+     撞船王, 锦鲤运.
+3. **Podium.** Score = base × tier multiplier, with the base shown. Two
+   buttons: "Next year: same lake (N fish)" and "Back to the village"
+   (the room).
 
 ### The flow
 
@@ -89,10 +209,12 @@ that makes everyone lose.
 3. In the room, each person joins with a name and a character (portrait).
    The room shows the code and a Copy link button, who is here, the four
    games, and the picked game's goal and win rule above the Start button.
-4. Start, play one match, then results (portraits and the match's
-   highlights).
-5. At the same table: Rematch, or Change game, with no new link and no new
-   name. "What happened here" lists every finished match.
+4. Start, play one match, then the ceremony (below): the verdict on next
+   year's lake, who took what, and the podium.
+5. At the same table: "Next year: same lake" (the next match starts from the
+   fish this one left) or "Back to the village" (the room, where the game can
+   be changed), with no new link and no new name. "What happened here" lists
+   every finished match.
 
 Only modes that can be played get a Start button. An unfinished mode still
 shows its card, marked with a date ("Coming: 10/28"), and never leaves the
@@ -100,165 +222,272 @@ menu. "First playable" means: a room can be opened, two or more people can
 play from the start to the results, and they can rematch. A menu card alone
 does not count.
 
-### What was promised, and when
 
-| Mode | Promised (the preview, word for word, is the scope) | Due |
-|---|---|---|
-| Boat Rush | Each player sails a small boat round the lake: move, cast, ram, chase the golden carp, upgrade the boat. A match is 2 minutes. | Phase 1 (before 10/21) |
-| Fishing Party | Five short rounds: shoal scramble, koi chase, tug of line, lantern night, last net. The lake's fish carry over between rounds. An 8-second shop between rounds: big net, fast boat, bait. "Fish hard early and later rounds have fewer fish." | Phase 2 (before 10/28), all five rounds in the first playable |
-| Who's Poaching | One secret poacher steals with a fine net. Everyone fishes, inspects a neighbour's basket and votes at a meeting. Fishers win by exposing the poacher while the lake lives; the poacher wins if the lake dies or they are never found. | Phase 2 (before 10/28), ready for the crit's group playtest |
-| Lake Holdings | Place nets, ponds, fences, cormorants and lanterns, fight neighbours for water; fish swim towards water nobody fishes. A payout every 15 seconds, 3 minutes a match, land plus harvest = score. | Phase 3 (before 11/4), all five buildings in the first playable |
-| Lobby | Pick your mode once inside. | Phase 1 |
+#### Practice runs in the browser only (an explicit exception)
 
-### Boat Rush (rush 1.0)
+Boat Rush's 30-second practice (the three-step teaching run before a match) is
+simulated in the browser, alone, with no clock. The client's practice decides
+nothing about any match: it is never sent to the server, never stored and
+never scored, and it cannot be seen by other seats. This is the one place the
+client simulates fish, nets and a hold, and it is allowed for that reason
+only: a player learns the controls without a room, a server tick or a bot.
+Everything in a match, including the same actions, is decided by the server.
+The practice uses Math.random() for its fish, as the client already does for
+particles; the server never does.
 
-The experience: handling and risk. Every trip asks "one more cast, or home
-now?" 2 to 4 boats (bots fill empty seats when asked), 2.5 minutes.
+### Boat Rush 开船抢鱼 (2.0)
 
-Win (stated at the start): the most fish banked at your own dock when the
-horn blows. Fish still aboard count for nothing.
+2 to 4 boats, with bots filling empty seats. About 4 minutes.
 
-Actions: sail (tap or drag); cast at the bow; charge cast (hold to widen
-the net up to 1.6 times; it sinks 0.3 s slower, so fish may escape); dash
-and ram; scoop spilled fish; unload at your dock; upgrade at your dock.
+**Flow:**
+1. The rules card, with "Start" and "Practise first (30 s)".
+2. Practice (alone, no clock), three steps with an arrow:
+   1. sail to the gold ring;
+   2. net the school ahead of your bow (3 fish);
+   3. take the fish home and unload.
 
-Rules kept from boat-sim 0.1: a hold of 10, slower when full, unload at your
-own dock, a ram spills at most 3 fish, a boat that was hit is shielded, no
-ram near a dock, spilled fish float and can be scooped, the golden carp is
-worth 5.
+   Then "You're ready".
+3. Four seasons of 45 s each, in the order spring, summer, autumn, winter.
+   Each season opens with a banner naming its twist:
+   - spring: schools gather at the river mouth and the reeds;
+   - summer: the lotus pond and the deep water, with two golden carp;
+   - autumn: every fish counts double;
+   - winter: ice, and the fish keep to the deep water.
+4. The last 10 s are the Rush: faster music, and an arrow home if you
+   carry fish.
+5. The gong: fish still aboard spoil.
+6. The lake breathes, for 4.5 s, with the camera on the whole lake: young
+   fish grow up, and the adults breed by the formula, plus Fish Ladder and
+   Reed Bed effects.
+7. The market, 14 s:
+   - one plain, one keeper and one greedy card;
+   - a reroll costs 2 banked fish;
+   - picks are hidden until the market closes, then everyone sees them.
+8. After winter, the ceremony.
 
-New in rush 1.0:
-- Upgrades at your dock, paid from banked fish, at most two a match: Big
-  Hold (+5), Fast Hull, Wide Net, Iron Bow (a ram you deal spills 1 more, a
-  ram you take spills 1 fewer). The first upgrade costs 3 banked fish and
-  the second 7, whichever they are. The start card lists them with their
-  prices; your dock glows when you can afford one, and after your first
-  unload a coach mark asks "Spend fish on an upgrade?". Spending lowers your
-  score now for speed later.
-- Schools scatter after a net hits them.
-- The reed shallows: dense fish, but boats there move at half speed.
-- The leader's boat wears a crown; ramming it spills one extra fish.
-- The last 30 s are "Lantern Rush": fish banked then count double.
+**Numbers:**
+- hold 12; speed 15, 35% slower when full;
+- net radius 3.5, cast 4 units ahead of the bow, cooldown 1.0 s, at most
+  6 fish a cast;
+- dash 0.4 s at ×2.4, cooldown 4 s;
+- a ram spills at most 3 fish; shield 3 s; no ram within 11 units of a
+  dock;
+- the golden carp is worth 5 and lasts 10 s;
+- 8% of adults are big fish worth 2;
+- a chain of 3+ fish within 2.6 s adds 1.
 
-Leading: go home often, buy Iron Bow, guard the golden carp. Behind: chase
-the carp, ram the leader's full boat, gamble on a full hold in Lantern Rush.
-The second match differs by upgrade route, learned timing, and the seed's
-schools. First playable: Quick Catch's rules plus upgrades, charge cast, 3D,
-characters and the lobby. boat-sim 0.1 is unchanged for /b; rush 1.0 is a
-new model.
+**Cards** (11): Big Hold, Fast Hull, Wide Net, Quick Hands, Iron Bow and
+Golden Hook (plain); Fine Mesh and Trawl (greedy: they take young fish); Fish
+Ladder, Let Them Go and Reed Bed (keeper). The wording and numbers are those
+in the prototype's RCARDS.
 
-### Fishing Party (party 1.0)
+**Bots:** steady, keeper and greedy. These differ in when they go home
+(0.75, 0.6 and 0.95 full) and in what they pick at the market.
 
-The experience: novelty and rhythm; every round is a new game with new
-controls. 2 to 4 players, about 6 minutes [plan: about 5]: five rounds of
-35 s [plan: 20 s] and an 8 s shop between rounds.
+**Measured in the prototype** (bots only, 6 runs, not people):
+- the lake ended No fish ×1, Lean ×2, Fair ×2 and Bountiful ×1;
+- the counterfactual was Bountiful in every run (225–271).
 
-Win (stated at the start): the most coins after five rounds. The last round
-pays double.
+### Who's Poaching 谁在偷鱼 (2.0)
 
-The five rounds (Ava's five; none replaced):
-1. Shoal Scramble. Schools surface for 1.5 s at points the server chooses;
-   tap the spot. The first net there takes the school.
-2. Koi Chase. Steer through gates after the golden carp. The first to touch
-   it scores, and every gate passed pays 1.
-3. Tug of Line. Pairs on one big fish. A needle sweeps; a reel inside the
-   green zone pulls, outside it slips. Mashing is rate-limited by the server.
-4. Lantern Night. Each seat sees only the fish within its lantern's radius
-   (frameFor). A lantern you drop lights a spot for everyone for 10 s.
-5. Last Net. Everyone secretly picks small (3), medium (6) or huge (10). If
-   the sum exceeds the school, everyone gets 1. Coins are doubled.
+4 to 8 players: 1 poacher, or 2 at 7 or more. Three days of 70 s, each
+ending in a meeting of at most 55 s. About 7 minutes.
 
-Between rounds, after the standings, the last-placed player gets a 4 s
-screen to pick one of two variants for the next round (only that player is
-sent the choice; everyone else sees who is choosing). Then an 8 s shop: Big
-Net (bigger catch next round), Fast Boat (faster next round), Bait (for the
-first 10 s of the next round, fish within two lantern radii swim to you), and
-Muddy Water, which only players behind the leader may buy and which shrinks
-the leader's view next round. Tug of Line's needle is drawn over the fish on
-the lake and as a full-width bar at the bottom of the screen.
+**Flow:**
+1. The rules card.
+2. **Role reveal**, a full screen shown only to you:
+   - your portrait;
+   - 渔民 Fisher or 偷鱼贼 Poacher in large brush letters;
+   - one sentence on how you win;
+   - the whole village's portraits.
 
-The lake carries over: rounds 1, 2 and 4 draw from it and fish taken do not
-come back; Last Net's school is what is left. Before round 5 the screen says
-so ("You fished hard early; this is what is left"). Standings with portraits
-between rounds. A second match reorders rounds 1 to 4 by the seed (Last Net
-is always last). First playable: all five rounds, the shop, the lake carried
-between rounds, Last Net doubled, final standings.
+   A second poacher (at 7 or more) also sees their partner.
+3. **Day**, 70 s, from morning light to dusk:
+   - **Your lantern's circle.** You see only within 24 units of your boat
+     (the fog). Beyond that, the server does not send boats, fish or dead
+     fish. Your own buoy also lights a circle for you.
+   - **Tasks.** Each player gets 3 tasks a day at named places, for
+     example 收网·北湾 or 数鱼苗·芦苇荡. Stay inside the ring for 2.5 s.
+     Each task adds 2 fish to the village for fishers. The poacher's
+     tasks are a cover: they count nothing. The task list is on the left
+     and the rings are on the minimap.
+   - **Net**, for everyone: adults only, at most 3, cooldown 2 s.
+   - **Inspect** (查船): stay within 8 units of a boat for 1.5 s. Only
+     you learn "clean" or "N young fish". The target is told someone
+     inspected them.
+   - **Buoy** (浮标): one a day. It logs every boat that passes within 15
+     units, with the time, and is shown at the meeting.
+   - **Report** (报告): within 11 units of dead young fish nobody has
+     reported, call the meeting now.
+   - **Poacher only:**
+     - **Fine net** (绝户网): cooldown 13 s, radius 5.2, up to 22 fish. It
+       leaves a floating patch of dead young fish, the evidence. Every
+       boat within 24 units at that moment witnessed it.
+     - **Dump** (倒掉): empty the young fish from your boat. That leaves a
+       patch too.
+   - "👁 N boats can see you" is shown to everyone. It matters most to the
+     poacher.
+4. **Meeting**, at dusk or on a report:
+   - **The map of what you know:**
+     - your own path;
+     - where you saw each boat, with times;
+     - every dead-fish patch you saw or that was reported, with times;
+     - buoys and their logs.
+   - **The table:** every portrait with their last two statements, your
+     private knowledge ("you inspected: clean" or "you saw them use a fine
+     net") and a "voted" badge.
+   - **Speaking:** chips built from what you actually know, for example
+     "I was at 东湾", "I inspected Jin: clean", "I saw Lu at the reeds,
+     near the dead fish" or "My buoy at 北湾 saw …". The poacher gets
+     plausible lies instead. Tap a portrait to suspect, vouch for or vote
+     out. Statements travel as codes, so each page words them in its own
+     language. People also talk out loud.
+   - **Voting:** tap a portrait, or "Skip". There is no skip at the last
+     meeting. The meeting ends when everyone still in has voted.
+5. **The tally** shows who voted for whom. Then the exile: the portrait
+   drifts away and the text types "X is sent away…", then "X was / was not
+   the poacher". With no exile, the lake loses 5%.
+6. **Night:** while the poacher is free, the lake loses another 4%
+   overnight. That is 6% for the poacher, less 2% recovery.
+7. **The end:**
+   - Fishers win if every poacher is exiled while health stays at 40% or
+     more.
+   - The poacher wins if health falls below 40% or they survive day 3.
+   - The end screen reveals every role and replays the poacher's path and
+     nets on the map. Then the ceremony: score = (fish netted + task fish)
+     × tier, +20 for the winning side.
 
-### Who's Poaching (poach 1.0)
+An exiled player becomes a ghost: they see everything and cannot act.
 
-The experience: suspicion, deception, deduction, trust. 4 to 8 people (bots
-only for practice), three days and two meetings, about 8 minutes.
+**Lake health** = fish now ÷ fish at the start of the match, as a
+percentage. The start includes 40 extra young fish in the reeds.
 
-Roles: Fishers; 1 Poacher (2 at 7 or more seats); 1 Warden at 6 or more.
-Each seat is sent only its own role.
+**Measured in the prototype** (bots, 3 runs): the poacher was caught on day
+2 or 3 in every run, and health ended near 75%. Bots are easier to read
+than people.
 
-Win: Fishers win if every poacher is exiled while lake health stays above
-40%. The Poacher wins if health falls below 40%, if they survive day 3, or
-if two innocents are exiled.
+**Removed from v4:**
+- the Warden;
+- planting fry;
+- the village quota bar, replaced by tasks.
 
-Day (75 s [plan: 60 s]): everyone fishes for the village quota (a bar at
-the top).
-- Anyone can inspect: stay within 6 units of a boat for 3 s to see its
-  basket. Only the inspector sees the result; the target is told someone
-  looked.
-- Anyone can drop one buoy a day. It logs who passes, and the log is shown
-  at the meeting.
-- The Warden inspects once a day without coming close.
-- Poacher only: the fine net (fast, takes fry, lake health drops); dump fry
-  (destroys evidence, but the fry still die); plant fry (2 s alongside
-  another boat puts fry in its basket; any boat within 10 units sees a
-  splash).
-- Each day ends with an announcement of the fry lost in each bay.
+Ava decides on these: see "Decisions".
 
-Meeting (90 s; every day ends in one, so there are three): portraits round a table. Set phrases only: "I was in
-[bay]", "I inspected [X]: [clean / N fry]" (true or not), "I suspect [X]",
-"I vouch for [X]", "Skip". No free text and no chat; people talk face to
-face. Then a vote; ties and skips exile nobody, and a meeting that exiles
-nobody costs the lake 5 points of health ("the poacher worked the night
-unwatched"). A meeting ends as soon as everyone still in has voted (or
-skipped, where Skip exists): the vote is counted within a tick and the reveal
-follows. A meeting where someone has not voted ends at 90 s. The last
-meeting, after day 3, has no Skip, and the most votes go. A tie there is
-drawn by the server when everyone voted; if anyone did not vote by 90 s they
-abstained, and a tie then exiles nobody, so the poacher has survived day 3
-and wins. If nobody votes at all, nobody goes. An exiled player's
-role is revealed. Lake health is always shown. At the results, each
-player's contribution to the quota is shown.
+### Lake Holdings 抢地盘经营 (2.0)
 
-First playable: 4 to 6 people, one poacher, three days, inspect, buoy, fine
-net, dump, plant, set phrases, vote, the reveal; the Warden at 6 or more.
+2 to 4 players. Turn-based, everyone choosing at the same time. Four
+seasons with 3 moves each, then the harvest. About 5 minutes.
 
-### Lake Holdings (holdings 1.0)
+**The board:**
+- Hex tiles of size 8.4 over the lake: every tile whose centre has a shore
+  distance up to 0.8, and none on the island.
+- Each tile has a cap of `max(4, round(K × w / Σw))`, where w is 1.35 for
+  deep water, 1.15 for the reeds and 1 otherwise.
+- The lake's fish are spread over the tiles by w.
+- Each player starts with the 2 tiles nearest their dock.
 
-The experience: spatial strategy, economy and counterplay. 2 to 4 players,
-3 minutes, a tide every 15 s (12 tides).
+**A move:**
+1. You hold 3 cards: always the Flag (claim), plus 2 drawn from Net 3,
+   Pond 2, Fence 1.2, Cormorant 1 and Lantern 1.2 (weights).
+2. Pick a card: legal tiles glow.
+3. Hover or tap a tile to see a one-line preview of what it will do, for
+   example "Net: takes 7 of the 9 fish here each season; this tile will
+   run dry in about 2 seasons". Tap again (phones) or click (laptops) to
+   place it.
+4. 20 s per move. On time-out the bot's choice is played for you.
+5. Reveal: everyone's placements appear one by one. Two flags on one tile:
+   the player with fewer tiles gets it.
 
-Win: tiles held plus fish harvested; the leader is shown, and the tie-break
-is stated on screen.
+**The cards:**
+- **Flag:** claim an empty tile next to yours.
+- **Net:** takes up to 7 a season.
+- **Pond:** +2 on its own tile and +1 on every tile around it, anyone's.
+  It brings dry neighbours back.
+- **Fence:** fish don't swim away from here. Lanterns and cormorants can't
+  touch this tile or your tiles next to it.
+- **Cormorant:** steals 2 a season from the richest neighbour's net within
+  2 tiles.
+- **Lantern:** pulls 1 fish a season from each tile around it.
 
-The board is a hex lake (the v7 layout). Each player starts with 3 shore
-tiles. The current comes from a seeded flow field and schools drift along
-it. Each player holds 3 cards and draws back to 3 after each tide: Net,
-Pond, Fence, Cormorant, Lantern and Claim.
+**The harvest,** shown step by step with a banner each:
+1. ponds breed;
+2. lanterns pull;
+3. nets haul, and every other tile you hold that is not dry gives you 2;
+4. cormorants steal;
+5. the lake breeds on each tile that is not dry, at rate 0.2 (0.4 in the
+   reeds) × (1 − fish/cap);
+6. fish swim one tile away from each net;
+7. empty tiles run dry. Dry tiles stay dry unless next to a pond.
 
-At each tide:
-- nets take 2 from every school on or beside them, and each school stays
-  smaller;
-- a school smaller than 3 dies out and its water runs dry (grey on the
-  board); a school on dry water loses a fish a tide; only a pond beside it
-  brings dry water back;
-- ponds breed 3 fish into the tiles next to them (neighbours benefit too);
-- fences turn the current on their tile;
-- a cormorant steals 2 from an enemy net within 2 tiles, once per tide;
-- lanterns pull schools within 3 tiles, for two tides;
-- over-netted lanes thin, and the board shows it.
+**Next spring for this mode** is the board after one more pond-and-breed
+step, and dry water stays dry. Score = fish harvested + 1 per tile, × tier.
 
-Claim takes empty water next to yours; taking an enemy tile costs 2 cards.
-Every net shows what it paid last tide, all game. While a card is selected,
-every tile it could go on shows what a net there would have paid last tide,
-and the best three are marked.
-First playable: the hex board, the current, all five buildings and Claim,
-a tide every 15 s, 3 minutes, standings.
+**Measured in the prototype** (bots, 5 runs): the lake fell from 260 to
+199–209 and 13–15 tiles ran dry, but next spring was still 222–232
+(Bountiful). Greed is not punished enough yet. The balance pass must fix
+this.
+
+**Removed from v4:**
+- the real-time 15 s tide;
+- the current's flow field;
+- taking an enemy tile.
+
+### Fishing Party 钓鱼派对 (2.0)
+
+2 to 4 players. Five rounds of 28 s. About 5 minutes.
+
+**Every round** goes through the same steps:
+1. **The intro card:**
+   - "Round n of 5";
+   - one brush verb (点！ 追！ 收！ 照！ 选！);
+   - the game's name and a picture;
+   - one sentence, and the controls for this device;
+   - a row of portraits that light up when each player is ready.
+2. **Try it first:** the card shrinks to a bar at the top and you play
+   without scoring.
+3. When everyone is ready, or after 20 s: 3-2-1.
+4. 28 s of play.
+5. **Standings:** coin bars grow with this round's coins in green, and the
+   screen shows how many fish are left in the lake.
+6. **The shop,** after rounds 1–3, 9 s. Each item costs 3 coins and lasts
+   one round:
+   - Big Net: the net is half as wide again;
+   - Fast Boat: +25% speed;
+   - Bait: fish nearby swim to you for the first 8 s.
+
+**The rounds:**
+1. **Shoal Scramble** (tap). Gold rings warn for 0.8 s, then fish jump for
+   1.5 s. The first tap within 8 units (11 with Big Net) takes the school:
+   2 coins, 2 fish out of the lake.
+2. **Koi Chase** (steer). Eight lantern gates in order: 1 coin and 1 fish
+   each. Touching the golden carp: 5 coins and 2 fish, and it jumps two
+   gates ahead.
+3. **Tug of Line** (timing). A needle sweeps and a green zone drifts.
+   REEL inside the zone: +9%. Outside: −6% and a 0.35 s stun. Finish
+   places pay 6, 4, 2 and 1. No fish leave the lake.
+4. **Lantern Night** (steer, net, light).
+   - It is dark, and you see fish only within 16 units of your boat.
+   - A dropped lantern lights a spot for everyone for 10 s (cooldown 8 s).
+   - A net takes up to 2 adults, 1 coin each, cooldown 1.6 s.
+5. **The Last Net** (choose, in secret).
+   - The school is round(fish left ÷ 7). Before round 5 the screen says
+     "You fished hard early; this is what is left" if the lake lost more
+     than 15%.
+   - Everyone picks 3, 6 or 10. Picks are revealed one by one with a
+     drum, and a bar grows against the school's line.
+   - If the total fits the school, each player gets double their pick and
+     the fish leave the lake. If not, the net tears: everyone gets 1 and
+     the school is lost.
+
+**Score** = coins × tier.
+
+**Measured in the prototype** (bots, 1 run after tuning): the last net
+held, and the year ended Fair. Before the night round was weakened, two
+runs ended Lean with the lake at 23–25 fish.
+
+**Removed from v4:**
+- the last-placed player's variant pick;
+- Muddy Water.
 
 ### What is shared, and what is not
 
@@ -270,17 +499,21 @@ screen; and "the lake remembers".
 
 Not forced to be shared: controls (sailing, rhythm taps, set phrases,
 cards); state and scoring (fish, coins, suspicion and roles, tiles); pace
-(real time, rounds, day and meeting, a tide every 15 s); and the picture
+(real time, seasons, rounds, day and meeting, turns); and the picture
 (the same lake, but each mode has its own camera, light and HUD).
 
 ### frameFor(sim, seat)
 
-/b sends every viewer the same frame. Who's Poaching (secret roles) and
-Lantern Night (only what a lantern lights) need each seat to get its own.
-So every mode builds its frame with frameFor(sim, seat), separately for
-each seat, and a frame holds only what that seat may see. A secret (a role,
-fish in the dark, an inspection result) is never sent to a seat that may
-not see it. Boat Rush's frames happen to be the same for everyone.
+/b sends every viewer the same frame. Who's Poaching (secret roles, and from
+2.0 a lantern's view) and Lantern Night (only what a lantern lights) need
+each seat to get its own. So every mode builds its frame with
+frameFor(sim, seat), separately for each seat, and a frame holds only what
+that seat may see. A secret (a role, fish in the dark, an inspection result,
+a boat outside your lantern) is never sent to a seat that may not see it.
+Boat Rush 2.0's frames are the same for everyone, except that during a market
+a seat's card pick is not in anyone else's frame or events until the market
+closes.
+
 
 ### The platform
 
@@ -301,10 +534,20 @@ bot's decisions in one tick come from their own stream, SHA-256(secret | bot
 runs a bot (CLAUDE.md's lake rule). A mode's own random draws use named
 streams of the secret ("lake" and so on).
 
-The lake remembers: a match starts with its room's lake_fish (220 for a new
-room) and its results write back what is left. Between matches the lake
-regrows 15% of the gap to 220. Below 40 the room shows "This lake died" and
-the next match starts a new lake of 220.
+The lake remembers (v5.0): a room's lake is stored as adults and young fish.
+A new room starts with 230 adults and 50 young fish (280). A match reads it at
+its start; its results write back next spring, from "The world": adults =
+min(K, 0.8 × next) and young = 0.2 × next, with K = 340. There is no separate
+regrowth between matches: breeding is part of each mode's year (Boat Rush's
+rest, every season). Below 40 fish the room shows "This lake died" and the
+next match starts a new lake of 230 adults and 50 young.
+
+Reading note, for Ava to confirm: v4.0 regrew the room's lake by 15% of the
+gap to 220 between matches. The v5.0 draft says nothing about it and stores
+adults and young separately, so this text drops that rule. Poaching, Holdings
+and Party still follow v4.0 until parts B and C, and keep writing a single
+fish count; the room stores it as adults and young by the 0.8 / 0.2 split
+until they move.
 
 Playtest instruments: every match's summary stores, per seat, the count of
 each input kind, the seconds to the first scoring action, and the final
@@ -338,39 +581,6 @@ d. Streams. boat-sim has two streams: "lake" (fish, breeding and the golden
    re-runs the bots. That is why a replay needs the same BOAT_MODEL, and any
    change to bots, rules or stream use needs a new one.
 
-### Clarity (every mode)
-
-- C1. Before the start, one card: the goal in one sentence, three icons for
-  the three main actions, and "The choice that matters: ..." in one line.
-  Then 3-2-1.
-- C2. For the first 20 seconds, coach marks react to what the player has not
-  done yet ("Tap the water to sail", "Fish ahead: tap CAST") and stop once
-  they have.
-- C3. The goal and the clock are always on screen ("Most fish home wins ·
-  1:42").
-- C4. Every server event has visible and audible feedback: a float, a sound,
-  a small shake for hits, a banner for big moments.
-- C5. Results: a podium with portraits, three highlights computed by the
-  server (best trip, biggest loss, closest call), what the lake has left,
-  and "Rematch" and "Change game".
-- C6. A two-player room plays well: bots fill seats when asked, are always
-  named as bots, and never claim to be people.
-
-### Presentation: 3D and portraits
-
-- Three.js 0.160.0, vendored as one file, stylised low-poly with toon
-  outlines, in New Year print colours (vermilion, jade, ink, gold). The water
-  is a shader written here; at night lanterns glow by emissive colour, not
-  real lights, so phones can run it.
-- 3D is only the picture. The server's frames are the same whether drawn in
-  2D or 3D, so the 3D adds no rule.
-- Six original characters drawn as SVG: Mei (阿梅), Old Wang (老王), Jin
-  (阿金), Lu (小鹭), Lian (莲娘), Shitou (石头), each with a boat colour.
-  They appear at the character pick, the Poaching meeting table and the
-  results podium. One expression each in the first version; the
-  "suspicious / surprised" expressions for Poaching are phase 2.
-- The visual target is prototype v7 (prototype-v7-lobby-3d.html). Its art
-  code is reused. Its game logic is a browser mock and is not.
 
 ## Not building
 
@@ -382,39 +592,30 @@ in chat or in a session, and said so in PROCESS.md). Restocking a dead lake
 the next match starts a new lake). Trading, loans, alliances: one
 negotiation (the promise) first.
 
-## Decisions and timeline
 
-### Decisions (provisional, Ava confirms on review)
-
-1. The room's lake remembers between matches: on. The next match in the
-   same room, in any mode, starts from what the last one left, regrown a
-   little. The lobby says "This room's lake remembers."
-2. Six characters: Mei, Old Wang, Jin, Lu, Lian, Shitou, each with a boat
-   colour.
-3. The order of the work: the lobby, 3D and Boat Rush first; Who's Poaching
-   and Fishing Party second (Poaching before the 10/28 crit, which is the
-   only group of four or more); Lake Holdings third.
-4. Two rule changes: Three.js may be vendored as one ES module file under
-   /static/vendor; and "AI-generated anything" in Not building becomes the
-   art rule (art is SVG and Three.js code written by Claude, said so in
-   PROCESS.md; nothing generated at run time; no image model).
-
-### Timeline (from the plan)
-
-| Phase | By | Delivers | People playing |
-|---|---|---|---|
-| 0 | 10/16 | DESIGN v3.0 and CLAUDE.md (one commit); per-seat frames | none |
-| 1 | 10/20 (C10 cutoff 10/21 13:30) | Lobby, 3D, portraits, Boat Rush with upgrades, playtest instruments | Ava and one more, phone and desktop |
-| 2 | 10/27 | Who's Poaching and Fishing Party first playable | the 10/28 crit group (4 or more) on Poaching; Party 2 to 4 |
-| 3 | 11/3 | Lake Holdings first playable; the three others revised after playtests | the 11/4 group |
-| 4 | 11/8 | Polish, README, PROCESS, reflection | none |
-| Due | 11/9 12:00 | | |
+## No mode is quietly cut
 
 No mode is quietly cut to save time. If one truly cannot be finished, the
 evidence, the remaining work and two or three alternatives go to Ava, who
-decides.
+decides. (v4.0 said this under its timeline; the timeline is in
+docs/design-history/four-games-v4.0.md.)
+
+## Decisions for Ava (accepted on 19 October, session 17 prompt)
+
+
+1. Remove the Warden, planting fry and the quota bar from Who's Poaching
+   [remove: one hidden role is clearer].
+2. Remove the party's variant pick and Muddy Water [remove].
+3. Lake Holdings is turn-based [yes].
+4. Season length 45 s and four seasons in Boat Rush [yes].
+
+All four defaults were accepted: the Warden, planting fry and the quota bar
+leave Who's Poaching; the variant pick and Muddy Water leave Fishing Party;
+Lake Holdings becomes turn-based; Boat Rush has four seasons of 45 s.
 
 ## Changelog
+
+- v5.0 (19 Oct, session 17): the design for all four games, step by step (prototype v10, docs/prototypes/v10/). The world is shared: one lake shape (92 × 64, an island, named places), seasons, K = 340, one ending ceremony. Boat Rush 2.0 is built first: four 45 s seasons with a rest and a market between them. Who's Poaching 2.0, Lake Holdings 2.0 and Fishing Party 2.0 follow. v4.0's mode sections moved word for word to docs/design-history/four-games-v4.0.md. Rule changes approved in the session 17 prompt: the lake shape and start (230 adults, 50 young), Boat Rush's browser-only practice (above), the shared ceremony, shared client modules, crash fixes in frozen code, and the removals listed under each mode.
 
 - v4.0.1 (19 Oct): the UI rules. The room is a page and the game is its own full-screen page; the host menu holds Stop match; informing layers take no taps; no course text on player pages; Chinese corrections. No game rule changed. (Boat Rush seasons and the shared closing ceremony are not in this version.)
 - v4.0 (19 Oct): one site, two languages. "/" is the current game's home
