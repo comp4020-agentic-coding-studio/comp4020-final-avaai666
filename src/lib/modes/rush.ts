@@ -41,7 +41,21 @@ interface Boat {
   mind: { spot: [number, number] | null; spotT: number; calm: number };
 }
 interface Market { offer: CardId[]; botPicks: (CardId | null)[]; picked: (CardId | null | undefined)[]; closesAt: number; closed: boolean; perSeatOffer?: Record<number, CardId[]> }
-interface SeasonHistory { startA: number; startY: number; endA: number; endY: number; caught: number; young: number }
+// One entry per season, from the moment it starts (spring: make(); summer
+// on: startSeason()) to its gong. caught/young is every fish a net or trawl
+// removed that season (young is the subset that were young, always counting
+// fish, never a card-doubled value); liveBorn is what moveFish()'s in-play
+// mating added, and reclaimed is an un-scooped rammed fish respawning via
+// floatLoose — the only two other ways s.fish changes mid-season, so the
+// population at the gong is exactly startA + startY + liveBorn + reclaimed
+// - caught (nextSpring()'s guard test checks this holds on real seeds).
+// Spring, summer and autumn then breed once more at the gong (DESIGN.md
+// "the rest... the lake breathes"), with that season's Fish Ladder bonus
+// and Reed Bed extra (bonus/reedsExtra, recorded there since the cards
+// held can differ by season); winter's gong goes straight to the
+// ceremony, so bred stays false on its entry and nextSpring() forecasts
+// once instead, with no bonus (matching forecast()'s own plain meaning).
+export interface SeasonHistory { startA: number; startY: number; caught: number; young: number; liveBorn: number; reclaimed: number; gongA: number; gongY: number; bred: boolean; bonus: number; reedsExtra: number }
 export interface RushSim {
   tick: number; t: number; season: Season; phase: "play" | "rest" | "market" | "end"; phaseT: number;
   players: number; bots: boolean[]; botKinds: string[]; rng: () => number;
@@ -90,7 +104,9 @@ function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number
     boats: [], fish: [], nets: [], loose: [], koi: null, koiSpawned: 0, nextId: 1,
     cap: Math.round(K * 1.3), market: null, history: [],
   };
-  seedFish(s, lake.adults ?? Math.round(lake.fish * 0.8), lake.young ?? Math.round(lake.fish * 0.2));
+  const a0 = lake.adults ?? Math.round(lake.fish * 0.8), y0 = lake.young ?? Math.round(lake.fish * 0.2);
+  seedFish(s, a0, y0);
+  s.history.push({ startA: a0, startY: y0, caught: 0, young: 0, liveBorn: 0, reclaimed: 0, gongA: 0, gongY: 0, bred: false, bonus: 0, reedsExtra: 0 });
   seats.forEach((_, seat) => {
     const d = dockPos(seat, players), x = d.x - Math.cos(d.inward) * 2, y = d.y - Math.sin(d.inward) * 2;
     s.boats.push({
@@ -197,11 +213,12 @@ function step(s: RushSim, inputs: { seat: number; i: RushInput }[]): GameEvent[]
   if (s.phase === "end") return ev;
   for (const { seat, i } of inputs) apply(s, seat, i, ev);
   if (s.phase === "play") {
+    const hist = s.history[s.history.length - 1];
     moveBoats(s, ev);
-    moveFish(s);
+    hist.liveBorn += moveFish(s);
     closeNets(s, ev);
     rams(s, ev);
-    floatLoose(s, ev);
+    hist.reclaimed += floatLoose(s, ev);
     koiTick(s, ev);
   }
   s.tick++;
@@ -214,7 +231,6 @@ function step(s: RushSim, inputs: { seat: number; i: RushInput }[]): GameEvent[]
 function advancePhase(s: RushSim, ev: GameEvent[]): void {
   if (s.phase === "play" && s.phaseT >= Q.SEASON_S - 1e-9) { endSeason(s, ev); return; }
   if (s.phase === "rest" && s.phaseT >= Q.REST_S - 1e-9) {
-    if (isLastSeason(s)) { s.phase = "end"; ev.push({ k: "end" }); return; }
     startMarket(s, ev);
     return;
   }
@@ -228,34 +244,38 @@ function advancePhase(s: RushSim, ev: GameEvent[]): void {
   }
 }
 
+// three rests that breed (spring, summer, autumn), then winter's gong goes
+// straight to the ceremony (DESIGN.md "8. After winter, the ceremony" — no
+// fourth rest, no market): isLastSeason() is true exactly when s.season is
+// already winter, since startSeason() only advances it on the way INTO a
+// season, never past the last one.
+function isLastSeason(s: RushSim): boolean { return s.season >= Q.SEASONS - 1; }
 function endSeason(s: RushSim, ev: GameEvent[]): void {
-  s.phase = "rest"; s.phaseT = 0;
   let spoiled = 0;
   for (const b of s.boats) { spoiled += holdValue(b); b.stats.lost += holdValue(b); if (b.tripValue > 0) { b.stats.trips++; b.stats.bestTrip = Math.max(b.stats.bestTrip, b.tripValue); b.tripValue = 0; } b.hold = []; }
   s.nets = []; s.loose = []; s.koi = null;
   ev.push({ k: "gong", spoiled });
+  const [gongA, gongY] = counts(s);
+  const hist = s.history[s.history.length - 1];
+  hist.gongA = gongA; hist.gongY = gongY;
+  if (isLastSeason(s)) { s.phase = "end"; ev.push({ k: "end" }); return; }
+  s.phase = "rest"; s.phaseT = 0;
   // breed: Fish Ladder sums across everyone who has it; Reed Bed too
   const ladders = s.boats.reduce((n, b) => n + (has(b, "ladder") ? 1 : 0), 0);
   const reedOwners = s.boats.filter((b) => has(b, "reeds"));
-  const [a, y] = counts(s);
-  const r = breedLake(a, y, Q.LADDER_BONUS * ladders);
-  const extra = reedOwners.length * Q.REEDS_YOUNG;
-  const born = r.born + extra;
-  s.history.push({ startA: a, startY: y, endA: a, endY: y, caught: 0, young: 0 });
-  const hist = s.history[s.history.length - 1];
+  const bonus = Q.LADDER_BONUS * ladders, reedsExtra = reedOwners.length * Q.REEDS_YOUNG;
+  const r = breedLake(gongA, gongY, bonus);
+  const born = r.born + reedsExtra;
+  hist.bred = true; hist.bonus = bonus; hist.reedsExtra = reedsExtra;
   for (const f of s.fish) f.adult = true;
   for (let i = 0; i < born; i++) {
-    const owner = reedOwners.length && i < extra ? reedOwners[i % reedOwners.length] : null;
+    const owner = reedOwners.length && i < reedsExtra ? reedOwners[i % reedOwners.length] : null;
     if (owner) { const d = dockPos(owner.seat, s.players); s.fish.push(newFish(s, d.x + (s.rng() - 0.5) * 4, d.y + (s.rng() - 0.5) * 4, false)); }
     else s.fish.push(newFish(s, null, null, false));
   }
   if (ladders) for (const b of s.boats) if (has(b, "ladder")) { const gift = Math.floor(born / Q.LADDER_PER); b.banked += gift; b.stats.home += gift; }
-  const [a2, y2] = counts(s);
-  hist.endA = a2; hist.endY = y2;
-  ev.push({ k: "rest", grew: y, born });
+  ev.push({ k: "rest", grew: gongY, born });
 }
-// after winter's rest, the match ends: no market, straight to the ceremony
-function isLastSeason(s: RushSim): boolean { return s.season >= Q.SEASONS - 1; }
 function startMarket(s: RushSim, ev: GameEvent[]): void {
   s.phase = "market"; s.phaseT = 0;
   const offer = offerFor(s);
@@ -270,6 +290,8 @@ export function botKindOf(i: number): string { return DEFAULT_BOT_KINDS[i % 3]; 
 function startSeason(s: RushSim, ev: GameEvent[]): void {
   s.season = (s.season + 1) as Season; s.phase = "play"; s.phaseT = 0; s.market = null;
   for (const b of s.boats) { const d = dockPos(b.seat, s.players); b.x = d.x; b.y = d.y; b.h = d.inward + Math.PI; b.docked = true; b.combo = 0; }
+  const [a, y] = counts(s);
+  s.history.push({ startA: a, startY: y, caught: 0, young: 0, liveBorn: 0, reclaimed: 0, gongA: 0, gongY: 0, bred: false, bonus: 0, reedsExtra: 0 });
   ev.push({ k: "season", season: s.season });
 }
 
@@ -324,7 +346,10 @@ function trawlPickup(s: RushSim, b: Boat, ev: GameEvent[]): void {
     s.fish.splice(i, 1);
     const val = s.season === 2 ? Q.BIG_MULT : f.big ? Q.BIG_MULT : 1;
     b.hold.push(val); b.stats.caught += val;
-    if (!f.adult) b.stats.youngKilled++;
+    const young = !f.adult;
+    if (young) b.stats.youngKilled++;
+    const hist = s.history[s.history.length - 1];
+    hist.caught++; if (young) hist.young++; // one fish left the lake, whatever its card-doubled value
     ev.push({ k: "catch", seat: b.seat, n: 1, fry: f.adult ? 0 : 1, koi: false, full: 0, x: b.x, y: b.y });
     break;
   }
@@ -336,7 +361,7 @@ function trawlPickup(s: RushSim, b: Boat, ev: GameEvent[]): void {
 // positive; this lake's are not, so that scheme silently collided two
 // distant cells into one bucket and made every fish check every other).
 const GRID_OFFSET = 1000;
-function moveFish(s: RushSim): void {
+function moveFish(s: RushSim): number {
   const dt = Q.DT, cs = Q.SIGHT, grid = new Map<number, number[]>();
   const cellKey = (gx: number, gy: number): number => (gx + GRID_OFFSET) * 100000 + (gy + GRID_OFFSET);
   s.fish.forEach((f, i) => { const k = cellKey((f.x / cs) | 0, (f.y / cs) | 0); let c = grid.get(k); if (!c) grid.set(k, (c = [])); c.push(i); });
@@ -383,6 +408,7 @@ function moveFish(s: RushSim): void {
     }
   }
   for (const b of born) s.fish.push(b);
+  return born.length;
 }
 // spring: river mouth + reeds; summer: lotus + deep water; autumn: open water; winter: deep water
 function seasonPull(season: Season): { x: number; y: number } | null {
@@ -444,11 +470,14 @@ function rams(s: RushSim, ev: GameEvent[]): void {
 }
 const nearAnyDock = (s: RushSim, x: number, y: number, r: number): boolean => s.boats.some((b) => { const d = dockPos(b.seat, s.players); return Math.hypot(x - d.x, y - d.y) < r; });
 
-function floatLoose(s: RushSim, ev: GameEvent[]): void {
+// an un-scooped value-1 fish respawns live after LOOSE_S: population change
+// nobody caught, so the caller records it in the season's history too
+function floatLoose(s: RushSim, ev: GameEvent[]): number {
   const keep: Loose[] = [];
+  let reclaimed = 0;
   for (const l of s.loose) {
     l.vx *= 0.92; l.vy *= 0.92; l.x += l.vx * Q.DT; l.y += l.vy * Q.DT;
-    if (s.t - l.t > Q.LOOSE_S) { if (l.value === 1) s.fish.push(newFish(s, l.x, l.y, true)); continue; }
+    if (s.t - l.t > Q.LOOSE_S) { if (l.value === 1) { s.fish.push(newFish(s, l.x, l.y, true)); reclaimed++; } continue; }
     let taken = false;
     if (s.t - l.t > 0.3) for (const b of s.boats) {
       if (b.stun > 0 || b.hold.length >= holdMax(b) || Math.hypot(b.x - l.x, b.y - l.y) > Q.PICK_R) continue;
@@ -459,6 +488,7 @@ function floatLoose(s: RushSim, ev: GameEvent[]): void {
     if (!taken) keep.push(l);
   }
   s.loose = keep;
+  return reclaimed;
 }
 
 function koiTick(s: RushSim, ev: GameEvent[]): void {
@@ -557,18 +587,30 @@ function frameFor(s: RushSim, seat: number) {
   };
 }
 
-// ---- the counterfactual: the year replayed with every catch x 0.8 ----
-function counterfactualNext(s: RushSim): number {
-  let a = s.history[0]?.startA ?? 0, y = s.history[0]?.startY ?? 0;
-  for (const h of s.history) {
-    const tookA = (h.caught - h.young) * 0.8, tookY = h.young * 0.8;
-    const natural = Math.max(0, h.startA - h.endA - (h.caught - h.young));
-    a = Math.max(0, a - tookA - natural);
-    y = Math.max(0, y - tookY);
-    const r = breedLake(Math.round(a), Math.round(y));
-    a = r.adults; y = r.born;
+// ---- next spring, from the match's own history: one function, used both
+// for the real result (scale 1) and the counterfactual (scale 0.8, every
+// catch replaced by a lighter one). Each entry already recorded the real
+// population at its gong (gongA/gongY, straight from s.fish); scale 1 only
+// has to put caught fish back to reproduce that population exactly — the
+// guard test below checks this against results() on real seeds. Scale 0.8
+// adds back the 20% of each catch a lighter hand would have left, split
+// adult/young the way it was actually caught, then breeds (if this season
+// did) exactly as endSeason() did, with that season's own bonus and Reed
+// Bed extra. Winter's entry never breeds (bred stays false): the final
+// nextSpring() call there is forecast(), once, same as a real year's end.
+// Exported for rush.test.ts's hand-computed example; nothing else calls it
+// from outside this module.
+export function nextSpring(history: SeasonHistory[], scale: number): number {
+  let a = 0, y = 0;
+  for (const h of history) {
+    a = h.gongA + (1 - scale) * (h.caught - h.young);
+    y = h.gongY + (1 - scale) * h.young;
+    if (h.bred) {
+      const r = breedLake(Math.round(a), Math.round(y), h.bonus);
+      a = r.adults; y = r.born + h.reedsExtra;
+    }
   }
-  return Math.round(a + y * 0.6);
+  return forecast(a, y);
 }
 
 function titlesFor(s: RushSim): { key: string; vars: Record<string, string | number>; seat: number }[] {
@@ -597,9 +639,8 @@ function results(s: RushSim): Results {
     { title: "Biggest loss", text: loss.stats.lost ? `{name}: lost ${loss.stats.lost} (rams and the gong)` : "nobody lost a fish", seat: loss.seat, tkey: "hl_rush_loss_t", key: loss.stats.lost ? "hl_rush_loss" : "hl_rush_loss_none", vars: { n: loss.stats.lost } },
     { title: "Rams", text: rammer.stats.rams ? `{name}: ${rammer.stats.rams} rams` : "nobody rammed", seat: rammer.seat, tkey: "hl_rush_rams_t", key: rammer.stats.rams ? "hl_rush_rams" : "hl_rush_rams_none", vars: { n: rammer.stats.rams } },
   ];
-  const [a, y] = counts(s);
-  const next = forecast(a, y); // the final rest already bred; results reports that as next spring directly
-  const alt = counterfactualNext(s);
+  const next = nextSpring(s.history, 1);
+  const alt = nextSpring(s.history, 0.8);
   const fairShare = Math.max(1, Math.round((s.boats.reduce((n, b) => n + b.banked, 0)) / s.boats.length));
   return {
     seats, lakeLeft: Math.min(K, next), highlights,

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { botStream, eventsFor, replay, type Seat } from "../../src/lib/game-platform.ts";
-import { botKindOf, DEFAULT_BOT_KINDS, makeWithOpts, rush, type RushInput, type RushSim } from "../../src/lib/modes/rush.ts";
+import { botKindOf, DEFAULT_BOT_KINDS, makeWithOpts, nextSpring, rush, type RushInput, type RushSim, type SeasonHistory } from "../../src/lib/modes/rush.ts";
 import { RUSH } from "../../src/lib/game-constants.ts";
-import { dockPos, K, shape } from "../../src/lib/lake-world.ts";
+import { dockPos, forecast, K, shape } from "../../src/lib/lake-world.ts";
 
 // Boat Rush, "rush 2.0" (DESIGN.md "Boat Rush 开船抢鱼 (2.0)"): four seasons,
 // each with a twist, ending in the gong, a breeding rest, and a market of
@@ -76,15 +76,20 @@ describe("four 45 s seasons, a gong, a rest, then a market", () => {
     }
   }, 30000);
 
-  it("after winter's rest, the match ends with no market", () => {
+  it("winter's gong ends the match directly: no fourth rest, no market (rule change 1, bug fix: breeding was counted twice)", () => {
     const s = make();
     for (let season = 0; season < RUSH.SEASONS - 1; season++) skipMarket(s);
-    until(s, s.t + RUSH.SEASON_S - RUSH.DT); // one tick before winter's play ends
-    step(s); // the gong; into the rest
-    until(s, s.t + RUSH.REST_S - RUSH.DT); // one tick before the rest ends
-    step(s); // the match ends: no market after the last season
+    expect(s.season).toBe(3); // winter, already playing
+    const historyLenBeforeGong = s.history.length;
+    let ev: ReturnType<typeof step> = [];
+    while (s.phase === "play") ev = step(s); // run winter out to its own gong, wherever it falls
+    expect(ev.some((e) => e.k === "gong")).toBe(true);
+    expect(ev.some((e) => e.k === "rest")).toBe(false);
+    expect(ev.some((e) => e.k === "end")).toBe(true);
     expect(s.phase).toBe("end");
     expect(rush.over(s)).toBe(true);
+    expect(s.history.length).toBe(historyLenBeforeGong); // no new (fifth) season entry opened
+    expect(s.history[s.history.length - 1].bred).toBe(false); // winter's entry never breeds
   }, 30000);
 });
 
@@ -266,12 +271,25 @@ describe("the four seasonal twists", () => {
   });
 });
 
+// runs a whole match (bots only, so there is always something to catch and
+// something to breed), returning the finished sim
+function playOut(seed: string, n = 4): RushSim {
+  const seats: Seat[] = Array.from({ length: n }, (_, i) => ({ seat: i, name: `B${i}`, bot: `bot${i}`, character: "mei" }));
+  const s = makeWithOpts(seed, seats, { fish: 280, adults: 224, young: 56 }, {});
+  for (let tick = 0; !rush.over(s) && tick < 20000; tick++) {
+    const applied: { seat: number; i: RushInput }[] = [];
+    for (const st of seats) for (const raw of rush.bot(s, st.seat, botStream(seed, st.bot!, tick, st.seat))) { const ok = rush.input(s, st.seat, raw); if (ok) applied.push({ seat: st.seat, i: ok }); }
+    rush.step(s, applied);
+  }
+  return s;
+}
+
 describe("the ending: next spring, the counterfactual and titles", () => {
   it("breeds: true — results().lakeLeft is next spring directly, capped at K, not a raw fish count", () => {
     const s = make("ending", 2, 280);
     expect(rush.breeds).toBe(true);
     for (let season = 0; season < RUSH.SEASONS - 1; season++) skipMarket(s);
-    until(s, s.t + RUSH.SEASON_S + RUSH.REST_S + 0.1);
+    while (s.phase === "play") step(s);
     expect(rush.over(s)).toBe(true);
     const r = rush.results(s);
     expect(r.lakeLeft).toBeLessThanOrEqual(K);
@@ -281,7 +299,7 @@ describe("the ending: next spring, the counterfactual and titles", () => {
   it("the counterfactual (catches x0.8) is at least as generous as the real result", () => {
     const s = make("alt", 2, 280);
     for (let season = 0; season < RUSH.SEASONS - 1; season++) skipMarket(s);
-    until(s, s.t + RUSH.SEASON_S + RUSH.REST_S + 0.1);
+    while (s.phase === "play") step(s);
     const r = rush.results(s) as unknown as { counterfactual: { alt: number; tierId: string } };
     expect(r.counterfactual.alt).toBeGreaterThanOrEqual(0);
     expect(["rich", "fair", "lean", "none"]).toContain(r.counterfactual.tierId);
@@ -290,10 +308,86 @@ describe("the ending: next spring, the counterfactual and titles", () => {
   it("titles are only awarded when someone earned them, king always first", () => {
     const s = make("titles", 2, 280);
     for (let season = 0; season < RUSH.SEASONS - 1; season++) skipMarket(s);
-    until(s, s.t + RUSH.SEASON_S + RUSH.REST_S + 0.1);
+    while (s.phase === "play") step(s);
     const r = rush.results(s) as unknown as { titles: { key: string }[] };
     expect(r.titles[0].key).toBe("king");
     expect(r.titles.length).toBeLessThanOrEqual(4);
+  }, 30000);
+
+  it("the lake breeds exactly 3 times in a match, not 5 (spring, summer, autumn; winter's gong ends the match directly)", () => {
+    for (const seed of ["breed-count-1", "breed-count-2", "breed-count-3"]) {
+      const s = playOut(seed);
+      expect(s.history.length).toBe(4); // one entry per season
+      expect(s.history.filter((h) => h.bred).length).toBe(3); // spring, summer, autumn
+      expect(s.history[3].bred).toBe(false); // winter never breeds here
+    }
+  }, 30000);
+
+  it("scale 1 reproduces the real next spring exactly, on several seeds", () => {
+    for (const seed of ["np-1", "np-2", "np-3", "np-4", "np-5"]) {
+      const s = playOut(seed);
+      const [a, y] = (() => { let a = 0, y = 0; for (const f of s.fish) f.adult ? a++ : y++; return [a, y]; })();
+      const real = forecast(a, y);
+      const r = rush.results(s);
+      expect(r.lakeLeft).toBe(Math.min(K, real));
+    }
+  }, 30000);
+
+  it("scale 0.8 is never below scale 1 on the same match", () => {
+    for (const seed of ["np-alt-1", "np-alt-2", "np-alt-3", "np-alt-4", "np-alt-5"]) {
+      const s = playOut(seed);
+      const r = rush.results(s) as unknown as { lakeLeft: number; counterfactual: { alt: number } };
+      expect(r.counterfactual.alt).toBeGreaterThanOrEqual(r.lakeLeft);
+    }
+  }, 30000);
+
+  it("a hand-computed small example: two seasons, one breed, then one forecast", () => {
+    // spring: starts at 100 adults, 20 young; 12 fish caught (10 adult, 2
+    // young), 6 born live during play, none reclaimed; gong at 94 adults,
+    // 24 young (100 - 10 + 0 adult-side is wrong to hand-check against
+    // gongA directly, since live births and maturing blur adult/young —
+    // gongA/gongY are simply what the entry says, as the real sim would
+    // record). Spring breeds, with a 10% Fish Ladder bonus.
+    const spring: SeasonHistory = { startA: 100, startY: 20, caught: 12, young: 2, liveBorn: 6, reclaimed: 0, gongA: 94, gongY: 24, bred: true, bonus: 0.1, reedsExtra: 2 };
+    // winter: never breeds (bred: false) — its own gongA/gongY is the only
+    // thing that matters, since nextSpring() only forecasts once, at the end
+    const winter: SeasonHistory = { startA: 0, startY: 0, caught: 9, young: 1, liveBorn: 3, reclaimed: 0, gongA: 180, gongY: 15, bred: false, bonus: 0, reedsExtra: 0 };
+
+    // scale 1: spring breeds breed(94, 24, 0.1), with +2 Reed Bed fish added
+    // to the born count; winter's catch contributes nothing extra (scale 1
+    // means every caught fish is really gone), so next spring is forecast()
+    // straight off winter's own gongA/gongY, ignoring spring's bred result
+    // entirely (each entry's a/y is reset to its own gong at scale 1 — only
+    // the LAST entry's outcome, after its own breed if any, is what the real
+    // sim carries forward, exactly as endSeason() replaces s.fish each time).
+    expect(nextSpring([spring, winter], 1)).toBe(forecast(180, 15));
+
+    // scale 0.8: winter's catch (9 fish, 1 young) is 20% lighter, so 0.2 of
+    // it (1.8 adult-side, 0.2 young-side) is added back before the final
+    // (bred: false) forecast — spring's breed still never happened for
+    // winter's base numbers, same reasoning as above.
+    const expectedAlt = forecast(180 + 0.2 * (9 - 1), 15 + 0.2 * 1);
+    expect(nextSpring([spring, winter], 0.8)).toBe(expectedAlt);
+    expect(nextSpring([spring, winter], 0.8)).toBeGreaterThanOrEqual(nextSpring([spring, winter], 1));
+  });
+
+  it("every season's recorded catch matches its own catch events, in the right season's entry — nothing silently dropped or attributed to the wrong season", () => {
+    for (const seed of ["conserve-1", "conserve-2", "conserve-3"]) {
+      const seats: Seat[] = Array.from({ length: 4 }, (_, i) => ({ seat: i, name: `B${i}`, bot: `bot${i}`, character: "mei" }));
+      const s = makeWithOpts(seed, seats, { fish: 280, adults: 224, young: 56 }, {});
+      const caughtBySeason: number[] = [0, 0, 0, 0];
+      for (let tick = 0; !rush.over(s) && tick < 20000; tick++) {
+        const applied: { seat: number; i: RushInput }[] = [];
+        for (const st of seats) for (const raw of rush.bot(s, st.seat, botStream(seed, st.bot!, tick, st.seat))) { const ok = rush.input(s, st.seat, raw); if (ok) applied.push({ seat: st.seat, i: ok }); }
+        const seasonBefore = s.season;
+        const ev = rush.step(s, applied);
+        for (const e of ev) if (e.k === "catch") caughtBySeason[seasonBefore] += (e.n as number) ?? 0;
+      }
+      expect(s.history.length).toBe(4);
+      for (let season = 0; season < 4; season++) expect(s.history[season].caught).toBe(caughtBySeason[season]);
+      // and the population identity: no fish unaccounted for, mid-season
+      for (const h of s.history) expect(h.gongA + h.gongY).toBe(h.startA + h.startY + h.liveBorn + h.reclaimed - h.caught);
+    }
   }, 30000);
 });
 

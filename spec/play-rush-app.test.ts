@@ -20,7 +20,7 @@ if (!isOpenWater(STEER_X, STEER_Y)) throw new Error(`(${STEER_X}, ${STEER_Y}) is
 // a full match's own length (4 seasons, their rests and markets), not a
 // hard-coded number, so a future season-length tune cannot silently make
 // this wait too short again (rule change 1, 4 x 45 s seasons)
-const MATCH_S = RUSH.SEASONS * RUSH.SEASON_S + RUSH.SEASONS * RUSH.REST_S + (RUSH.SEASONS - 1) * (RUSH.MARKET_S + RUSH.REVEAL_S);
+const MATCH_S = RUSH.SEASONS * RUSH.SEASON_S + (RUSH.SEASONS - 1) * RUSH.REST_S + (RUSH.SEASONS - 1) * (RUSH.MARKET_S + RUSH.REVEAL_S); // winter's gong ends the match directly: no fourth rest (bug fix)
 const END_WAIT_MS = MATCH_S * 1000 + 60_000;
 
 it("rush 1. two people play Boat Rush from the lobby to the results and a rematch", { timeout: END_WAIT_MS + 60_000 }, async () => {
