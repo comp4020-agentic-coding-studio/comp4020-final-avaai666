@@ -19,32 +19,14 @@ import { botStream, type Seat } from "../src/lib/game-platform.ts";
 import { hold, type HoldInput, type HoldSim } from "../src/lib/modes/hold.ts";
 import { party, type PartyInput, type PartySim } from "../src/lib/modes/party.ts";
 import { poach, type PoachInput, type PoachSim } from "../src/lib/modes/poach.ts";
-import { rush, type RushInput, type RushSim } from "../src/lib/modes/rush.ts";
+import { botKindOf, rush, type RushInput } from "../src/lib/modes/rush.ts";
 
 type Strat = { name: string; shape: (s: any, seat: number, ins: any[], r: () => number) => any[] };
 
-// ---- Boat Rush: one upgrade path each, no upgrades, or ram-heavy ----
-const firstUp = (first: string) => (s: RushSim, seat: number, ins: RushInput[]) => {
-  const b = s.boats[seat], order = [first, ...["bigHold", "fastHull", "wideNet", "ironBow"].filter((u) => u !== first)];
-  const out: RushInput[] = ins.filter((i) => i.k !== "buy");
-  if (b.docked && b.ups.length < 2) { const u = order.find((x) => !b.ups.includes(x as never)); if (u) out.push({ k: "buy", up: u as never }); }
-  return out;
-};
-const RUSH_STRATS: Strat[] = [
-  { name: "Big Hold first", shape: firstUp("bigHold") },
-  { name: "Fast Hull first", shape: firstUp("fastHull") },
-  { name: "Wide Net first", shape: firstUp("wideNet") },
-  { name: "Iron Bow first", shape: firstUp("ironBow") },
-  { name: "no upgrades", shape: (_s, _seat, ins) => ins.filter((i: RushInput) => i.k !== "buy") },
-  { name: "ram-heavy", shape: (s: RushSim, seat, ins: RushInput[]) => {
-    const b = s.boats[seat];
-    const prey = s.boats.filter((o) => o !== b && o.hold.length >= 3 && o.shield <= 0).sort((p, q) => Math.hypot(p.x - b.x, p.y - b.y) - Math.hypot(q.x - b.x, q.y - b.y))[0];
-    if (!prey || b.hold.length >= 6) return ins.filter((i) => i.k !== "buy");
-    const out: RushInput[] = [{ k: "steer", x: Math.round(prey.x), y: Math.round(prey.y) }];
-    if (Math.hypot(prey.x - b.x, prey.y - b.y) < 90 && b.dashCd <= 0) out.push({ k: "dash" });
-    return out;
-  } },
-];
+// ---- Boat Rush 2.0: no bot logic lives in this script. Every rush match is
+// steady/keeper/greedy, the server's own three bot kinds (src/lib/modes/rush.ts
+// bot(), botKindOf()), one per seat by seat % 3. The harness plays mode.bot()'s
+// output unmodified and tallies results by kind.
 
 // ---- Fishing Party: one shop item every time, or never buy ----
 const always = (item: string) => (s: PartySim, seat: number, ins: PartyInput[]) => {
@@ -146,6 +128,24 @@ function playRotating(mode: any, strats: Strat[], seed: number, n: number): { wi
   return { winners: res.seats.filter((x: any) => x.place === 1).map((x: any) => seatStrat[x.seat].name), sat: seatStrat.map((x) => x.name) };
 }
 
+// a real 4-bot rush lobby is already steady/keeper/greedy/steady (botKindOf,
+// seat % 3): this plays mode.bot() unmodified and reports per-seat, not
+// per-match, since "steady" sits two boats to the other kinds' one
+function playRush(seed: number, n: number): { seats: { kind: string; place: number }[] } {
+  const seats = seatsOf(n), secret = `balance-rush-${seed}`;
+  const s = rush.make(secret, seats, { fish: 220 });
+  for (let tick = 0; !rush.over(s) && tick < 20000; tick++) {
+    const applied: { seat: number; i: RushInput }[] = [];
+    for (const st of seats) {
+      const r = botStream(secret, st.bot!, tick, st.seat);
+      for (const raw of rush.bot(s, st.seat, r)) { const ok = rush.input(s, st.seat, raw); if (ok) applied.push({ seat: st.seat, i: ok }); }
+    }
+    rush.step(s, applied);
+  }
+  const res = rush.results(s);
+  return { seats: res.seats.map((x) => ({ kind: botKindOf(x.seat), place: x.place })) };
+}
+
 function playPoach(table: Table, seed: number): boolean {
   const n = 5, seats = seatsOf(n), secret = `balance-poach-${table}-${seed}`;
   const s = poach.make(secret, seats, { fish: 220 });
@@ -169,7 +169,7 @@ type Job = { mode: string; seed: number; table?: Table };
 if (!isMainThread) {
   const out: unknown[] = [];
   for (const j of workerData as Job[]) {
-    if (j.mode === "rush") out.push(playRotating(rush, RUSH_STRATS, j.seed, 4));
+    if (j.mode === "rush") out.push(playRush(j.seed, 4));
     if (j.mode === "party") out.push(playRotating(party, PARTY_STRATS, j.seed, 4));
     if (j.mode === "hold") out.push(playRotating(hold, HOLD_STRATS, j.seed, 4));
     if (j.mode === "poach") out.push({ table: j.table, fishers: playPoach(j.table!, j.seed) });
@@ -199,25 +199,42 @@ if (!isMainThread) {
       sections[m] = `## Who's Poaching (5 bots, 1 poacher; fishers' win rate by how the table votes)\n\n| Table behaviour | Matches | Fishers won | Rate | 95% interval |\n|---|---|---|---|---|\n${lines.join("\n")}\n`;
       continue;
     }
-    const strats = (m === "rush" ? RUSH_STRATS : m === "party" ? PARTY_STRATS : HOLD_STRATS).map((x) => x.name);
+    if (m === "rush") {
+      const bySeat = rows.flatMap((x) => x.r.seats as { kind: string; place: number }[]);
+      const kinds = ["steady", "keeper", "greedy"];
+      const lines = kinds.map((kind) => {
+        const played = bySeat.filter((x) => x.kind === kind);
+        const won = played.filter((x) => x.place === 1).length, [lo, hi] = wilson(won, played.length);
+        return { name: kind, rate: won / played.length, line: `| ${kind} | ${played.length} | ${won} | ${pct(won / played.length)} | ${pct(lo)}–${pct(hi)} |` };
+      });
+      const over = lines.filter((l) => l.rate > 0.4).map((l) => l.name);
+      sections[m] = `## Boat Rush (4 bots per match, seat % 3: steady, keeper, greedy, steady — src/lib/modes/rush.ts's own bot())\n\n| Bot kind | Seats played | Won (incl. shared first) | Rate | 95% interval |\n|---|---|---|---|---|\n${lines.map((l) => l.line).join("\n")}\n\n${over.length ? `Over the 40% target: ${over.join(", ")}.` : "No kind over the 40% target."}\n`;
+      continue;
+    }
+    const strats = (m === "party" ? PARTY_STRATS : HOLD_STRATS).map((x) => x.name);
     const lines = strats.map((name) => {
       const played = rows.filter((x) => x.r.sat.includes(name));
       const won = played.filter((x) => x.r.winners.includes(name)).length, [lo, hi] = wilson(won, played.length);
       return { name, n: played.length, won, rate: won / played.length, line: `| ${name} | ${played.length} | ${won} | ${pct(won / played.length)} | ${pct(lo)}–${pct(hi)} |` };
     });
     const over = lines.filter((l) => l.rate > 0.4).map((l) => l.name);
-    sections[m] = `## ${m === "rush" ? "Boat Rush" : m === "party" ? "Fishing Party" : "Lake Holdings"} (4 bots per match; ${strats.length} strategies drawn by a seeded shuffle each match)\n\n| Strategy | Matches it sat in | Won (incl. shared first) | Rate | 95% interval |\n|---|---|---|---|---|\n${lines.map((l) => l.line).join("\n")}\n\n${over.length ? `Over the 40% target: ${over.join(", ")}.` : "No strategy over the 40% target."}\n`;
+    sections[m] = `## ${m === "party" ? "Fishing Party" : "Lake Holdings"} (4 bots per match; ${strats.length} strategies drawn by a seeded shuffle each match)\n\n| Strategy | Matches it sat in | Won (incl. shared first) | Rate | 95% interval |\n|---|---|---|---|---|\n${lines.map((l) => l.line).join("\n")}\n\n${over.length ? `Over the 40% target: ${over.join(", ")}.` : "No strategy over the 40% target."}\n`;
   }
+  // the 2026-10-15 file is rush 1.0's history; rush 2.0's report is a new
+  // file and never touches it. party/hold/poach keep writing there.
   const file = "docs/checks/balance-2026-10-15.md";
   const old = existsSync(file) ? readFileSync(file, "utf8") : "";
   const head = `# Balance, 2026-10-15 (bots only)\n\nWritten by \`node scripts/balance.ts\`. Every match here is bots against bots, with the strategies in scripts/balance.ts, on the seeds \`balance-<mode>-1\` to \`-${N}\`. These are claims about these bots, strategies and seeds, not about how people play. A fair share in a four-seat match is 25%; the target is that no strategy wins more than 40%. 95% intervals are Wilson intervals.\n\n`;
-  // the file is: the head, then one section per mode in a fixed order (kept from the old
-  // file for modes not run now), then "Changes" (the notes on which numbers moved, kept)
   const TITLES: Record<string, string> = { rush: "## Boat Rush", party: "## Fishing Party", hold: "## Lake Holdings", poach: "## Who's Poaching" };
   const oldParts = old.split(/^(?=## )/m).filter((x) => x.startsWith("## "));
   const part = (m: string) => sections[m] ?? oldParts.find((x) => x.startsWith(TITLES[m])) ?? "";
   const notes = oldParts.filter((x) => x.startsWith("## Before") || x.startsWith("## Changes")).map((x) => x.trimEnd() + "\n");
-  writeFileSync(file, head + ["rush", "party", "hold", "poach"].map(part).filter(Boolean).map((x) => x.trimEnd() + "\n").join("\n") + (notes.length ? "\n" + notes.join("\n") : ""));
+  writeFileSync(file, head + ["rush", "party", "hold", "poach"].map((m) => (m === "rush" ? oldParts.find((x) => x.startsWith(TITLES.rush)) ?? "" : part(m))).filter(Boolean).map((x) => x.trimEnd() + "\n").join("\n") + (notes.length ? "\n" + notes.join("\n") : ""));
+  if (sections.rush) {
+    const rfile = "docs/checks/balance-rush2-2026-10-23.md";
+    const rhead = `# Balance, Boat Rush 2.0, 2026-10-23 (bots only)\n\nWritten by \`node scripts/balance.ts rush\`. Every match here is bots against bots: a 4-seat rush lobby is steady/keeper/greedy/steady (seat % 3, src/lib/modes/rush.ts's own bot()), on the seeds \`balance-rush-1\` to \`-${N}\`. These are claims about these bots and seeds, not about how people play. A fair share of 4 seats is 25%; the target is that no kind wins more than 40%. 95% intervals are Wilson intervals.\n\n`;
+    writeFileSync(rfile, rhead + sections.rush.trimEnd() + "\n");
+  }
   for (const m of modes) console.log(sections[m]);
   console.log(`(${jobs.length} matches in ${Math.round((performance.now() - t0) / 1000)} s on ${W} workers)`);
 }

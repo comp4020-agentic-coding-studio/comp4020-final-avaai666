@@ -95,7 +95,7 @@ async function loadMode(id) {
   hud.innerHTML = "";
   mode = await import(`/static/play/${id}.js`);
   modeId = id;
-  modeApi = mode.mount({ world, sound, ui, send, view: () => view });
+  modeApi = mode.mount({ world, sound, ui, send, view: () => view, post });
   return modeApi;
 }
 
@@ -159,7 +159,12 @@ function showRoom() {
   if (hostMenu.hidden) openHost(false);
   if (view.me === null && document.querySelector(".joinform")) { overlay.innerHTML = ""; return; }
   if (view.state === "lobby") { location.replace(`/play/${code}`); return; }
-  if (view.state === "end" && view.results) { overlay.innerHTML = resultsHtml(); bindOverlay(); }
+  if (view.state === "end" && view.results) {
+    // a mode may draw its own results screen (the ceremony, DESIGN.md "The ceremony"); the generic
+    // podium (resultsHtml) is the fallback for modes not yet rebuilt to it
+    if (modeApi?.results) modeApi.results(view, overlay);
+    else { overlay.innerHTML = resultsHtml(); bindOverlay(); }
+  }
   if (view.state === "play") { /* the countdown or the match */ }
 }
 function countdown(startedAt, serverNow) {

@@ -1,6 +1,7 @@
 import { expect, inject, it } from "vitest";
 import { openRoom, joinRoom, post, openStream } from "./play-helpers.ts";
-import { A0, K, Y0 } from "../src/lib/lake-world.ts";
+import { A0, blockedAt, K, nr, Y0, ZONES } from "../src/lib/lake-world.ts";
+import { RUSH } from "../src/lib/game-constants.ts";
 
 // Boat Rush on /play over HTTP, against the RUNNING app (never production):
 // two people open a room from the lobby, join with their own cookies, play a
@@ -8,7 +9,21 @@ import { A0, K, Y0 } from "../src/lib/lake-world.ts";
 // rematch, which starts with the lake the first match left.
 const baseUrl = inject("baseUrl");
 
-it("rush 1. two people play Boat Rush from the lobby to the results and a rematch", { timeout: 240_000 }, async () => {
+// a steer target, in the v5 lake's own 92 x 64 space (rule change 2): open
+// water, not a zone, the island or winter ice, so a wrong point fails loudly
+// here rather than timing out below if the shape ever changes again
+const STEER_X = 32, STEER_Y = 23;
+const isOpenWater = (x: number, y: number) =>
+  nr(x, y) < 0.6 && !blockedAt(x, y, 0) && !blockedAt(x, y, 3) && !Object.values(ZONES).some((z) => Math.hypot(x - z.x, y - z.y) < z.r);
+if (!isOpenWater(STEER_X, STEER_Y)) throw new Error(`(${STEER_X}, ${STEER_Y}) is not open water in the current lake shape`);
+
+// a full match's own length (4 seasons, their rests and markets), not a
+// hard-coded number, so a future season-length tune cannot silently make
+// this wait too short again (rule change 1, 4 x 45 s seasons)
+const MATCH_S = RUSH.SEASONS * RUSH.SEASON_S + RUSH.SEASONS * RUSH.REST_S + (RUSH.SEASONS - 1) * (RUSH.MARKET_S + RUSH.REVEAL_S);
+const END_WAIT_MS = MATCH_S * 1000 + 60_000;
+
+it("rush 1. two people play Boat Rush from the lobby to the results and a rematch", { timeout: END_WAIT_MS + 60_000 }, async () => {
   const code = await openRoom(baseUrl, "rush");
   const a = await joinRoom(baseUrl, code, "Ava", "mei");
   const b = await joinRoom(baseUrl, code, "Bo", "jin");
@@ -25,17 +40,17 @@ it("rush 1. two people play Boat Rush from the lobby to the results and a rematc
 
   // one steer from Ava reaches Bo's frames, decided by the server
   const t0 = performance.now();
-  expect((await post(baseUrl, code, "in", a, { k: "steer", x: 321, y: 234 })).status).toBe(200);
-  await sb.next((e) => e.event === "frame" && JSON.parse(e.data).f.b[0][11] === 321 && JSON.parse(e.data).f.b[0][12] === 234);
+  expect((await post(baseUrl, code, "in", a, { k: "steer", x: STEER_X, y: STEER_Y })).status).toBe(200);
+  await sb.next((e) => e.event === "frame" && JSON.parse(e.data).f.b[0][11] === STEER_X * 10 && JSON.parse(e.data).f.b[0][12] === STEER_Y * 10);
   const ms = performance.now() - t0;
   console.log(`rush steer -> the other stream: ${ms.toFixed(1)} ms`);
   expect((await post(baseUrl, code, "in", b, { k: "cast", charge: 1 })).status).toBe(200);
   const cast = await sb.next((e) => e.event === "frame" && JSON.parse(e.data).ev.some((x: { k: string }) => x.k === "cast"), 3000);
-  expect(JSON.parse(cast.data).ev.find((x: { k: string }) => x.k === "cast").r).toBeCloseTo(38 * 1.6, 0);
+  expect(JSON.parse(cast.data).ev.find((x: { k: string }) => x.k === "cast").r).toBeCloseTo(RUSH.NET_R * 1.3);
   expect((await post(baseUrl, code, "in", a, { k: "teleport" })).status).toBe(409);
 
   // the horn, then the results with three highlights and the lake left
-  const end = await sa.next((e) => e.event === "room" && JSON.parse(e.data).state === "end", 170_000);
+  const end = await sa.next((e) => e.event === "room" && JSON.parse(e.data).state === "end", END_WAIT_MS);
   const results = JSON.parse(end.data).results;
   expect(results.seats.length).toBe(2);
   expect(results.highlights.length).toBe(3);

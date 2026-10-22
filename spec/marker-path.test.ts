@@ -5,7 +5,22 @@ import { join } from "node:path";
 import { JSDOM } from "jsdom";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { openStream, post } from "./play-helpers.ts";
-import { A0, Y0 } from "../src/lib/lake-world.ts";
+import { A0, blockedAt, nr, Y0, ZONES } from "../src/lib/lake-world.ts";
+import { RUSH } from "../src/lib/game-constants.ts";
+
+// a steer target, in the v5 lake's own 92 x 64 space (rule change 2): open
+// water, not a zone, the island or winter ice, so a wrong point fails loudly
+// here rather than timing out below if the shape ever changes again
+const STEER_X = 43, STEER_Y = 21;
+const isOpenWater = (x: number, y: number) =>
+  nr(x, y) < 0.6 && !blockedAt(x, y, 0) && !blockedAt(x, y, 3) && !Object.values(ZONES).some((z) => Math.hypot(x - z.x, y - z.y) < z.r);
+if (!isOpenWater(STEER_X, STEER_Y)) throw new Error(`(${STEER_X}, ${STEER_Y}) is not open water in the current lake shape`);
+
+// a full match's own length (4 seasons, their rests and markets), not a
+// hard-coded number, so a future season-length tune cannot silently make
+// this wait too short again (rule change 1, 4 x 45 s seasons)
+const MATCH_S = RUSH.SEASONS * RUSH.SEASON_S + RUSH.SEASONS * RUSH.REST_S + (RUSH.SEASONS - 1) * (RUSH.MARKET_S + RUSH.REVEAL_S);
+const END_WAIT_MS = MATCH_S * 1000 + 60_000;
 
 // The marker's path (the course's "How it's marked"), as one test: start at
 // /readme/, then /, two people in separate cookie jars in one room, a Boat
@@ -54,7 +69,7 @@ async function joinAs(code: string, name: string, character: string, lang = ""):
   return res.headers.getSetCookie()[0].split(";")[0];
 }
 
-it("the marker's path: /readme/, two profiles in one room under 1 s, a match, a restart, two languages", { timeout: 300_000 }, async () => {
+it("the marker's path: /readme/, two profiles in one room under 1 s, a match, a restart, two languages", { timeout: END_WAIT_MS + 60_000 }, async () => {
   // 1. /readme/ has README.md's headings in the HTML the server sends
   const readme = text(await page("/readme/"));
   const headings = readFileSync("README.md", "utf8").split("\n").filter((l) => /^#{1,6} /.test(l)).map((l) => l.replace(/^#+ /, "").replace(/\*/g, ""));
@@ -80,14 +95,14 @@ it("the marker's path: /readme/, two profiles in one room under 1 s, a match, a 
   const go = JSON.parse((await sa.next((e) => e.event === "go")).data);
   await new Promise((r) => setTimeout(r, Math.max(0, go.startedAt - go.serverNow) + 200));
   const t1 = performance.now();
-  expect((await post(base, code, "in", b, { k: "steer", x: 432, y: 210 })).status).toBe(200);
-  await sa.next((e) => e.event === "frame" && JSON.parse(e.data).f.b[1][11] === 432 && JSON.parse(e.data).f.b[1][12] === 210);
+  expect((await post(base, code, "in", b, { k: "steer", x: STEER_X, y: STEER_Y })).status).toBe(200);
+  await sa.next((e) => e.event === "frame" && JSON.parse(e.data).f.b[1][11] === STEER_X * 10 && JSON.parse(e.data).f.b[1][12] === STEER_Y * 10);
   const steer = performance.now() - t1;
   console.log(`B's steer on A's stream: ${steer.toFixed(1)} ms`);
   expect(steer).toBeLessThan(1000);
 
   // 4. the match ends; both jars see it in "What happened here"
-  const end = JSON.parse((await sa.next((e) => e.event === "room" && JSON.parse(e.data).state === "end", 200_000)).data);
+  const end = JSON.parse((await sa.next((e) => e.event === "room" && JSON.parse(e.data).state === "end", END_WAIT_MS)).data);
   const lakeNow = end.lake.fish;
   const line = (html: string) => text(html).match(/Boat Rush · (Ava|Bo) won|Boat Rush · no winner/)?.[0];
   const pageA = await page(`/play/${code}`, a), pageB = await page(`/play/${code}`, b);

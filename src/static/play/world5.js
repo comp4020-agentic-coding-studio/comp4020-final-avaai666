@@ -573,6 +573,7 @@ export function createWorld5(canvas, stage, world, opts = {}) {
 
   return {
     THREE, scene, camera, toon, makeLantern, glowSprite, toWorld, toSim, zones, island, docks: DOCKS,
+    k: world.k, tiers: world.tiers, // so a mode never reaches into the page's own boot JSON for these
     setSeason, setNight: (v) => { nightTarget = v; }, setLanterns: (l) => { lanterns = l; },
     setDocks, boat, drawBoat, clearBoats, boats, setFish, setKoi, prop, sweepProps, clearProps,
     ripple, netDrop, floatText, setLabels, screenToSim,

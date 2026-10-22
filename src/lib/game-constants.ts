@@ -145,33 +145,53 @@ export const PLAY_COUNTDOWN_MS = 3000; // 3-2-1, everyone sees it
 export const LAKE_DEAD = 40; // below this, the lake has died
 export const PLAY_CHARACTERS = ["mei", "wang", "jin", "lu", "lian", "shitou"] as const;
 
-// ---- Boat Rush, "rush 1.0" (DESIGN.md "Boat Rush") ----
-// boat-sim 0.1's numbers (BOAT above) plus the new rules; start points for
-// playtests, not findings.
+// ---- Boat Rush, "rush 2.0" (DESIGN.md "Boat Rush 开船抢鱼 (2.0)") ----
+// Runs directly in lake-world.ts's coordinate space (x east, y south, the
+// 92 x 64 lobed lake): unlike rush 1.0 (boat-sim's 1000 x 700 ellipse,
+// BOAT above), there is no separate sim scale to convert. Distances and
+// speeds are the prototype's RU numbers (docs/prototypes/v10/rush.js),
+// which are already in this scale. Start points for playtests, not findings
+// (scripts/balance.ts tunes them).
 export const RUSH = {
-  ...BOAT,
-  SECONDS: 150, // two and a half minutes
-  LOAD_SLOW: 0.6, // a full hold is 60% slower (boat-sim 0.1: 35%)
-  MAX_CHARGE: 0.6, // a full charge widens the net by this much (to 1.6 times)
-  CHARGE_SINK: 0.3, // and it sinks this much slower
-  SCATTER_R: 2.2, // a closing net scares fish within this many net radii
-  REEDS: [{ x: 210, y: 300, r: 70 }, { x: 790, y: 410, r: 70 }], // the reed shallows
-  REED_SLOW: 0.5, // boats in the reeds sail at half speed
-  REED_SHARE: 0.22, // share of the starting fish placed in the reeds
-  CROWN_DROP: 1, // a ram on the leader spills one more
-  LANTERN_S: 30, // the last 30 s: Lantern Rush
-  LANTERN_MULT: 2, // fish banked then count double
-  MAX_UPGRADES: 2,
-  FIRST_UP_COST: 3, SECOND_UP_COST: 7, // banked fish: the first upgrade, whichever it is, then the second
-  UPGRADES: {
-    bigHold: { cost: 3, hold: 5, name: "Big Hold", text: "+5 hold" },
-    fastHull: { cost: 3, speed: 1.12, name: "Fast Hull", text: "12% faster" },
-    wideNet: { cost: 3, net: 1.12, name: "Wide Net", text: "12% wider net" },
-    ironBow: { cost: 3, dealt: 1, taken: 1, name: "Iron Bow", text: "+1 spill dealt, −1 taken" },
-  } as Record<string, { cost: number; name: string; text: string; hold?: number; speed?: number; net?: number; dealt?: number; taken?: number }>,
-  KOI_STOP: 12, // no golden carp in the last 12 s
+  DT: 0.05, // a tick, seconds (20 a second)
+  SEASONS: 4, SEASON_S: 45, RUSH_S: 10, MARKET_S: 14, REST_S: 4.5, REVEAL_S: 2.6, // the market's reveal pause once it closes
+  HOLD: 12, SPEED: 15, LOAD_SLOW: 0.35, ACCEL: 6, // a full hold is 35% slower
+  NET_R: 3.5, NET_AHEAD: 4, SINK: 0.5, CAST_CD: 1.0, NET_MAX: 6, SCATTER_R: 2.2, // at most 6 fish a cast; a closing net scares fish within this many net radii
+  DASH_S: 0.4, DASH_MULT: 2.4, DASH_CD: 4,
+  RAM_R: 3.4, RAM_DROP: 3, STUN: 0.6, SHIELD: 3,
+  DOCK_R: 4, SAFE_R: 11, UNLOAD_EVERY: 0.12, // no ram within 11 of a dock
+  LOOSE_S: 8, PICK_R: 2.6,
+  KOI_VALUE: 5, KOI_FOR: 10, KOI_STOP: 12, // no golden carp in the last 12 s of a season
+  // SIGHT/MATE/SEP are tuned for the same average neighbour count as rush
+  // 1.0's (about 9, measured directly): schools cluster, so density near a
+  // school centre is much higher than the lake-wide average, and the same
+  // lake-width ratio rush 1.0 used (scaled naively to this much smaller
+  // lake) gave ~64 neighbours per fish, making moveFish's O(fish x
+  // neighbours) cost per tick far too slow for a full match.
+  SIGHT: 0.5, MATE: 0.16, SEP: 0.08, V_ADULT: 4.2, V_FRY: 2.6, BREED_CHANCE: 0.02, COOL: 6, MATURE_S: 20, SHALLOW: 0.72,
+  BIG_SHARE: 0.08, BIG_MULT: 2, // 8% of adults are worth 2
+  CHAIN_S: 2.6, CHAIN_BONUS: 1, // a chain of 3+ fish within 2.6 s adds 1
+  REROLL: 2, // banked fish
+  REEDS_YOUNG: 10, // Reed Bed: this many extra young fish hatch at the owner's dock, each breed
+  LADDER_BONUS: 0.15, // Fish Ladder: the whole lake breeds this much better
+  LADDER_PER: 8, // ...and the owner gets 1 fish for every this many born
+  RELEASE_SHARE: 0.5, // Let Them Go: each spared young fish scores this share of a fish, if next year is Fair+
+  CARDS: {
+    bigHold: { kind: "plain", hold: 4, name: "Big Hold", text: "+4 fish in your boat." },
+    fastHull: { kind: "plain", speed: 1.15, name: "Fast Hull", text: "Sail 15% faster." },
+    wideNet: { kind: "plain", net: 1.18, name: "Wide Net", text: "Your net is 18% wider." },
+    quickHands: { kind: "plain", castCd: 0.7, name: "Quick Hands", text: "Cast again 30% sooner." },
+    ironBow: { kind: "plain", dealt: 1, taken: 1, name: "Iron Bow", text: "Your rams knock out 1 more fish; rams on you, 1 fewer." },
+    goldHook: { kind: "plain", koiValue: 8, koiPull: true, name: "Golden Hook", text: "Golden carp are worth 8, and swim toward you." },
+    fineMesh: { kind: "greedy", youngShare: 0.4, name: "Fine Mesh", text: "Your net keeps the young fish too: about +40% catch. They were next year's fish." },
+    trawl: { kind: "greedy", trawl: true, name: "Trawl", text: "While you sail, you scoop up every fish you pass over, young ones included." },
+    ladder: { kind: "keeper", name: "Fish Ladder", text: "The whole lake breeds 15% better. You get 1 fish for every 8 born." },
+    release: { kind: "keeper", name: "Let Them Go", text: "Young fish in your net go free; each one you spare scores ½ a fish if next year is Fair or better." },
+    reeds: { kind: "keeper", name: "Reed Bed", text: "Plant reeds by your dock: 10 more young fish hatch there each time the lake breeds." },
+  } as Record<string, { kind: "plain" | "greedy" | "keeper"; name: string; text: string; hold?: number; speed?: number; net?: number; castCd?: number; dealt?: number; taken?: number; koiValue?: number; koiPull?: boolean; youngShare?: number; trawl?: boolean }>,
   SEATS: { min: 2, max: 4, botFill: 4 },
 } as const;
+export const RUSH_MODEL = "rush 2.0";
 
 // ---- Who's Poaching, "poach 1.0" (DESIGN.md "Who's Poaching") ----
 // Distances are in sim units (the lake is 1000 x 700; the 3D lake is a

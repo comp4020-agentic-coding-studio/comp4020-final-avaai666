@@ -29,6 +29,25 @@ function fakeWorld() {
   };
 }
 
+// rush.js (rush 2.0) draws through world5.js's API, not world.js's: a
+// different fake, matching world5.js's createWorld5() return shape.
+function fakeWorld5() {
+  const noop = () => {};
+  const scene = new THREE.Scene();
+  return {
+    THREE, scene, camera: new THREE.PerspectiveCamera(), toon: (c: string) => new THREE.MeshBasicMaterial({ color: c }),
+    makeLantern: () => new THREE.Group(), toWorld: (x: number, y: number) => [x, y], toSim: (x: number, y: number) => [x, y],
+    zones: {}, island: { x: 10, y: -15, r: 7.5 }, docks: [{ x: 0, z: 10, wx: 0, wz: 10 }],
+    setSeason: noop, setNight: noop, setLanterns: noop, setDocks: noop,
+    boat: () => ({ tag: { classList: { toggle: noop } }, mesh: { visible: true, userData: { pile: { children: [] } } } }), drawBoat: noop,
+    clearBoats: noop, setFish: noop, setKoi: noop, prop: () => new THREE.Group(), sweepProps: noop, clearProps: noop,
+    ripple: noop, netDrop: noop, floatText: noop, setLabels: noop, screenToSim: () => [0, 0] as [number, number],
+    setCameraMode: noop, viewSpan: () => 118, iceBlocks: () => false, growHouse: noop, resetHouses: noop, minimapEl: null,
+    onFrame: noop, pointAt: noop, wantDir: () => null, setTap: noop, setSteerMode: noop, shake: noop,
+    canvas: document.getElementById("gl5"), end: noop,
+  };
+}
+
 function ui(lang: "en" | "zh") {
   const banners: [string, string][] = [];
   return {
