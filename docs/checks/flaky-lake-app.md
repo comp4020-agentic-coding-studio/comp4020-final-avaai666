@@ -107,11 +107,18 @@ has `testTimeout: 30_000`. In a loaded full run `lake-runner`'s "throwNet
 refusals" took 6.45 s against vitest's 5 s default; alone it takes 2.9-3.9 s.
 No assertion changed.
 
-## A known edge, not changed
+## A known edge, fixed
 
-Starting a 13th live lake on one server answers an unhandled `500`
+Starting a 13th live lake on one server used to answer an unhandled `500`
 (`Error: full`) instead of a clear message, because the lake hub caps live
-lakes at 12 (`MAX_LIVE_LAKES` in `src/lib/lake-live.ts`). It is in frozen code
-(`/l`), so it was left alone. Two of the failures seen during this
-investigation were this, from my own loop starting too many lakes on one
-server, and are not the frame failure.
+lakes at 12 (`MAX_LIVE_LAKES` in `src/lib/lake-live.ts`). Fixed as a crash fix
+in frozen code (`/l`): `register()` now throws a typed `LakeFull` error
+(`src/lib/lake-live.ts`), which `showLake`, `startLake` and `lakeEvents`
+(`src/routes.ts`) each catch and answer with 503, `Retry-After: 60`, and
+`g_busy` from `src/lib/i18n.ts` in both languages, instead of letting it
+reach the generic 500 handler. `spec/unit/lake-live.test.ts` covers the cap
+directly: 12 lakes register without throwing, a 13th throws `LakeFull` (not
+a bare `Error`), and re-registering an already-live lake (a rebuild) never
+counts against the cap. Two of the failures seen during this investigation
+were this edge, from my own loop starting too many lakes on one server, and
+were not the frame failure.

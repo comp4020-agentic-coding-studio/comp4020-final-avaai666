@@ -26,9 +26,19 @@ interface LiveLake {
   sentUpTo: number;
 }
 
+// Thrown by register() when MAX_LIVE_LAKES are already live (crash fix in
+// frozen code: a route catches this and answers a clear, non-500 message
+// instead of letting it become an unhandled 500).
+export class LakeFull extends Error {
+  readonly lakeFull = true as const;
+  constructor() {
+    super("full");
+  }
+}
+
 export interface LakeHub {
   // Registers a runner that just started (or was rebuilt at boot) as live.
-  // Throws "full" if MAX_LIVE_LAKES are already live.
+  // Throws LakeFull if MAX_LIVE_LAKES are already live.
   register(runner: Runner): void;
   isLive(lakeId: number): boolean;
   // Looks up the runner for an action route. Null if the lake is not live.
@@ -89,7 +99,7 @@ export function createLakeHub(onError: (err: unknown) => void): LakeHub {
 
   return {
     register(runner) {
-      if (lakes.size >= MAX_LIVE_LAKES && !lakes.has(runner.lakeId)) throw new Error("full");
+      if (lakes.size >= MAX_LIVE_LAKES && !lakes.has(runner.lakeId)) throw new LakeFull();
       lakes.set(runner.lakeId, { runner, streams: new Set(), sentUpTo: 0 });
     },
 

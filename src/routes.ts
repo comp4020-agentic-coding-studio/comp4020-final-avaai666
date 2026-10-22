@@ -5,7 +5,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 import { isIdempotencyKey } from "./lib/keys.ts";
 import { FILL_TO } from "./lib/game-constants.ts";
-import { type LakeHub } from "./lib/lake-live.ts";
+import { LakeFull, type LakeHub } from "./lib/lake-live.ts";
 import { publicRow, rebuild as rebuildLakeRunner, type Runner } from "./lib/lake-runner.ts";
 import type { FamilyRow, LakeLedgerRow, LakeStore } from "./lib/lake-store.ts";
 import { available } from "./lib/pond.ts";
@@ -16,7 +16,7 @@ import type { Hub } from "./live.ts";
 import { lakeHomePage, lakePage } from "./lake-pages.ts";
 import { log } from "./log.ts";
 import { errorPage, pondPage, pondRegisterPage } from "./pages.ts";
-import { langFrom } from "./lib/i18n.ts";
+import { langFrom, t } from "./lib/i18n.ts";
 import { homePage, howPage, makingOfPage, notFoundPage, readmeSitePage } from "./site-pages.ts";
 
 const DIG_INTERVAL_MS = 10_000;
@@ -212,7 +212,9 @@ export function createHandler({ store, hub, lakeStore, lakeHub, now, readmeHtml,
   }
 
   // A runner for a started lake, live in the hub already or rebuilt now
-  // (e.g. the first request to reach it since the server started).
+  // (e.g. the first request to reach it since the server started). Throws
+  // LakeFull if MAX_LIVE_LAKES are already live; every caller catches it
+  // (crash fix in frozen code: this used to reach the generic 500 handler).
   function liveRunner(lakeId: number, code: string, secret: string, startedAt: number): Runner {
     const existing = lakeHub.runnerFor(lakeId);
     if (existing) return existing;
@@ -221,6 +223,12 @@ export function createHandler({ store, hub, lakeStore, lakeHub, now, readmeHtml,
     const runner = rebuildLakeRunner({ store: lakeStore, lakeId, code, secret, startedAt, families, rows }, now());
     lakeHub.register(runner);
     return runner;
+  }
+
+  // Both languages, since /l has no lang switch of its own to pick one by.
+  const LAKE_BUSY_MESSAGE = `${t("en", "g_busy")} / ${t("zh", "g_busy")}`;
+  function sendLakeBusy(res: ServerResponse): void {
+    sendHtml(res, 503, errorPage("All lakes are busy", LAKE_BUSY_MESSAGE), { "retry-after": "60" });
   }
 
   function showLake(req: IncomingMessage, res: ServerResponse, code: string, status = 200, error?: string): void {
@@ -251,7 +259,13 @@ export function createHandler({ store, hub, lakeStore, lakeHub, now, readmeHtml,
 
     if (startRow) {
       const { startedAt } = startRow.data as { startedAt: number };
-      const runner = liveRunner(lake.id, code, lake.secret, startedAt);
+      let runner: Runner;
+      try {
+        runner = liveRunner(lake.id, code, lake.secret, startedAt);
+      } catch (err) {
+        if (err instanceof LakeFull) return sendLakeBusy(res);
+        throw err;
+      }
       return sendHtml(res, status, lakePage({ state: "live", code, snapshot: runner.snapshot(), me }));
     }
 
@@ -306,7 +320,12 @@ export function createHandler({ store, hub, lakeStore, lakeHub, now, readmeHtml,
     const bots = Math.max(0, FILL_TO - families.length);
     const startedAt = now();
     lakeStore.start(lake.id, startedAt, bots);
-    liveRunner(lake.id, code, lake.secret, startedAt);
+    try {
+      liveRunner(lake.id, code, lake.secret, startedAt);
+    } catch (err) {
+      if (err instanceof LakeFull) return sendLakeBusy(res);
+      throw err;
+    }
     lakeHub.lobbyStarted(lake.id);
     redirect(res, `/l/${code}`);
   }
@@ -350,7 +369,12 @@ export function createHandler({ store, hub, lakeStore, lakeHub, now, readmeHtml,
     const startRow = rows.find((r) => r.kind === "start");
     if (!startRow) return lakeHub.openLobby(lake.id, res);
     const { startedAt } = startRow.data as { startedAt: number };
-    liveRunner(lake.id, code, lake.secret, startedAt);
+    try {
+      liveRunner(lake.id, code, lake.secret, startedAt);
+    } catch (err) {
+      if (err instanceof LakeFull) return sendLakeBusy(res);
+      throw err;
+    }
     const header = req.headers["last-event-id"];
     const raw = typeof header === "string" ? header : url.searchParams.get("after");
     const lastEventId = raw !== null && /^\d{1,15}$/.test(raw) ? Number(raw) : null;
