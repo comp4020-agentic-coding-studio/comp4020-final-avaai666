@@ -44,7 +44,7 @@ interface Market { offer: CardId[]; botPicks: (CardId | null)[]; picked: (CardId
 interface SeasonHistory { startA: number; startY: number; endA: number; endY: number; caught: number; young: number }
 export interface RushSim {
   tick: number; t: number; season: Season; phase: "play" | "rest" | "market" | "end"; phaseT: number;
-  players: number; bots: boolean[]; rng: () => number;
+  players: number; bots: boolean[]; botKinds: string[]; rng: () => number;
   boats: Boat[]; fish: Fish[]; nets: Net[]; loose: Loose[]; koi: Koi | null; koiSpawned: number;
   nextId: number; cap: number; market: Market | null; history: SeasonHistory[];
 }
@@ -75,10 +75,18 @@ function seedFish(s: RushSim, adults: number, young: number): void {
 }
 const counts = (s: RushSim): [number, number] => { let a = 0, y = 0; for (const f of s.fish) f.adult ? a++ : y++; return [a, y]; };
 
-function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number; young?: number }): RushSim {
+// opts.botKinds: a test/script-only override of each seat's bot kind
+// (default steady/keeper/greedy by seat % 3, below). Not part of the
+// Mode<S, I> interface, so no page or API route can reach it: game-hub.ts
+// calls mode.make(seed, seats, lake) with exactly three arguments.
+// scripts/balance.ts uses it to run a table of one kind (all-greedy, etc.)
+// for a target that seat % 3 alone cannot measure.
+function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number; young?: number }, opts?: { botKinds?: string[] }): RushSim {
   const players = seats.length;
   const s: RushSim = {
-    tick: 0, t: 0, season: 0, phase: "play", phaseT: 0, players, bots: seats.map((x) => x.bot !== null), rng: streamOf(seed, "lake"),
+    tick: 0, t: 0, season: 0, phase: "play", phaseT: 0, players, bots: seats.map((x) => x.bot !== null),
+    botKinds: seats.map((_, i) => opts?.botKinds?.[i] ?? DEFAULT_BOT_KINDS[i % 3]),
+    rng: streamOf(seed, "lake"),
     boats: [], fish: [], nets: [], loose: [], koi: null, koiSpawned: 0, nextId: 1,
     cap: Math.round(K * 1.3), market: null, history: [],
   };
@@ -251,13 +259,14 @@ function isLastSeason(s: RushSim): boolean { return s.season >= Q.SEASONS - 1; }
 function startMarket(s: RushSim, ev: GameEvent[]): void {
   s.phase = "market"; s.phaseT = 0;
   const offer = offerFor(s);
-  const botPicks: (CardId | null)[] = s.boats.map((b, i) => (s.bots[i] ? botPick(s, offerFor(s), botKindOf(i)) : null));
+  const botPicks: (CardId | null)[] = s.boats.map((b, i) => (s.bots[i] ? botPick(s, offerFor(s), s.botKinds[i]) : null));
   s.market = { offer, botPicks, picked: s.boats.map((_, i) => (s.bots[i] ? botPicks[i] : undefined)), closesAt: s.t + Q.MARKET_S, closed: false };
   ev.push({ k: "market", offer, players: s.players });
 }
-// bots are drawn steady/keeper/greedy by seat; scripts/balance.ts imports this
-// directly rather than guessing a seat's kind from the outside
-export function botKindOf(i: number): string { return ["steady", "keeper", "greedy"][i % 3]; }
+// the default bot kinds by seat, steady/keeper/greedy (seat % 3); a real
+// room always gets this (make()'s opts.botKinds is script/test-only)
+export const DEFAULT_BOT_KINDS = ["steady", "keeper", "greedy"];
+export function botKindOf(i: number): string { return DEFAULT_BOT_KINDS[i % 3]; }
 function startSeason(s: RushSim, ev: GameEvent[]): void {
   s.season = (s.season + 1) as Season; s.phase = "play"; s.phaseT = 0; s.market = null;
   for (const b of s.boats) { const d = dockPos(b.seat, s.players); b.x = d.x; b.y = d.y; b.h = d.inward + Math.PI; b.docked = true; b.combo = 0; }
@@ -473,9 +482,9 @@ function koiTick(s: RushSim, ev: GameEvent[]): void {
 }
 
 // ---- a bot: only what a person could see, a person's slower hands ----
-// Three kinds by seat (steady, keeper, greedy), matching the market's weighting.
+// Its kind (steady, keeper, greedy) matches the market's weighting.
 function bot(s: RushSim, seat: number, r: () => number): RushInput[] {
-  const kind = botKindOf(seat);
+  const kind = s.botKinds[seat];
   if (s.phase === "market") {
     const m = s.market; if (!m || m.picked[seat] !== undefined) return [];
     const offer = m.perSeatOffer?.[seat] ?? m.offer;
@@ -603,3 +612,7 @@ export const rush: Mode<RushSim, RushInput> = {
   id: "rush", model: RUSH_MODEL, seats: Q.SEATS, breeds: true,
   make, input, step, frameFor, over: (s) => s.phase === "end", results, bot,
 };
+// make(), with its script/test-only 4th argument: Mode<S, I>'s make() takes
+// exactly three, so rush.make loses that overload. scripts/balance.ts and
+// rush.test.ts import this instead of rush.make when they need it.
+export const makeWithOpts = make;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { botStream, eventsFor, replay, type Seat } from "../../src/lib/game-platform.ts";
-import { rush, type RushInput, type RushSim } from "../../src/lib/modes/rush.ts";
+import { botKindOf, DEFAULT_BOT_KINDS, makeWithOpts, rush, type RushInput, type RushSim } from "../../src/lib/modes/rush.ts";
 import { RUSH } from "../../src/lib/game-constants.ts";
 import { dockPos, K, shape } from "../../src/lib/lake-world.ts";
 
@@ -313,4 +313,24 @@ describe("the lake and the record", { timeout: 30000 }, () => {
     expect(rush.results(again)).toEqual(rush.results(s));
     expect(rush.results(s).seats.slice(1).some((x) => x.score > 0)).toBe(true); // the bots fish
   }, 60000);
+});
+
+describe("bot kinds: steady, keeper, greedy by seat % 3, unless a script overrides it", () => {
+  it("a room created through the normal path (no 4th argument) gets seat % 3, every time", () => {
+    const seats: Seat[] = [0, 1, 2, 3].map((i) => ({ seat: i, name: `P${i}`, bot: `bot${i}`, character: "mei" }));
+    const s = rush.make("normal-path", seats, { fish: 280 });
+    expect(s.botKinds).toEqual([0, 1, 2, 3].map((i) => botKindOf(i)));
+    expect(s.botKinds).toEqual(["steady", "keeper", "greedy", "steady"]);
+  });
+
+  it("DEFAULT_BOT_KINDS and botKindOf agree: steady, keeper, greedy, repeating", () => {
+    expect(DEFAULT_BOT_KINDS).toEqual(["steady", "keeper", "greedy"]);
+    expect([0, 1, 2, 3, 4, 5].map((i) => botKindOf(i))).toEqual(["steady", "keeper", "greedy", "steady", "keeper", "greedy"]);
+  });
+
+  it("a script-only 4th argument can override every seat's kind, reachable only by calling makeWithOpts() directly (not through rush.make, which Mode<S, I> types at three arguments)", () => {
+    const seats: Seat[] = [0, 1, 2, 3].map((i) => ({ seat: i, name: `P${i}`, bot: `bot${i}`, character: "mei" }));
+    const s = makeWithOpts("all-greedy", seats, { fish: 280 }, { botKinds: ["greedy", "greedy", "greedy", "greedy"] });
+    expect(s.botKinds).toEqual(["greedy", "greedy", "greedy", "greedy"]);
+  });
 });

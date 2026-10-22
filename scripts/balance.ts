@@ -19,14 +19,32 @@ import { botStream, type Seat } from "../src/lib/game-platform.ts";
 import { hold, type HoldInput, type HoldSim } from "../src/lib/modes/hold.ts";
 import { party, type PartyInput, type PartySim } from "../src/lib/modes/party.ts";
 import { poach, type PoachInput, type PoachSim } from "../src/lib/modes/poach.ts";
-import { botKindOf, rush, type RushInput } from "../src/lib/modes/rush.ts";
+import { tierOf, type TierId } from "../src/lib/lake-world.ts";
+import { DEFAULT_BOT_KINDS, makeWithOpts as rushMakeWithOpts, rush, type RushInput } from "../src/lib/modes/rush.ts";
 
 type Strat = { name: string; shape: (s: any, seat: number, ins: any[], r: () => number) => any[] };
 
-// ---- Boat Rush 2.0: no bot logic lives in this script. Every rush match is
-// steady/keeper/greedy, the server's own three bot kinds (src/lib/modes/rush.ts
-// bot(), botKindOf()), one per seat by seat % 3. The harness plays mode.bot()'s
-// output unmodified and tallies results by kind.
+// ---- Boat Rush 2.0: no bot logic lives in this script. Every seat plays the
+// server's own bot (src/lib/modes/rush.ts's bot()), one of three kinds
+// (steady, keeper, greedy). A real room always draws seat % 3
+// (DEFAULT_BOT_KINDS, rush.ts) — makeWithOpts's botKinds override is reached
+// only from here, to run whole tables of one kind, which prompt-17 step 5's
+// targets (a) and (b) need: seat % 3 alone never gives an all-greedy table.
+type RushTable = "all-greedy" | "all-keeper" | "all-steady" | "random mix";
+const RUSH_TABLES: RushTable[] = ["all-greedy", "all-keeper", "all-steady", "random mix"];
+// a seeded shuffle of kinds for "random mix", so every match's mix is
+// reproducible from its seed alone (no Math.random, CLAUDE.md "The ledger")
+function mixKinds(seed: number, n: number): string[] {
+  let x = (seed * 2654435761) >>> 0;
+  const r = () => { x = (x ^ (x << 13)) >>> 0; x = (x ^ (x >>> 17)) >>> 0; x = (x ^ (x << 5)) >>> 0; return x / 4294967296; };
+  return Array.from({ length: n }, () => DEFAULT_BOT_KINDS[Math.floor(r() * DEFAULT_BOT_KINDS.length)]);
+}
+function kindsFor(table: RushTable, seed: number, n: number): string[] {
+  if (table === "all-greedy") return Array(n).fill("greedy");
+  if (table === "all-keeper") return Array(n).fill("keeper");
+  if (table === "all-steady") return Array(n).fill("steady");
+  return mixKinds(seed, n);
+}
 
 // ---- Fishing Party: one shop item every time, or never buy ----
 const always = (item: string) => (s: PartySim, seat: number, ins: PartyInput[]) => {
@@ -128,12 +146,13 @@ function playRotating(mode: any, strats: Strat[], seed: number, n: number): { wi
   return { winners: res.seats.filter((x: any) => x.place === 1).map((x: any) => seatStrat[x.seat].name), sat: seatStrat.map((x) => x.name) };
 }
 
-// a real 4-bot rush lobby is already steady/keeper/greedy/steady (botKindOf,
-// seat % 3): this plays mode.bot() unmodified and reports per-seat, not
-// per-match, since "steady" sits two boats to the other kinds' one
-function playRush(seed: number, n: number): { seats: { kind: string; place: number }[] } {
-  const seats = seatsOf(n), secret = `balance-rush-${seed}`;
-  const s = rush.make(secret, seats, { fish: 220 });
+// plays mode.bot() unmodified against a harness-chosen table of bot kinds
+// (makeWithOpts's script-only override); reports per-seat (not per-match),
+// since a table is not always an even split of kinds
+function playRush(table: RushTable, seed: number, n: number): { seats: { kind: string; place: number }[]; tier: TierId; altTier: TierId } {
+  const seats = seatsOf(n), secret = `balance-rush-${table}-${seed}`;
+  const botKinds = kindsFor(table, seed, n);
+  const s = rushMakeWithOpts(secret, seats, { fish: 220 }, { botKinds });
   for (let tick = 0; !rush.over(s) && tick < 20000; tick++) {
     const applied: { seat: number; i: RushInput }[] = [];
     for (const st of seats) {
@@ -143,7 +162,8 @@ function playRush(seed: number, n: number): { seats: { kind: string; place: numb
     rush.step(s, applied);
   }
   const res = rush.results(s);
-  return { seats: res.seats.map((x) => ({ kind: botKindOf(x.seat), place: x.place })) };
+  const counterfactual = res.counterfactual as { alt: number; tierId: TierId };
+  return { seats: res.seats.map((x) => ({ kind: botKinds[x.seat], place: x.place })), tier: tierOf(res.lakeLeft).id, altTier: counterfactual.tierId };
 }
 
 function playPoach(table: Table, seed: number): boolean {
@@ -165,11 +185,11 @@ function playPoach(table: Table, seed: number): boolean {
 }
 
 // ---- workers ----
-type Job = { mode: string; seed: number; table?: Table };
+type Job = { mode: string; seed: number; table?: Table; rushTable?: RushTable };
 if (!isMainThread) {
   const out: unknown[] = [];
   for (const j of workerData as Job[]) {
-    if (j.mode === "rush") out.push(playRush(j.seed, 4));
+    if (j.mode === "rush") out.push(playRush(j.rushTable!, j.seed, 4));
     if (j.mode === "party") out.push(playRotating(party, PARTY_STRATS, j.seed, 4));
     if (j.mode === "hold") out.push(playRotating(hold, HOLD_STRATS, j.seed, 4));
     if (j.mode === "poach") out.push({ table: j.table, fishers: playPoach(j.table!, j.seed) });
@@ -181,6 +201,7 @@ if (!isMainThread) {
   const jobs: Job[] = [];
   for (const m of modes) for (let seed = 1; seed <= N; seed++) {
     if (m === "poach") for (const table of TABLES) jobs.push({ mode: m, seed, table });
+    else if (m === "rush") for (const rushTable of RUSH_TABLES) jobs.push({ mode: m, seed, rushTable });
     else jobs.push({ mode: m, seed });
   }
   const W = Math.max(1, availableParallelism() - 1), chunks: Job[][] = Array.from({ length: W }, () => []);
@@ -200,15 +221,40 @@ if (!isMainThread) {
       continue;
     }
     if (m === "rush") {
-      const bySeat = rows.flatMap((x) => x.r.seats as { kind: string; place: number }[]);
+      const byTable = (t: RushTable) => rows.filter((x) => x.job.rushTable === t) as { job: Job; r: { seats: { kind: string; place: number }[]; tier: TierId; altTier: TierId } }[];
+      const TIERS_ORDER: TierId[] = ["rich", "fair", "lean", "none"];
+      const tierRow = (rs: ReturnType<typeof byTable>): string[] => {
+        const n = rs.length;
+        return TIERS_ORDER.map((t) => pct(rs.filter((x) => x.r.tier === t).length / n));
+      };
+
+      // (a) all-greedy tables end Lean or No fish in most matches
+      const greedy = byTable("all-greedy");
+      const greedyLeanOrNone = greedy.filter((x) => x.r.tier === "lean" || x.r.tier === "none").length;
+      const [aLo, aHi] = wilson(greedyLeanOrNone, greedy.length);
+
+      // (b) all-greedy's counterfactual (the year replayed at 80% of the catch) is Fair or better in most
+      const greedyAltFairPlus = greedy.filter((x) => x.r.altTier === "fair" || x.r.altTier === "rich").length;
+      const [bLo, bHi] = wilson(greedyAltFairPlus, greedy.length);
+
+      // (c) no bot kind wins more than 41% of the random-mix matches
+      const mix = byTable("random mix");
+      const mixBySeat = mix.flatMap((x) => x.r.seats);
       const kinds = ["steady", "keeper", "greedy"];
-      const lines = kinds.map((kind) => {
-        const played = bySeat.filter((x) => x.kind === kind);
+      const cLines = kinds.map((kind) => {
+        const played = mixBySeat.filter((x) => x.kind === kind);
         const won = played.filter((x) => x.place === 1).length, [lo, hi] = wilson(won, played.length);
-        return { name: kind, rate: won / played.length, line: `| ${kind} | ${played.length} | ${won} | ${pct(won / played.length)} | ${pct(lo)}–${pct(hi)} |` };
+        return { name: kind, n: played.length, won, rate: played.length ? won / played.length : 0, line: `| ${kind} | ${played.length} | ${won} | ${played.length ? pct(won / played.length) : "n/a"} | ${played.length ? `${pct(lo)}–${pct(hi)}` : "n/a"} |` };
       });
-      const over = lines.filter((l) => l.rate > 0.4).map((l) => l.name);
-      sections[m] = `## Boat Rush (4 bots per match, seat % 3: steady, keeper, greedy, steady — src/lib/modes/rush.ts's own bot())\n\n| Bot kind | Seats played | Won (incl. shared first) | Rate | 95% interval |\n|---|---|---|---|---|\n${lines.map((l) => l.line).join("\n")}\n\n${over.length ? `Over the 40% target: ${over.join(", ")}.` : "No kind over the 40% target."}\n`;
+      const cOver = cLines.filter((l) => l.rate > 0.41).map((l) => l.name);
+
+      const tierLines = RUSH_TABLES.map((t) => `| ${t} | ${tierRow(byTable(t)).join(" | ")} |`);
+
+      sections[m] = `## Boat Rush (prompt-17 step 5; 4 bots per match, src/lib/modes/rush.ts's own bot(), on ${greedy.length} matches per table type)\n\n` +
+        `**(a) all-greedy tables end Lean or No fish in most matches:** ${greedyLeanOrNone} / ${greedy.length} (${pct(greedyLeanOrNone / greedy.length)}, 95% interval ${pct(aLo)}–${pct(aHi)}).\n\n` +
+        `**(b) all-greedy's counterfactual (the year replayed at 80% of the catch) is Fair or better in most:** ${greedyAltFairPlus} / ${greedy.length} (${pct(greedyAltFairPlus / greedy.length)}, 95% interval ${pct(bLo)}–${pct(bHi)}).\n\n` +
+        `**(c) no bot kind wins more than 41% of the random-mix matches:**\n\n| Bot kind | Seats played | Won (incl. shared first) | Rate | 95% interval |\n|---|---|---|---|---|\n${cLines.map((l) => l.line).join("\n")}\n\n${cOver.length ? `Over the 41% target: ${cOver.join(", ")}.` : "No kind over the 41% target."}\n\n` +
+        `**Tier distribution, by table type:**\n\n| Table | rich | fair | lean | none |\n|---|---|---|---|---|\n${tierLines.join("\n")}\n`;
       continue;
     }
     const strats = (m === "party" ? PARTY_STRATS : HOLD_STRATS).map((x) => x.name);
@@ -232,7 +278,7 @@ if (!isMainThread) {
   writeFileSync(file, head + ["rush", "party", "hold", "poach"].map((m) => (m === "rush" ? oldParts.find((x) => x.startsWith(TITLES.rush)) ?? "" : part(m))).filter(Boolean).map((x) => x.trimEnd() + "\n").join("\n") + (notes.length ? "\n" + notes.join("\n") : ""));
   if (sections.rush) {
     const rfile = "docs/checks/balance-rush2-2026-10-23.md";
-    const rhead = `# Balance, Boat Rush 2.0, 2026-10-23 (bots only)\n\nWritten by \`node scripts/balance.ts rush\`. Every match here is bots against bots: a 4-seat rush lobby is steady/keeper/greedy/steady (seat % 3, src/lib/modes/rush.ts's own bot()), on the seeds \`balance-rush-1\` to \`-${N}\`. These are claims about these bots and seeds, not about how people play. A fair share of 4 seats is 25%; the target is that no kind wins more than 40%. 95% intervals are Wilson intervals.\n\n`;
+    const rhead = `# Balance, Boat Rush 2.0, 2026-10-23 (bots only)\n\nWritten by \`node scripts/balance.ts rush\`. Every match here is bots against bots, 4 seats, src/lib/modes/rush.ts's own bot() in one of three kinds (steady, keeper, greedy). A real room always draws seat % 3; this harness also runs whole tables of one kind (all-greedy, all-keeper, all-steady) and a seeded random mix, on the seeds \`balance-rush-<table>-1\` to \`-${N}\`, through makeWithOpts's script-only override (src/lib/modes/rush.ts), to measure prompt-17 step 5's three targets, which seat % 3 alone cannot (there is never an all-greedy table that way). These are claims about these bots and seeds, not about how people play. 95% intervals are Wilson intervals.\n\n`;
     writeFileSync(rfile, rhead + sections.rush.trimEnd() + "\n");
   }
   for (const m of modes) console.log(sections[m]);
