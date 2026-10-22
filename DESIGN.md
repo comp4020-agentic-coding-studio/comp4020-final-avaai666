@@ -279,7 +279,9 @@ particles; the server never does.
   dock;
 - the golden carp is worth 5 and lasts 10 s;
 - 8% of adults are big fish worth 2;
-- a chain of 3+ fish within 2.6 s adds 1.
+- a chain of 3+ fish within 2.6 s adds 1;
+- a steer target outside the lake is clamped to the shore on purpose, so a
+  tap near the edge still sails the boat there instead of doing nothing.
 
 **Cards** (11): Big Hold, Fast Hull, Wide Net, Quick Hands, Iron Bow and
 Golden Hook (plain); Fine Mesh and Trawl (greedy: they take young fish); Fish
