@@ -26,6 +26,7 @@ const FILES: Record<string, string> = {
   "play/roomlive.js": "text/javascript; charset=utf-8",
   "play/lobby.js": "text/javascript; charset=utf-8",
   "play/rush.js": "text/javascript; charset=utf-8",
+  "play/ceremony.js": "text/javascript; charset=utf-8",
   "play/poach.js": "text/javascript; charset=utf-8",
   "play/party.js": "text/javascript; charset=utf-8",
   "play/hold.js": "text/javascript; charset=utf-8",
