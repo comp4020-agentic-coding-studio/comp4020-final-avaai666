@@ -1,4 +1,4 @@
-# Next Year, No Fish (明年无鱼): design v5.0
+# Next Year, No Fish (明年无鱼): design v5.0.1
 
 ## What it is
 
@@ -272,7 +272,7 @@ particles; the server never does.
 
 **Numbers:**
 - hold 12; speed 15, 35% slower when full;
-- net radius 3.5, cast 4 units ahead of the bow, cooldown 1.0 s, at most
+- net radius 4.5, cast 4 units ahead of the bow, cooldown 0.7 s, at most
   6 fish a cast;
 - dash 0.4 s at ×2.4, cooldown 4 s;
 - a ram spills at most 3 fish; shield 3 s; no ram within 11 units of a
@@ -646,6 +646,7 @@ Lake Holdings becomes turn-based; Boat Rush has four seasons of 45 s.
 
 ## Changelog
 
+- v5.0.1: net 4.5, cooldown 0.7 (rule change 7, balance report docs/checks/balance-rush2-2026-10-23.md).
 - v5.0 (19 Oct, session 17): the design for all four games, step by step (prototype v10, docs/prototypes/v10/). The world is shared: one lake shape (92 × 64, an island, named places), seasons, K = 340, one ending ceremony. Boat Rush 2.0 is built first: four 45 s seasons with a rest and a market between them. Who's Poaching 2.0, Lake Holdings 2.0 and Fishing Party 2.0 follow. v4.0's mode sections moved word for word to docs/design-history/four-games-v4.0.md. Rule changes approved in the session 17 prompt: the lake shape and start (230 adults, 50 young), Boat Rush's browser-only practice (above), the shared ceremony, shared client modules, crash fixes in frozen code, and the removals listed under each mode.
 
 - v4.0.1 (19 Oct): the UI rules. The room is a page and the game is its own full-screen page; the host menu holds Stop match; informing layers take no taps; no course text on player pages; Chinese corrections. No game rule changed. (Boat Rush seasons and the shared closing ceremony are not in this version.)

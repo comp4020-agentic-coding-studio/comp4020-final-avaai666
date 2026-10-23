@@ -156,7 +156,7 @@ export const RUSH = {
   DT: 0.05, // a tick, seconds (20 a second)
   SEASONS: 4, SEASON_S: 45, RUSH_S: 10, MARKET_S: 14, REST_S: 4.5, REVEAL_S: 2.6, // the market's reveal pause once it closes
   HOLD: 12, SPEED: 15, LOAD_SLOW: 0.35, ACCEL: 6, // a full hold is 35% slower
-  NET_R: 3.5, NET_AHEAD: 4, SINK: 0.38, CAST_CD: 1.0, NET_MAX: 6, SCATTER_R: 2.2, // the net closes 0.38 s after a cast (prototype's rCloseNet); at most 6 fish a cast; a closing net scares fish within this many net radii
+  NET_R: 4.5, NET_AHEAD: 4, SINK: 0.38, CAST_CD: 0.7, NET_MAX: 6, SCATTER_R: 2.2, // the net closes 0.38 s after a cast (prototype's rCloseNet); at most 6 fish a cast; a closing net scares fish within this many net radii; net 4.5 and cooldown 0.7 since rule change 7 (balance-rush2-2026-10-23.md)
   DASH_S: 0.4, DASH_MULT: 2.4, DASH_CD: 4,
   RAM_R: 3.4, RAM_DROP: 3, STUN: 0.6, SHIELD: 3,
   DOCK_R: 6.5, SAFE_R: 11, UNLOAD_EVERY: 0.1, // unloading starts within 6.5 of the dock (prototype's UNLOAD_R), one fish every 0.1 s; no ram within 11 of a dock
