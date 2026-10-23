@@ -103,3 +103,44 @@ describe("Who's Poaching", () => {
     expect(() => draw(0.05, 12.5)).not.toThrow();
   });
 });
+
+describe("Fishing Party", () => {
+  beforeEach(() => { dom(); });
+
+  it("drawing every phase of a whole party from real 2.0 frames, then the results, does not throw and shows no raw key, in either language", async () => {
+    // Fishing Party 2.0 (rule change 1): party.js draws through world5.js, with 2.0's frame
+    const party = await importJs("../../src/static/play/party.js");
+    const { party: mode2 } = await import("../../src/lib/modes/party.ts");
+    const { eventsFor } = await import("../../src/lib/game-platform.ts");
+    for (const lang of ["en", "zh"] as const) {
+      dom();
+      const { api } = ui(lang);
+      const seats = [{ seat: 0, name: "Ava", bot: null, character: "mei" as const }, { seat: 1, name: "Bo", bot: null, character: "jin" as const }];
+      let draw: (dt: number, time: number) => void = () => {};
+      // prop() builds what the mode asks for, as world5.js does, so the mode can colour it
+      const world = Object.assign(fakeWorld5(), { boats: new Map(), prop: (_id: string, make: () => unknown) => make(), onFrame: (fn: typeof draw) => { draw = fn; } });
+      const m = party.mount({ world, sound: api.sound, ui: api, send: () => {}, post: () => {}, view: () => ({ mySeat: 0, seats, code: "ABCD" }) });
+      const s = mode2.make(`client-${lang}`, seats, { fish: 280, adults: 224, young: 56 });
+      m.start(mode2.frameFor(s, 0), { seats });
+      const seen = new Set<string>();
+      for (let k = 0; k < 40000 && !mode2.over(s); k++) {
+        const inputs = s.phase === "intro" ? s.boats.map((b) => ({ seat: b.seat, i: { k: "ready" } }))
+          : s.phase === "shop" ? s.boats.filter((b) => !s.done[b.seat]).map((b) => ({ seat: b.seat, i: { k: "done" } }))
+          : s.phase === "pick" ? s.boats.filter((b) => s.last!.picks[b.seat] === null).map((b) => ({ seat: b.seat, i: { k: "pick", n: 3 } })) : [];
+        const ev = mode2.step(s, inputs as never);
+        if (k % 4 === 0 || ev.length) {
+          m.frame(mode2.frameFor(s, 0), eventsFor(ev, 0));
+          draw(0.05, k * 0.05);
+          seen.add(`${s.phase}:${s.game}`);
+          expect(api.overlay.innerHTML + api.hud.innerHTML, `${lang} ${s.phase} ${s.game}`).not.toMatch(/y2_|undefined|NaN/);
+        }
+      }
+      expect(seen).toContain("play:night"); expect(seen).toContain("shop:scramble"); expect(seen).toContain("reveal:last");
+      const r = mode2.results(s), { seats: rs, lakeLeft, highlights, ...extra } = r;
+      const overlay = document.createElement("div");
+      expect(() => m.results({ results: { seats: rs, lakeAfter: lakeLeft, highlights, extra }, code: "ABCD" }, overlay)).not.toThrow();
+      expect(overlay.innerHTML).not.toMatch(/y2_|undefined|NaN/);
+      m.end();
+    }
+  }, 60000);
+});

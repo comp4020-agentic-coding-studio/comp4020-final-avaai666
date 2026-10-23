@@ -6,7 +6,7 @@
 // data shape:
 //   { a, y, next, tier: {id, mult}, counterfactual?: {alt, tierId},
 //     ledger?: [{seat, name, character, isMe, home, young, spared}],
-//     fairShare?, titles?: [{key, vars}], unit?,
+//     fairShare?, titles?: [{key, vars}], unit?, multKey? (what the tier multiplies: fish home by default),
 //     podium: [{seat, name, character, isMe, base, score, sub}] }
 const dotsHtml = (n, on) => `<div class="cer-dots">${Array.from({ length: n }, (_, i) => `<i class="${i <= on ? "on" : ""}"></i>`).join("")}</div>`;
 
@@ -29,7 +29,7 @@ export function ceremonySteps(data, { t, esc, portrait, zh }) {
           <div class="cer-arrow">→</div>
           <div><small class="muted">${esc(t("cer_nextyear"))}</small><div class="cer-big" style="color:${col}">${data.next}</div><small class="muted">${esc(t("cer_fish"))}</small></div>
         </div>
-        <p class="cer-mult">${esc(t("cer_step3_mult", { mult: data.tier.mult, tier: t("cer_v_" + data.tier.id) }))}</p></div>${nav(0)}</div>`;
+        <p class="cer-mult">${esc(t(data.multKey ?? "cer_step3_mult", { mult: data.tier.mult, tier: t("cer_v_" + data.tier.id) }))}</p></div>${nav(0)}</div>`;
   }
   function step2() {
     const fair = data.fairShare ?? 1;
@@ -47,7 +47,7 @@ export function ceremonySteps(data, { t, esc, portrait, zh }) {
     const place = (n) => (n <= 3 ? t(`g_place${n}`) : t("g_placeN", { n }));
     const title = myPlace === 1 ? t("g_you_win") : myPlace > 0 ? t("g_you_came", { place: place(myPlace) }) : t("g_results");
     return `<div class="sheet narrow"><h2>${esc(title)}</h2>
-      <p class="lede">${esc(t("cer_step3_mult", { mult: data.tier.mult, tier: t("cer_v_" + data.tier.id) }))}</p>
+      <p class="lede">${esc(t(data.multKey ?? "cer_step3_mult", { mult: data.tier.mult, tier: t("cer_v_" + data.tier.id) }))}</p>
       <div class="podium">${rows.map((x, i) => `<div class="pl ${x.isMe ? "first" : ""}">${portrait(x.character, x.name)}<span class="place">${i + 1}</span><b>${esc(x.isMe ? t("g_you") : x.name)}${x.sub ? `<br><small class="muted">${esc(x.sub)}</small>` : ""}</b><span class="sc">${x.score}</span>${x.base !== undefined ? `<small>${x.base} × ${data.tier.mult}</small>` : ""}</div>`).join("")}</div>
       <div class="row"><button class="btn primary" type="button" data-cer-again>${esc(t("cer_next_same", { n: data.next }))}</button><button class="btn ghost" type="button" data-cer-village>${esc(t("cer_back_village"))}</button></div>${nav(2)}</div>`;
   }

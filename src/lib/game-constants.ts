@@ -215,35 +215,23 @@ export const POACH = {
 } as const;
 export const BAYS = ["North Bay", "East Bay", "South Bay", "West Bay"] as const;
 
-// ---- Fishing Party, "party 1.0" (DESIGN.md "Fishing Party") ----
+// ---- Fishing Party, "party 2.0" (DESIGN.md "Fishing Party 钓鱼派对 (2.0)") ----
+// In lake-world.ts's units; the prototype's YP and its rounds (docs/prototypes/v10/party.js).
+export const PARTY_MODEL = "party 2.0";
 export const PARTY = {
-  W: 1000, H: 700, RX: 460, RY: 315, DT: 0.05,
-  INTRO_S: 3, ROUND_S: 35, STANDINGS_S: 4, PICK_S: 4, SHOP_S: 8, // the last-placed player's variant pick is its own screen
-  GAMES: ["shoal", "koi", "tug", "night"] as const, // rounds 1 to 4, in a seeded order; Last Net is round 5
-  // Shoal Scramble
-  SHOAL_EVERY_S: 2, SHOAL_UP_S: 1.5, SHOAL_MAX: 6, TAP_R: 55, BIG_NET: 1.5,
-  // Koi Chase
-  SPEED: 160, FAST: 1.15, GATE_R: 40, GATES: 6, KOI_R: 30, KOI_COINS: 5, KOI_SPEED: 120,
-  // Tug of Line
-  NEEDLE_HZ: 0.7, GREEN: 0.36, GREEN_SOLO: 0.24, REEL_GAP_S: 0.25, PULL: 1, SLIP: 0.6, ROPE_WIN: 10, TUG_COINS: 6,
-  // Lantern Night
-  LANTERN_R: 140, DROP_R: 120, DROP_S: 10, NIGHT_NET_R: 40, NIGHT_CD: 0.9, MUDDY: 0.55, BAIT_PULL: 14,
-  BAIT_R: 2, BAIT_S: 10, // bait pulls fish within this many lantern radii, for the first 10 s of the round
-  // Last Net
-  NETS: [3, 6, 10] as const, SCHOOL_SHARE: 0.25, LAST_MULT: 2,
-  SHOP: {
-    bigNet: { cost: 3, name: "Big Net", text: "bigger catch next round" },
-    fastBoat: { cost: 3, name: "Fast Boat", text: "faster next round" },
-    bait: { cost: 3, name: "Bait", text: "schools swim to you first next round" },
-    muddy: { cost: 4, name: "Muddy Water", text: "the leader sees less next round (only if you are behind)" },
-  } as Record<string, { cost: number; name: string; text: string }>,
-  VARIANTS: {
-    shoal: ["One school at a time", "Two small schools at once"],
-    koi: ["Wide gates", "Narrow gates, more pay"],
-    tug: ["In pairs", "Each alone against the fish (narrower green)"],
-    night: ["One lantern drop each", "Three lantern drops each, smaller"],
-    last: ["One pick", "One pick"],
-  } as Record<string, [string, string]>,
+  DT: 0.05,
+  INTRO_S: 20, COUNT_S: 3, ROUND_S: 28, STANDINGS_S: 4, SHOP_S: 9, PICK_S: 20, REVEAL_EACH: 1.1, REVEAL_END: 3.6,
+  COST: 3, SPEED: 14, FAST: 1.25, BAIT_S: 8,
+  // Shoal Scramble: a gold ring warns, then fish jump; the first tap within 8 (11 with Big Net) takes the school
+  WARN_S: 0.8, JUMP_S: 1.5, TAP_R: 8, TAP_R_BIG: 11, SCRAMBLE_COINS: 2, SCRAMBLE_FISH: 2,
+  // Koi Chase: eight lantern gates in order; the golden carp
+  GATES: 8, GATE_R: 7, GATE_COINS: 1, KOI_SPEED: 9, KOI_R: 4, KOI_COINS: 5, KOI_FISH: 2,
+  // Tug of Line: a needle and a drifting green zone; finish places pay 6, 4, 2, 1
+  NEEDLE_SPEED: 1.25, REEL_UP: 9, REEL_DOWN: 6, REEL_STUN: 0.35, TUG_PAY: [6, 4, 2, 1],
+  // Lantern Night: you see fish within 16 of your boat (18 with Big Net) and within 14 of a dropped lantern
+  NIGHT_VIEW: 16, NIGHT_VIEW_BIG: 18, NIGHT_BOATS: 20, LANTERN_LIGHT: 14, LANTERN_S: 10, LANTERN_CD: 8, NIGHT_CD: 1.6, NIGHT_MAX: 2, NIGHT_NET_R: 3.6, NIGHT_NET_BIG: 5,
+  // the Last Net: the school is the lake / 7; a net that holds pays double
+  LAST_DIV: 7, LAST_MULT: 2,
   SEATS: { min: 2, max: 4, botFill: 4 },
 } as const;
 

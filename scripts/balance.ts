@@ -49,14 +49,13 @@ function kindsFor(table: RushTable, seed: number, n: number): string[] {
 // ---- Fishing Party: one shop item every time, or never buy ----
 const always = (item: string) => (s: PartySim, seat: number, ins: PartyInput[]) => {
   const out: PartyInput[] = ins.filter((i) => i.k !== "buy");
-  if (s.phase === "shop" && !s.perks[seat].includes(item as never)) out.push({ k: "buy", item: item as never });
+  if (s.phase === "shop" && !s.buys[seat].includes(item as never) && s.coins[seat] >= 3) out.push({ k: "buy", item: item as never });
   return out;
 };
 const PARTY_STRATS: Strat[] = [
-  { name: "Big Net always", shape: always("bigNet") },
-  { name: "Fast Boat always", shape: always("fastBoat") },
+  { name: "Big Net always", shape: always("net") },
+  { name: "Fast Boat always", shape: always("fast") },
   { name: "Bait always", shape: always("bait") },
-  { name: "Muddy Water always", shape: always("muddy") },
   { name: "never buy", shape: (_s, _seat, ins) => ins.filter((i: PartyInput) => i.k !== "buy") },
 ];
 
@@ -97,11 +96,11 @@ export function lineup(nStrats: number, seed: number, n: number): number[] {
   for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
   return order.slice(0, n);
 }
-function playRotating(mode: any, strats: Strat[], seed: number, n: number): { winners: string[]; sat: string[] } {
+function playRotating(mode: any, strats: Strat[], seed: number, n: number): { winners: string[]; sat: string[]; tier?: string; fit?: boolean | null } {
   const seatStrat = lineup(strats.length, seed, n).map((i) => strats[i]);
   const seats = seatsOf(n), secret = `balance-${mode.id}-${seed}`;
-  const s = mode.make(secret, seats, { fish: 220 });
-  for (let tick = 0; !mode.over(s) && tick < 20000; tick++) {
+  const s = mode.make(secret, seats, { fish: 280, adults: 224, young: 56 });
+  for (let tick = 0; !mode.over(s) && tick < 40000; tick++) {
     const applied: any[] = [];
     for (const st of seats) {
       const r = botStream(secret, st.bot!, tick, st.seat);
@@ -111,7 +110,7 @@ function playRotating(mode: any, strats: Strat[], seed: number, n: number): { wi
     mode.step(s, applied);
   }
   const res = mode.results(s);
-  return { winners: res.seats.filter((x: any) => x.place === 1).map((x: any) => seatStrat[x.seat].name), sat: seatStrat.map((x) => x.name) };
+  return { winners: res.seats.filter((x: any) => x.place === 1).map((x: any) => seatStrat[x.seat].name), sat: seatStrat.map((x) => x.name), tier: res.tier, fit: res.last?.fit ?? null };
 }
 
 // plays mode.bot() unmodified against a harness-chosen table of bot kinds
@@ -246,6 +245,10 @@ if (!isMainThread) {
       return { name, n: played.length, won, rate: won / played.length, line: `| ${name} | ${played.length} | ${won} | ${pct(won / played.length)} | ${pct(lo)}–${pct(hi)} |` };
     });
     const over = lines.filter((l) => l.rate > 0.4).map((l) => l.name);
+    const tiers = ["rich", "fair", "lean", "none"].map((id) => `${id} ${pct(rows.filter((x) => x.r.tier === id).length / rows.length)}`).join(", ");
+    const fit = rows.filter((x) => x.r.fit === true).length;
+    sections[m] = `## Fishing Party 2.0 (4 bots per match: party.ts's own bots; each seat's shop habit is one of ${strats.length} strategies drawn by a seeded shuffle each match)\n\nNext spring's tier over ${rows.length} matches: ${tiers}. The last net held in ${fit} (${pct(fit / rows.length)}).\n\n| Strategy | Matches it sat in | Won (incl. shared first) | Rate | 95% interval |\n|---|---|---|---|---|\n${lines.map((l) => l.line).join("\n")}\n\n${over.length ? `Over the 40% target: ${over.join(", ")}.` : "No strategy over the 40% target."}\n`;
+    continue;
     sections[m] = `## ${m === "party" ? "Fishing Party" : "Lake Holdings"} (4 bots per match; ${strats.length} strategies drawn by a seeded shuffle each match)\n\n| Strategy | Matches it sat in | Won (incl. shared first) | Rate | 95% interval |\n|---|---|---|---|---|\n${lines.map((l) => l.line).join("\n")}\n\n${over.length ? `Over the 40% target: ${over.join(", ")}.` : "No strategy over the 40% target."}\n`;
   }
   // the 2026-10-15 file is rush 1.0's history; rush 2.0's report is a new
@@ -258,11 +261,16 @@ if (!isMainThread) {
   const part = (m: string) => sections[m] ?? oldParts.find((x) => x.startsWith(TITLES[m])) ?? "";
   const notes = oldParts.filter((x) => x.startsWith("## Before") || x.startsWith("## Changes")).map((x) => x.trimEnd() + "\n");
   // poach 2.0 writes its own file below; the 2026-10-15 file keeps poach 1.0's table as history
-  writeFileSync(file, head + ["rush", "party", "hold", "poach"].map((m) => (m === "rush" || m === "poach" || m === "hold" ? oldParts.find((x) => x.startsWith(TITLES[m])) ?? "" : part(m))).filter(Boolean).map((x) => x.trimEnd() + "\n").join("\n") + (notes.length ? "\n" + notes.join("\n") : ""));
+  writeFileSync(file, head + ["rush", "party", "hold", "poach"].map((m) => (m === "rush" || m === "poach" || m === "hold" || m === "party" ? oldParts.find((x) => x.startsWith(TITLES[m])) ?? "" : part(m))).filter(Boolean).map((x) => x.trimEnd() + "\n").join("\n") + (notes.length ? "\n" + notes.join("\n") : ""));
   if (sections.rush) {
     const rfile = "docs/checks/balance-rush2-2026-10-23.md";
     const rhead = `# Balance, Boat Rush 2.0, 2026-10-23 (bots only)\n\nWritten by \`node scripts/balance.ts rush\`. Every match here is bots against bots, 4 seats, src/lib/modes/rush.ts's own bot() in one of three kinds (steady, keeper, greedy). A real room always draws seat % 3; this harness also runs whole tables of one kind (all-greedy, all-keeper, all-steady) and a seeded random mix, on the seeds \`balance-rush-<table>-1\` to \`-${N}\`, through makeWithOpts's script-only override (src/lib/modes/rush.ts), to measure prompt-17 step 5's three targets, which seat % 3 alone cannot (there is never an all-greedy table that way). These are claims about these bots and seeds, not about how people play. 95% intervals are Wilson intervals.\n\n`;
     writeFileSync(rfile, rhead + sections.rush.trimEnd() + "\n");
+  }
+  if (sections.party) {
+    const yfile = "docs/checks/balance-party2-2026-10-24.md";
+    const yhead = `# Balance, Fishing Party 2.0, 2026-10-24 (bots only)\n\nWritten by \`node scripts/balance.ts party\`. Every match here is four bots (src/lib/modes/party.ts's own bot(), steady, keeper and greedy by seat) on a fresh room's lake, on the seeds \`balance-party-1\` to \`-${N}\`; only their shop habit is swapped by the script. These are claims about these bots and seeds, not about how people play. 95% intervals are Wilson intervals.\n\n`;
+    writeFileSync(yfile, yhead + sections.party.trimEnd() + "\n");
   }
   if (sections.hold) {
     const hfile = "docs/checks/balance-hold2-2026-10-24.md";

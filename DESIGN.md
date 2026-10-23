@@ -1,4 +1,4 @@
-# Next Year, No Fish (明年无鱼): design v5.2
+# Next Year, No Fish (明年无鱼): design v5.3
 
 ## What it is
 
@@ -520,9 +520,32 @@ pays the player who is greedy; this is for Ava's balance pass.
 
 **Score** = coins × tier.
 
+**How party 2.0 settles what the text above leaves open** (session 18):
+- the brush verb is the Chinese word on both pages; an English page adds
+  its own word under it (TAP! CHASE! REEL! LIGHT! PICK!);
+- Big Net in each round: taps reach 11 instead of 8; the green zone is
+  0.04 wider each side; at night you see 18 instead of 16 and the net is 5
+  wide instead of 3.6;
+- at night a seat's frame holds only the fish it may see (16 of its boat,
+  or 14 of any dropped lantern) and the boats within 20; the dark itself is
+  drawn by the page from the view radius the frame carries;
+- the shop: a person with fewer than 3 coins is done already, so if nobody
+  can buy the shop is skipped; bots always visit it;
+- anyone who has not picked when the Last Net's 20 s run out gets 6;
+- the end ceremony multiplies coins, not fish home, so it has no fish
+  ledger step; the room's lake goes through next spring as for any mode
+  that does not breed in its own year.
+
 **Measured in the prototype** (bots, 1 run after tuning): the last net
 held, and the year ended Fair. Before the night round was weakened, two
 runs ended Lean with the lake at 23–25 fish.
+
+**Measured in party 2.0** (bots only, 300 matches of four,
+docs/checks/balance-party2-2026-10-24.md): next spring is Fair in 99.3% of
+matches; the bots' Last Net held in 24.3%. Over shop habits, Fast Boat
+always wins 35.7% (30.5%-41.2%), never buying 28.7%, Big Net 21.3%, Bait
+15.0%: none is over the 40% target. These are claims about party.ts's bots,
+not about people.
 
 **Removed from v4:**
 - the last-placed player's variant pick;
@@ -677,6 +700,8 @@ leave Who's Poaching; the variant pick and Muddy Water leave Fishing Party;
 Lake Holdings becomes turn-based; Boat Rush has four seasons of 45 s.
 
 ## Changelog
+
+- v5.3 (24 Oct, session 18): Fishing Party 2.0 is built (party 2.0 on the v5 lake): five rounds in a fixed order, each with its intro card, try it first, 3-2-1, standings, the shop after rounds 1-3, the Last Net picked in secret and revealed one by one, the ceremony. Its open points are settled under "How party 2.0 settles…". All four modes now run on the v5 lake.
 
 - v5.2 (24 Oct, session 18): Lake Holdings 2.0 is built (holdings 2.0 on the v5 lake): turn-based, three cards, the preview, the reveal, the harvest step by step, next spring with dry water staying dry, the ceremony. Its open points are settled under "How holdings 2.0 settles…". The greedy bot still wins 44% of mixed tables (over the 41% target); left for the balance pass.
 - v5.1 (23 Oct, session 18): Who's Poaching 2.0 is built (poach 2.0 on the v5 lake): the role card, the lantern's circle, tasks, inspect, buoy, report, the fine net and its dead fish, the meeting's map and lines, the tally, the exile, the night, the ceremony. What the section left open is settled under "How poach 2.0 settles…". poach 1.0's numbers made the lake die on day 1 (a fine net every 1.5 s); its tests are replaced by 2.0's.

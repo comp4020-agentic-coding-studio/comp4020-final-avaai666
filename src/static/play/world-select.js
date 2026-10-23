@@ -11,5 +11,5 @@
 // script makes against the module worldModuleFor() actually gives it, so a
 // mode left off this list while its script already calls the other API
 // fails that test instead of only throwing in a real browser.
-export const WORLD5_MODES = ["rush", "poach", "hold"];
+export const WORLD5_MODES = ["rush", "poach", "hold", "party"];
 export const worldModuleFor = (modeId) => (WORLD5_MODES.includes(modeId) ? "world5.js" : "world.js");

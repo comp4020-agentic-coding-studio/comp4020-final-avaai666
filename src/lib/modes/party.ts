@@ -1,332 +1,397 @@
-// Fishing Party, "party 1.0" (DESIGN.md "Fishing Party"): five rounds of
-// 35 s, each a different game with its own controls, an 8 s shop between
-// them, the last-placed player's pick of the next round's variant, and one
-// lake that carries over. Rounds 1, 2 and 4 draw from the lake; Last Net's
-// school is a share of what is left, and it pays double.
+// Fishing Party, "party 2.0" (DESIGN.md "Fishing Party 钓鱼派对 (2.0)"):
+// five rounds of 28 s on the v5 lake, always in the same order (Shoal
+// Scramble, Koi Chase, Tug of Line, Lantern Night, the Last Net). Every
+// round goes intro card (where you may try it first: the round runs, but
+// nothing scores or leaves the lake) -> 3-2-1 -> play -> standings, and
+// after rounds 1-3 a 9 s shop (Big Net, Fast Boat, Bait: 3 coins, one round).
+// Rounds 1, 2 and 4 take fish from the lake; the Last Net's school is what is
+// left, divided by 7, and everyone picks 3, 6 or 10 in secret: if the total
+// fits, double each pick; if not, the net tears and everyone gets 1.
+// Score = coins x the tier of next spring.
 //
-// Pure and deterministic: everything random draws from the match's "lake"
-// stream. Lantern Night is the one round with a secret: frameFor sends each
-// seat only the fish its lantern (or a dropped lantern) lights. Last Net's
-// picks are secret until the round ends.
-import { PARTY as Q } from "../game-constants.ts";
+// Pure and deterministic: the lake and every round's randomness draw from
+// the match's "lake" stream; a bot's decisions from the stream the platform
+// gives it for that tick. Secrets: Lantern Night sends a seat only the fish
+// its own lantern, or a dropped one, lights; Last Net's picks stay hidden
+// until everyone has picked.
+import { PARTY as Q, PARTY_MODEL } from "../game-constants.ts";
 import { type GameEvent, type Highlight, type Mode, type Results, type Seat, streamOf } from "../game-platform.ts";
+import { dockPos, ISLAND, nextSpring, nr, shape, tierOf, ZONES } from "../lake-world.ts";
+import { counts, type Fish, moveFish, type School, seedFish, updateSchools } from "./lake-life.ts";
 
-export type Game = "shoal" | "koi" | "tug" | "night" | "last";
-type Item = "bigNet" | "fastBoat" | "bait" | "muddy";
+export type Game = "scramble" | "koi" | "tug" | "night" | "last";
+export const GAMES: Game[] = ["scramble", "koi", "tug", "night", "last"];
+export type Item = "net" | "fast" | "bait";
+const ITEMS: Item[] = ["net", "fast", "bait"];
+type Phase = "intro" | "count" | "play" | "standings" | "shop" | "pick" | "reveal" | "end";
 export type PartyInput =
+  | { k: "ready" }
   | { k: "tap"; x: number; y: number }
   | { k: "steer"; x: number; y: number }
-  | { k: "reel" } | { k: "cast" } | { k: "drop" }
-  | { k: "buy"; item: Item }
-  | { k: "variant"; v: 0 | 1 }
-  | { k: "pick"; size: 3 | 6 | 10 };
+  | { k: "reel" } | { k: "net" } | { k: "lantern" }
+  | { k: "buy"; item: Item } | { k: "done" }
+  | { k: "pick"; n: 3 | 6 | 10 };
 
-interface Boat { x: number; y: number; h: number; tx: number; ty: number; vx: number; vy: number; cd: number }
-interface Fish { x: number; y: number; h: number }
+interface Boat { seat: number; x: number; y: number; h: number; speed: number; tx: number; ty: number; gate: number; reel: number; stun: number; castCd: number; lanT: number; finished: boolean }
+interface Spot { id: number; x: number; y: number; t: number; open: boolean; until: number; taken: number }
 export interface PartySim {
-  tick: number; t: number; phaseT: number; n: number; rng: () => number;
-  phase: "intro" | "round" | "standings" | "pick" | "shop" | "end"; round: number; order: Game[]; game: Game; variant: 0 | 1;
-  coins: number[]; roundCoins: number[][]; lake: number; lakeStart: number; school: number;
-  perks: Item[][]; muddy: number[]; view: number[]; picker: number; // perks: bought in a shop, used in the next round, then gone
-  boats: Boat[]; fish: Fish[]; shoals: { x: number; y: number; n: number; at: number; until: number }[]; nextShoal: number;
-  gates: { x: number; y: number }[]; nextGate: number[]; koi: { x: number; y: number; h: number };
-  ropes: { seats: number[]; pos: number }[]; needle: number; reelAt: number[];
-  drops: { seat: number; x: number; y: number; until: number }[]; dropsLeft: number[];
-  baitUntil: number[]; picks: (number | null)[]; firstScoreAt: (number | null)[]; best: { seat: number; coins: number; game: Game } | null;
+  tick: number; t: number; phase: Phase; phaseT: number; round: number; game: Game;
+  n: number; rng: () => number; bots: boolean[]; kinds: string[];
+  coins: number[]; roundCoins: number[]; ready: boolean[]; done: boolean[];
+  buys: Item[][]; next: Item[][]; // bought in a shop / in use this round
+  boats: Boat[]; fish: Fish[]; schools: Schools; nextId: number; season: number;
+  start: number; tookFish: number[];
+  spots: Spot[]; spotT: number;
+  path: [number, number][]; koi: { k: number; x: number; y: number };
+  tug: { needle: number; dir: number; zone: number; zw: number; zv: number; places: number };
+  lanterns: { seat: number; x: number; y: number; until: number }[];
+  last: { cap: number; fished: boolean; picks: (number | null)[]; fit: boolean | null; revealAt: number } | null;
+  best: { seat: number; coins: number; game: Game } | null;
 }
+type Schools = School[];
+export const BOT_KINDS = ["steady", "keeper", "greedy"];
+const scoring = (s: PartySim): boolean => s.phase === "play";
+const practice = (s: PartySim): boolean => s.phase === "intro"; // "try it first": the round runs, nothing counts
 
-const ell = (x: number, y: number): number => Math.hypot((x - Q.W / 2) / Q.RX, (y - Q.H / 2) / Q.RY);
-const NAMES: Record<Game, string> = { shoal: "Shoal Scramble", koi: "Koi Chase", tug: "Tug of Line", night: "Lantern Night", last: "Last Net" };
-const leaderOf = (s: PartySim): number => s.coins.indexOf(Math.max(...s.coins));
-
-function make(seed: string, seats: Seat[], lake: { fish: number }): PartySim {
-  const rng = streamOf(seed, "lake"), n = seats.length;
-  const order: Game[] = [...Q.GAMES];
-  for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
-  order.push("last");
-  return {
-    tick: 0, t: 0, phaseT: 0, n, rng, phase: "intro", round: 0, order, game: order[0], variant: 0,
-    coins: seats.map(() => 0), roundCoins: [], lake: lake.fish, lakeStart: lake.fish, school: 0,
-    perks: seats.map(() => []), muddy: [], view: seats.map(() => Q.LANTERN_R), picker: n - 1,
-    boats: seats.map((_, i) => { const a = (i / n) * Math.PI * 2 + Math.PI / 2, x = Q.W / 2 + Math.cos(a) * Q.RX * 0.75, y = Q.H / 2 + Math.sin(a) * Q.RY * 0.75; return { x, y, h: a + Math.PI, tx: x, ty: y, vx: 0, vy: 0, cd: 0 }; }),
-    fish: [], shoals: [], nextShoal: 0, gates: [], nextGate: seats.map(() => 0), koi: { x: Q.W / 2, y: Q.H / 2, h: 0 },
-    ropes: [], needle: 0, reelAt: seats.map(() => -99), drops: [], dropsLeft: seats.map(() => 1), baitUntil: seats.map(() => -1), picks: seats.map(() => null),
-    firstScoreAt: seats.map(() => null), best: null,
+function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number; young?: number }): PartySim {
+  const n = seats.length;
+  const s: PartySim = {
+    tick: 0, t: 0, phase: "intro", phaseT: 0, round: 1, game: "scramble",
+    n, rng: streamOf(seed, "lake"), bots: seats.map((x) => x.bot !== null), kinds: seats.map((_, i) => BOT_KINDS[i % 3]),
+    coins: seats.map(() => 0), roundCoins: seats.map(() => 0), ready: seats.map(() => false), done: seats.map(() => false),
+    buys: seats.map(() => []), next: seats.map(() => []),
+    boats: [], fish: [], schools: [], nextId: 1, season: 1, start: 0, tookFish: seats.map(() => 0),
+    spots: [], spotT: 0.8, path: [], koi: { k: 1, x: 0, y: 0 },
+    tug: { needle: 0, dir: 1, zone: 0.45, zw: 0.2, zv: 0.18, places: 0 }, lanterns: [], last: null, best: null,
   };
+  const a0 = lake.adults ?? Math.round(lake.fish * 0.8), y0 = lake.young ?? Math.round(lake.fish * 0.2);
+  seedFish(s, a0, y0);
+  s.start = s.fish.length;
+  for (const st of seats) { const d = dockPos(st.seat, n); s.boats.push({ seat: st.seat, x: d.x, y: d.y, h: d.inward + Math.PI, speed: 0, tx: d.x, ty: d.y, gate: 0, reel: 0, stun: 0, castCd: 0, lanT: 0, finished: false }); }
+  setupRound(s);
+  return s;
 }
 
-const num = (v: unknown): number | null => { const x = Number(v); return Number.isFinite(x) ? x : null; };
-function input(s: PartySim, _seat: number, raw: unknown): PartyInput | null {
+// a round's own setup: boats back at their docks, the round's props
+function setupRound(s: PartySim): void {
+  s.game = GAMES[s.round - 1];
+  for (const b of s.boats) { const d = dockPos(b.seat, s.n); b.x = b.tx = d.x - Math.cos(d.inward) * 2; b.y = b.ty = d.y - Math.sin(d.inward) * 2; b.h = d.inward + Math.PI; b.speed = 0; b.gate = 0; b.reel = 0; b.stun = 0; b.castCd = 0; b.lanT = 0; b.finished = false; }
+  s.spots = []; s.spotT = 0.8; s.lanterns = []; s.tug = { needle: 0, dir: 1, zone: 0.45, zw: 0.2, zv: 0.18, places: 0 };
+  if (s.game === "koi") {
+    s.path = Array.from({ length: Q.GATES }, (_, k) => shape(70 + k * 45, k % 2 ? 0.62 : 0.78)) as [number, number][];
+    s.koi = { k: 1, x: s.path[0][0], y: s.path[0][1] };
+  }
+  s.roundCoins = s.roundCoins.map(() => 0); s.ready = s.ready.map(() => false); s.done = s.done.map(() => false);
+}
+// what the round takes from the lake: the nearest adults to (x, y) if given
+function takeFish(s: PartySim, n: number, x?: number, y?: number): number {
+  let k = 0;
+  for (let i = 0; i < n && s.fish.length; i++) {
+    let j = -1, bd = Infinity;
+    s.fish.forEach((f, ii) => { const d = x === undefined || y === undefined ? 0 : Math.hypot(f.x - x, f.y - y); if (f.adult && d < bd) { bd = d; j = ii; } });
+    if (j < 0) j = 0;
+    s.fish.splice(j, 1); k++;
+  }
+  return k;
+}
+function give(s: PartySim, seat: number, n: number, ev: GameEvent[], x?: number, y?: number): void {
+  s.coins[seat] += n; s.roundCoins[seat] += n;
+  if (!s.best || s.roundCoins[seat] > s.best.coins) s.best = { seat, coins: s.roundCoins[seat], game: s.game };
+  ev.push({ k: "coins", seat, n, ...(x !== undefined ? { x: r1(x), y: r1(y!) } : {}) });
+}
+const r1 = (v: number): number => Math.round(v * 10) / 10;
+const has = (s: PartySim, seat: number, item: Item): boolean => s.next[seat].includes(item);
+
+// ---- inputs ----
+function input(s: PartySim, seat: number, raw: unknown): PartyInput | null {
   const o = raw as Record<string, unknown> | null;
-  if (!o || typeof o !== "object") return null;
-  const xy = (): { x: number; y: number } | null => { const x = num(o.x), y = num(o.y); return x === null || y === null ? null : { x: Math.round(Math.max(0, Math.min(Q.W, x))), y: Math.round(Math.max(0, Math.min(Q.H, y))) }; };
+  if (!o || typeof o !== "object" || seat < 0 || seat >= s.n) return null;
+  const live = s.phase === "intro" || s.phase === "play";
+  const num = (v: unknown, lo: number, hi: number) => { const x = Number(v); return Number.isFinite(x) ? Math.round(Math.max(lo, Math.min(hi, x)) * 10) / 10 : null; };
   switch (o.k) {
-    case "tap": case "steer": { const p = xy(); return p ? { k: o.k, ...p } : null; }
-    case "reel": case "cast": case "drop": return { k: o.k };
-    case "buy": return o.item === "bigNet" || o.item === "fastBoat" || o.item === "bait" || o.item === "muddy" ? { k: "buy", item: o.item } : null;
-    case "variant": return o.v === 0 || o.v === 1 ? { k: "variant", v: o.v } : null;
-    case "pick": return o.size === 3 || o.size === 6 || o.size === 10 ? { k: "pick", size: o.size } : null;
+    case "ready": return s.phase === "intro" && !s.ready[seat] ? { k: "ready" } : null;
+    case "tap": { const x = num(o.x, -92, 92), y = num(o.y, -64, 64); return live && s.game === "scramble" && x !== null && y !== null ? { k: "tap", x, y } : null; }
+    case "steer": { const x = num(o.x, -92, 92), y = num(o.y, -64, 64); return live && (s.game === "koi" || s.game === "night") && x !== null && y !== null ? { k: "steer", x, y } : null; }
+    case "reel": return live && s.game === "tug" ? { k: "reel" } : null;
+    case "net": case "lantern": return live && s.game === "night" ? { k: o.k } : null;
+    case "buy": return s.phase === "shop" && ITEMS.includes(o.item as Item) && !s.buys[seat].includes(o.item as Item) && s.coins[seat] >= Q.COST ? { k: "buy", item: o.item as Item } : null;
+    case "done": return s.phase === "shop" && !s.done[seat] ? { k: "done" } : null;
+    case "pick": return s.phase === "pick" && s.last && s.last.picks[seat] === null && (o.n === 3 || o.n === 6 || o.n === 10) ? { k: "pick", n: o.n } : null;
   }
   return null;
 }
 
-function earn(s: PartySim, seat: number, c: number, ev: GameEvent[], why: string): void {
-  if (c <= 0) return;
-  s.coins[seat] += c; s.roundCoins[s.round][seat] += c; s.firstScoreAt[seat] ??= s.t;
-  ev.push({ k: "coins", seat, c, why });
-}
-const take = (s: PartySim, n: number): number => { const got = Math.max(0, Math.min(n, s.lake)); s.lake -= got; return got; };
-
-function startRound(s: PartySim, ev: GameEvent[]): void {
-  s.game = s.order[s.round]; s.phase = "round"; s.phaseT = 0; s.roundCoins[s.round] = s.coins.map(() => 0);
-  s.baitUntil = s.perks.map((p) => (p.includes("bait") ? s.t + Q.BAIT_S : -1));
-  s.view = s.coins.map((_, i) => Q.LANTERN_R * (s.muddy.includes(i) ? Q.MUDDY : 1) * (s.variant && s.game === "night" ? 0.8 : 1));
-  const g = s.game;
-  if (g === "shoal") { s.shoals = []; s.nextShoal = 1; }
-  if (g === "koi") {
-    const narrow = s.variant === 1;
-    s.gates = Array.from({ length: Q.GATES }, (_, i) => { const a = (i / Q.GATES) * Math.PI * 2; return { x: Q.W / 2 + Math.cos(a) * Q.RX * 0.6, y: Q.H / 2 + Math.sin(a) * Q.RY * 0.6 }; });
-    s.nextGate = s.coins.map((_, i) => i % Q.GATES);
-    s.koi = { x: Q.W / 2, y: Q.H / 2, h: s.rng() * 6.28 };
-    if (narrow) s.gates = s.gates.map((p) => ({ x: p.x, y: p.y }));
-  }
-  if (g === "tug") {
-    const seats = s.coins.map((_, i) => i);
-    s.ropes = s.variant === 1 || s.n < 2 ? seats.map((i) => ({ seats: [i], pos: 0 })) : [];
-    if (!s.ropes.length) { for (let i = 0; i + 1 < s.n; i += 2) s.ropes.push({ seats: [i, i + 1], pos: 0 }); if (s.n % 2) s.ropes.push({ seats: [s.n - 1], pos: 0 }); }
-    s.reelAt = s.coins.map(() => -99);
-  }
-  if (g === "night") {
-    s.fish = [];
-    const n = Math.min(s.lake, 60);
-    for (let i = 0; i < n; i++) { let x, y; do { x = Q.W / 2 + (s.rng() * 2 - 1) * Q.RX; y = Q.H / 2 + (s.rng() * 2 - 1) * Q.RY; } while (ell(x, y) > 0.85); s.fish.push({ x, y, h: s.rng() * 6.28 }); }
-    s.drops = []; s.dropsLeft = s.coins.map(() => (s.variant === 1 ? 3 : 1));
-  }
-  if (g === "last") { s.school = Math.max(1, Math.round(s.lake * Q.SCHOOL_SHARE)); s.picks = s.coins.map(() => null); }
-  ev.push({ k: "round", n: s.round + 1, game: g, name: NAMES[g], variant: Q.VARIANTS[g][s.variant], vi: s.variant, school: g === "last" ? s.school : undefined });
-}
-
-function endRound(s: PartySim, ev: GameEvent[]): void {
-  const g = s.game;
-  if (g === "tug") for (const r of s.ropes) {
-    const winner = r.seats.length === 2 ? (r.pos > 0 ? r.seats[0] : r.pos < 0 ? r.seats[1] : null) : r.pos > 0 ? r.seats[0] : null;
-    if (winner !== null) { const got = take(s, Q.TUG_COINS); earn(s, winner, got, ev, "landed the big fish"); ev.push({ k: "landed", seat: winner, n: got }); }
-    else ev.push({ k: "lost", seats: r.seats });
-  }
-  if (g === "last") {
-    const sum = s.picks.reduce<number>((n, p) => n + (p ?? 0), 0), broke = sum > s.school;
-    s.picks.forEach((p, seat) => { const got = broke ? Math.min(1, s.lake) : take(s, p ?? 0); if (broke) take(s, 1); earn(s, seat, got * Q.LAST_MULT, ev, broke ? "the school broke" : "Last Net"); });
-    ev.push({ k: "lastNet", picks: s.picks, sum, school: s.school, broke });
-  }
-  if (g === "night") s.lake -= 0; // night catches already came out of the lake
-  const rc = s.roundCoins[s.round], top = Math.max(...rc), who = rc.indexOf(top);
-  if (top > 0 && (!s.best || top > s.best.coins)) s.best = { seat: who, coins: top, game: g };
-  s.muddy = []; s.perks = s.coins.map(() => []);
-  s.round++;
-  if (s.round >= 5) { s.phase = "end"; ev.push({ k: "end", coins: s.coins }); return; }
-  s.phase = "standings"; s.phaseT = 0; s.variant = 0;
-  // the last-placed player picks the next round's variant (ties: the later seat)
-  let low = 0; for (let i = 0; i < s.n; i++) if (s.coins[i] <= s.coins[low]) low = i;
-  s.picker = low;
-  ev.push({ k: "standings", coins: s.coins, lake: s.lake, next: NAMES[s.order[s.round]], picker: low });
-  if (s.order[s.round] === "last") ev.push({ k: "lastWarning", lake: s.lake, school: Math.max(1, Math.round(s.lake * Q.SCHOOL_SHARE)), started: s.lakeStart });
-}
-
 function apply(s: PartySim, seat: number, i: PartyInput, ev: GameEvent[]): void {
   const b = s.boats[seat];
-  if (s.phase === "pick" || s.phase === "shop") {
-    if (i.k === "variant" && seat === s.picker) { s.variant = i.v; ev.push({ k: "variant", seat, v: i.v, text: Q.VARIANTS[s.order[s.round]][i.v] }); }
-    if (s.phase === "pick") return;
-    if (i.k === "buy") {
-      const it = Q.SHOP[i.item];
-      if (s.coins[seat] < it.cost || s.perks[seat].includes(i.item)) return;
-      if (i.item === "muddy" && s.coins[seat] >= Math.max(...s.coins)) return; // only players behind the leader
-      s.coins[seat] -= it.cost; s.perks[seat].push(i.item);
-      if (i.item === "muddy") { const l = leaderOf(s); if (!s.muddy.includes(l)) s.muddy.push(l); }
-      ev.push({ k: "bought", seat, item: i.item });
+  if (i.k === "ready") { s.ready[seat] = true; ev.push({ k: "ready", seat }); return; }
+  if (i.k === "buy") { s.buys[seat].push(i.item); s.coins[seat] -= Q.COST; ev.push({ k: "bought", seat, item: i.item, to: [seat] }); return; }
+  if (i.k === "done") { s.done[seat] = true; return; }
+  if (i.k === "pick") { s.last!.picks[seat] = i.n; ev.push({ k: "picked", seat }); return; }
+  if (i.k === "steer") { b.tx = i.x; b.ty = i.y; return; }
+  if (i.k === "tap") {
+    const r = has(s, seat, "net") ? Q.TAP_R_BIG : Q.TAP_R;
+    const spot = s.spots.filter((p) => p.open && p.taken < 0).sort((p, q) => Math.hypot(p.x - i.x, p.y - i.y) - Math.hypot(q.x - i.x, q.y - i.y))[0];
+    if (spot && Math.hypot(spot.x - i.x, spot.y - i.y) < r) claimSpot(s, spot, seat, ev);
+    else ev.push({ k: "miss", seat, x: i.x, y: i.y, to: [seat] });
+    return;
+  }
+  if (i.k === "reel") {
+    if (b.stun > 0 || b.reel >= 100) return;
+    const T = s.tug, inZ = Math.abs(T.needle - T.zone) < T.zw / 2 + (has(s, seat, "net") ? 0.04 : 0);
+    b.reel = Math.max(0, b.reel + (inZ ? Q.REEL_UP : -Q.REEL_DOWN)); if (!inZ) b.stun = Q.REEL_STUN;
+    ev.push({ k: "reel", seat, ok: inZ ? 1 : 0, to: [seat] });
+    if (b.reel >= 100) {
+      if (scoring(s)) { const pay = Q.TUG_PAY[Math.min(T.places, Q.TUG_PAY.length - 1)]; T.places++; b.finished = true; give(s, seat, pay, ev); ev.push({ k: "landed", seat, place: T.places, pay }); }
+      else b.reel = 0; // practice: land it again
     }
     return;
   }
-  if (s.phase !== "round") return;
-  const g = s.game, has = (p: Item) => s.perks[seat]?.includes(p);
-  if (g === "shoal" && i.k === "tap") {
-    const r = Q.TAP_R * (has("bigNet") ? Q.BIG_NET : 1);
-    const k = s.shoals.findIndex((sh) => Math.hypot(sh.x - i.x, sh.y - i.y) <= r);
-    if (k < 0) { ev.push({ k: "miss", seat, x: i.x, y: i.y, to: [seat] }); return; }
-    const sh = s.shoals.splice(k, 1)[0], got = take(s, sh.n);
-    earn(s, seat, got, ev, "Shoal Scramble");
-    ev.push({ k: "shoal", seat, n: got, x: sh.x, y: sh.y });
+  if (i.k === "net") {
+    if (b.castCd > 0) return;
+    b.castCd = Q.NIGHT_CD;
+    const nx = b.x + Math.cos(b.h) * 4, ny = b.y + Math.sin(b.h) * 4, r = has(s, seat, "net") ? Q.NIGHT_NET_BIG : Q.NIGHT_NET_R;
+    let got = 0;
+    if (scoring(s)) s.fish = s.fish.filter((f) => { if (got < Q.NIGHT_MAX && f.adult && Math.hypot(f.x - nx, f.y - ny) < r) { got++; return false; } return true; });
+    else for (const f of s.fish) if (got < Q.NIGHT_MAX && f.adult && Math.hypot(f.x - nx, f.y - ny) < r) got++;
+    if (scoring(s) && got) { s.tookFish[seat] += got; give(s, seat, got, ev, nx, ny); }
+    ev.push({ k: "netted", seat, x: r1(nx), y: r1(ny), r, n: got, practice: practice(s) ? 1 : 0 });
+    return;
   }
-  if ((g === "koi" || g === "night") && i.k === "steer") { b.tx = i.x; b.ty = i.y; }
-  if (g === "tug" && i.k === "reel") {
-    if (s.t - s.reelAt[seat] < Q.REEL_GAP_S - 1e-9) return; // mashing is rate-limited here, on the server
-    s.reelAt[seat] = s.t;
-    const rope = s.ropes.find((r) => r.seats.includes(seat)); if (!rope) return;
-    const green = (rope.seats.length === 1 ? Q.GREEN_SOLO : Q.GREEN) / 2, inGreen = Math.abs(s.needle) <= green;
-    const dir = rope.seats[0] === seat ? 1 : -1;
-    rope.pos += inGreen ? dir * Q.PULL : -dir * Q.SLIP;
-    ev.push({ k: "reel", seat, ok: inGreen });
-    if (Math.abs(rope.pos) >= Q.ROPE_WIN) { rope.pos = Math.sign(rope.pos) * Q.ROPE_WIN; }
+  if (i.k === "lantern") {
+    if (b.lanT > 0) return;
+    b.lanT = Q.LANTERN_CD;
+    s.lanterns.push({ seat, x: r1(b.x), y: r1(b.y), until: s.t + Q.LANTERN_S });
+    ev.push({ k: "lantern", seat, x: r1(b.x), y: r1(b.y) });
   }
-  if (g === "night" && i.k === "cast" && b.cd <= 0) {
-    b.cd = Q.NIGHT_CD;
-    const r = Q.NIGHT_NET_R * (has("bigNet") ? Q.BIG_NET : 1), x = b.x + Math.cos(b.h) * 36, y = b.y + Math.sin(b.h) * 36;
-    let n = 0; s.fish = s.fish.filter((f) => { if (Math.hypot(f.x - x, f.y - y) < r) { n++; return false; } return true; });
-    const got = take(s, n); earn(s, seat, got, ev, "Lantern Night");
-    ev.push({ k: "netted", seat, n: got, x, y });
-  }
-  if (g === "night" && i.k === "drop" && s.dropsLeft[seat] > 0) {
-    s.dropsLeft[seat]--;
-    const d = { seat, x: Math.round(b.x), y: Math.round(b.y), until: s.t + Q.DROP_S };
-    s.drops.push(d); ev.push({ k: "drop", ...d });
-  }
-  if (g === "last" && i.k === "pick" && s.picks[seat] === null) { s.picks[seat] = i.size; ev.push({ k: "picked", seat }); }
+}
+function claimSpot(s: PartySim, spot: Spot, seat: number, ev: GameEvent[]): void {
+  spot.taken = seat;
+  if (scoring(s)) { const k = takeFish(s, Q.SCRAMBLE_FISH, spot.x, spot.y); s.tookFish[seat] += k; give(s, seat, Q.SCRAMBLE_COINS, ev, spot.x, spot.y); }
+  ev.push({ k: "claimed", seat, id: spot.id, x: r1(spot.x), y: r1(spot.y), practice: practice(s) ? 1 : 0 });
 }
 
-function sail(s: PartySim, seat: number): void {
-  const b = s.boats[seat], has = (p: Item) => s.perks[seat]?.includes(p);
-  if (b.cd > 0) b.cd -= Q.DT;
-  const dx = b.tx - b.x, dy = b.ty - b.y, d = Math.hypot(dx, dy), v = Q.SPEED * (has("fastBoat") ? Q.FAST : 1);
-  const want = d > 4 ? Math.min(1, d / 40) : 0, k = Math.min(1, 6 * Q.DT);
-  b.vx += ((d > 4 ? dx / d : 0) * v * want - b.vx) * k; b.vy += ((d > 4 ? dy / d : 0) * v * want - b.vy) * k;
-  b.x += b.vx * Q.DT; b.y += b.vy * Q.DT;
-  const e = ell(b.x, b.y); if (e > 0.95) { b.x = Q.W / 2 + (b.x - Q.W / 2) * 0.95 / e; b.y = Q.H / 2 + (b.y - Q.H / 2) * 0.95 / e; }
-  if (Math.hypot(b.vx, b.vy) > 8) b.h = Math.atan2(b.vy, b.vx);
+// ---- the rounds, tick by tick ----
+function moveBoats(s: PartySim): void {
+  const dt = Q.DT;
+  for (const b of s.boats) {
+    b.castCd = Math.max(0, b.castCd - dt); b.lanT = Math.max(0, b.lanT - dt); b.stun = Math.max(0, b.stun - dt);
+    if (s.game !== "koi" && s.game !== "night") continue;
+    const max = Q.SPEED * (has(s, b.seat, "fast") ? Q.FAST : 1);
+    const dx = b.tx - b.x, dy = b.ty - b.y, d = Math.hypot(dx, dy);
+    let throttle = 0;
+    if (d > 0.9) { const want = Math.atan2(dy, dx), diff = Math.atan2(Math.sin(want - b.h), Math.cos(want - b.h)); b.h += Math.sign(diff) * Math.min(Math.abs(diff), dt * 3.2); throttle = Math.min(1, d / 4) * Math.max(0.25, Math.cos(Math.min(1.4, Math.abs(diff)))); }
+    const inReeds = Math.hypot(b.x - ZONES.reeds.x, b.y - ZONES.reeds.y) < ZONES.reeds.r && nr(b.x, b.y) > 0.6;
+    b.speed += (max * throttle * (inReeds ? 0.62 : 1) - b.speed) * Math.min(1, dt * 2.6);
+    let nx = b.x + Math.cos(b.h) * b.speed * dt, ny = b.y + Math.sin(b.h) * b.speed * dt;
+    if (nr(nx, ny) > 0.965) { const k = 0.965 / nr(nx, ny); nx *= k; ny *= k; b.speed *= 0.7; }
+    const di = Math.hypot(nx - ISLAND.x, ny - ISLAND.y);
+    if (di < ISLAND.r + 2.2) { const a = Math.atan2(ny - ISLAND.y, nx - ISLAND.x); nx = ISLAND.x + Math.cos(a) * (ISLAND.r + 2.2); ny = ISLAND.y + Math.sin(a) * (ISLAND.r + 2.2); b.speed *= 0.8; }
+    b.x = nx; b.y = ny;
+  }
 }
-
-function play(s: PartySim, ev: GameEvent[]): void {
-  const g = s.game;
-  if (g === "shoal") {
-    s.shoals = s.shoals.filter((sh) => sh.until > s.t + 1e-9 || (ev.push({ k: "sank", x: sh.x, y: sh.y }), false));
-    if (s.phaseT >= s.nextShoal && s.lake > 0) {
-      s.nextShoal += Q.SHOAL_EVERY_S;
-      const two = s.variant === 1;
-      for (let k = 0; k < (two ? 2 : 1); k++) {
-        let x, y; do { x = Q.W / 2 + (s.rng() * 2 - 1) * Q.RX; y = Q.H / 2 + (s.rng() * 2 - 1) * Q.RY; } while (ell(x, y) > 0.8);
-        // bait: a school surfaces nearer the buyer
-        const baiter = s.baitUntil.findIndex((u) => u > s.t + 1e-9);
-        if (baiter >= 0 && s.rng() < 0.5) { x = (x + s.boats[baiter].x) / 2; y = (y + s.boats[baiter].y) / 2; }
-        const n = Math.max(1, Math.min(two ? 3 : Q.SHOAL_MAX, Math.round(s.lake / 30)));
-        s.shoals.push({ x: Math.round(x), y: Math.round(y), n, at: s.t, until: s.t + Q.SHOAL_UP_S });
-        ev.push({ k: "surface", x: Math.round(x), y: Math.round(y), n });
+function roundTick(s: PartySim, ev: GameEvent[]): void {
+  moveBoats(s);
+  // bait: for its first 8 s, the schools near a bait boat swim to it
+  if (scoring(s) && s.phaseT < Q.BAIT_S) for (const b of s.boats) if (has(s, b.seat, "bait")) for (const sc of s.schools) if (Math.hypot(sc.x - b.x, sc.y - b.y) < 30) { sc.tx = b.x; sc.ty = b.y; sc.t = 1; }
+  if (s.game === "night" || s.game === "koi") { updateSchools(s); moveFish(s); }
+  if (s.game === "scramble") {
+    s.spotT -= Q.DT;
+    if (s.spotT <= 0) {
+      s.spotT = 0.9 + s.rng() * 0.6;
+      const x = -60 + s.rng() * 100, y = -32 + s.rng() * 62;
+      if (nr(x, y) < 0.85 && Math.hypot(x - ISLAND.x, y - ISLAND.y) > 12) { s.spots.push({ id: s.nextId++, x, y, t: 0, open: false, until: 0, taken: -1 }); }
+    }
+    for (const p of s.spots) { p.t += Q.DT; if (!p.open && p.t >= Q.WARN_S) { p.open = true; p.until = p.t + Q.JUMP_S; ev.push({ k: "jump", id: p.id, x: r1(p.x), y: r1(p.y) }); } }
+    s.spots = s.spots.filter((p) => (!p.open || p.t < p.until) && !(p.taken >= 0 && p.t > p.until));
+  }
+  if (s.game === "koi") {
+    const k = s.koi, tgt = s.path[k.k % s.path.length], a = Math.atan2(tgt[1] - k.y, tgt[0] - k.x);
+    k.x += Math.cos(a) * Q.DT * Q.KOI_SPEED; k.y += Math.sin(a) * Q.DT * Q.KOI_SPEED;
+    if (Math.hypot(tgt[0] - k.x, tgt[1] - k.y) < 2) k.k++;
+    for (const b of s.boats) {
+      const gt = s.path[b.gate % s.path.length];
+      if (Math.hypot(gt[0] - b.x, gt[1] - b.y) < Q.GATE_R) {
+        b.gate++;
+        if (scoring(s)) { const got = takeFish(s, 1); s.tookFish[b.seat] += got; give(s, b.seat, Q.GATE_COINS, ev, gt[0], gt[1]); }
+        ev.push({ k: "gate", seat: b.seat, n: b.gate, practice: practice(s) ? 1 : 0 });
+      }
+      if (scoring(s) && Math.hypot(k.x - b.x, k.y - b.y) < Q.KOI_R) {
+        const got = takeFish(s, Q.KOI_FISH); s.tookFish[b.seat] += got; give(s, b.seat, Q.KOI_COINS, ev, k.x, k.y);
+        ev.push({ k: "koi", seat: b.seat });
+        k.k += 2; const p = s.path[(k.k - 1) % s.path.length]; k.x = p[0]; k.y = p[1];
       }
     }
   }
-  if (g === "koi") {
-    for (let i = 0; i < s.n; i++) {
-      sail(s, i);
-      const b = s.boats[i], gate = s.gates[s.nextGate[i]], r = s.variant === 1 ? Q.GATE_R * 0.6 : Q.GATE_R;
-      if (Math.hypot(b.x - gate.x, b.y - gate.y) < r) { earn(s, i, s.variant === 1 ? 2 : 1, ev, "gate"); ev.push({ k: "gate", seat: i, x: gate.x, y: gate.y }); s.nextGate[i] = (s.nextGate[i] + 1) % Q.GATES; }
-      if (Math.hypot(b.x - s.koi.x, b.y - s.koi.y) < Q.KOI_R) {
-        take(s, 1); earn(s, i, Q.KOI_COINS, ev, "the golden carp");
-        ev.push({ k: "koiCaught", seat: i, x: Math.round(s.koi.x), y: Math.round(s.koi.y) });
-        const a = s.rng() * 6.28; s.koi = { x: Q.W / 2 + Math.cos(a) * 200, y: Q.H / 2 + Math.sin(a) * 130, h: s.rng() * 6.28 };
-      }
-    }
-    let fx = 0, fy = 0; for (const b of s.boats) { const dx = s.koi.x - b.x, dy = s.koi.y - b.y, d = Math.hypot(dx, dy); if (d < 160 && d > 0) { fx += dx / d / d * 160; fy += dy / d / d * 160; } }
-    s.koi.h = Math.atan2(Math.sin(s.koi.h) + fy, Math.cos(s.koi.h) + fx) + (s.rng() - 0.5) * 0.4;
-    if (ell(s.koi.x, s.koi.y) > 0.8) s.koi.h = Math.atan2(Q.H / 2 - s.koi.y, Q.W / 2 - s.koi.x);
-    s.koi.x += Math.cos(s.koi.h) * Q.KOI_SPEED * Q.DT; s.koi.y += Math.sin(s.koi.h) * Q.KOI_SPEED * Q.DT;
+  if (s.game === "tug") {
+    const T = s.tug;
+    T.needle += T.dir * Q.DT * Q.NEEDLE_SPEED; if (T.needle > 1) { T.needle = 1; T.dir = -1; } if (T.needle < 0) { T.needle = 0; T.dir = 1; }
+    T.zone += T.zv * Q.DT; if (T.zone > 0.8 - T.zw / 2 || T.zone < 0.2 + T.zw / 2) T.zv *= -1;
   }
-  if (g === "tug") s.needle = Math.sin(s.phaseT * Math.PI * 2 * Q.NEEDLE_HZ);
-  if (g === "night") {
-    for (let i = 0; i < s.n; i++) sail(s, i);
-    const baiter = s.baitUntil.findIndex((u) => u > s.t + 1e-9);
-    for (const f of s.fish) {
-      f.h += (s.rng() - 0.5) * 0.5;
-      const b = baiter >= 0 ? s.boats[baiter] : null;
-      if (b && Math.hypot(b.x - f.x, b.y - f.y) <= Q.BAIT_R * Q.LANTERN_R) f.h = Math.atan2(b.y - f.y, b.x - f.x) + (s.rng() - 0.5) * 0.3;
-      if (ell(f.x, f.y) > 0.85) f.h = Math.atan2(Q.H / 2 - f.y, Q.W / 2 - f.x);
-      f.x += Math.cos(f.h) * 26 * Q.DT; f.y += Math.sin(f.h) * 26 * Q.DT;
-    }
-    s.drops = s.drops.filter((d) => d.until > s.t + 1e-9);
-  }
+  if (s.game === "night") s.lanterns = s.lanterns.filter((l) => l.until > s.t);
 }
 
 function step(s: PartySim, inputs: { seat: number; i: PartyInput }[]): GameEvent[] {
   const ev: GameEvent[] = [];
   if (s.phase === "end") return ev;
   for (const { seat, i } of inputs) apply(s, seat, i, ev);
-  s.tick++; s.t = Math.round(s.tick * Q.DT * 1000) / 1000; s.phaseT = Math.round((s.phaseT + Q.DT) * 1000) / 1000;
-  if (s.phase === "intro" && s.phaseT >= Q.INTRO_S - 1e-9) startRound(s, ev);
-  else if (s.phase === "round") { play(s, ev); if (s.phaseT >= Q.ROUND_S - 1e-9 || (s.game === "last" && s.picks.every((p) => p !== null) && s.phaseT > 2)) endRound(s, ev); }
-  else if (s.phase === "standings" && s.phaseT >= Q.STANDINGS_S - 1e-9) { s.phase = "pick"; s.phaseT = 0; ev.push({ k: "pick", picker: s.picker, next: NAMES[s.order[s.round]], nextGame: s.order[s.round] }); ev.push({ k: "choose", variants: Q.VARIANTS[s.order[s.round]], to: [s.picker] }); }
-  else if (s.phase === "pick" && s.phaseT >= Q.PICK_S - 1e-9) { s.phase = "shop"; s.phaseT = 0; ev.push({ k: "shop", picker: s.picker, next: NAMES[s.order[s.round]], variant: Q.VARIANTS[s.order[s.round]][s.variant], nextGame: s.order[s.round], vi: s.variant }); }
-  else if (s.phase === "shop" && s.phaseT >= Q.SHOP_S - 1e-9) startRound(s, ev);
+  if (s.phase === "intro" || s.phase === "play") roundTick(s, ev);
+  s.tick++;
+  s.t = Math.round(s.tick * Q.DT * 1000) / 1000;
+  s.phaseT = Math.round((s.phaseT + Q.DT) * 1000) / 1000;
+  advance(s, ev);
   return ev;
 }
-
-// ---- a bot ----
-function bot(s: PartySim, seat: number, r: () => number): PartyInput[] {
-  if (s.phase === "pick") return seat === s.picker && r() < 0.05 ? [{ k: "variant", v: r() < 0.5 ? 0 : 1 }] : [];
-  if (s.phase === "shop") {
-    if (r() > 0.05) return [];
-    const behind = s.coins[seat] < Math.max(...s.coins);
-    const items: Item[] = behind ? ["muddy", "bigNet", "fastBoat"] : ["bigNet", "fastBoat", "bait"];
-    const it = items[Math.floor(r() * items.length)];
-    return s.coins[seat] >= Q.SHOP[it].cost + 2 ? [{ k: "buy", item: it }] : [];
-  }
-  if (s.phase !== "round") return [];
-  const b = s.boats[seat];
-  switch (s.game) {
-    case "shoal": { const sh = s.shoals[0]; return sh && s.t - sh.at > 0.35 + r() * 0.6 && r() < 0.15 ? [{ k: "tap", x: sh.x + Math.round((r() - 0.5) * 50), y: sh.y + Math.round((r() - 0.5) * 50) }] : []; }
-    case "koi": { if (r() > 0.2) return []; const g = s.gates[s.nextGate[seat]], koi = Math.hypot(s.koi.x - b.x, s.koi.y - b.y) < 200; return [{ k: "steer", x: Math.round(koi ? s.koi.x : g.x), y: Math.round(koi ? s.koi.y : g.y) }]; }
-    case "tug": return Math.abs(s.needle) < Q.GREEN / 2 + (r() - 0.5) * 0.3 && r() < 0.4 ? [{ k: "reel" }] : [];
-    case "night": {
-      if (r() > 0.2) return [];
-      const near = s.fish.filter((f) => Math.hypot(f.x - b.x, f.y - b.y) < s.view[seat])[0];
-      const out: PartyInput[] = [{ k: "steer", x: Math.round(near ? near.x : Q.W / 2 + (r() - 0.5) * 600), y: Math.round(near ? near.y : Q.H / 2 + (r() - 0.5) * 400) }];
-      if (near && Math.hypot(near.x - b.x, near.y - b.y) < 60) out.push({ k: "cast" });
-      if (!near && s.dropsLeft[seat] && r() < 0.05) out.push({ k: "drop" });
-      return out;
+function enter(s: PartySim, phase: Phase, ev: GameEvent[], extra: Record<string, unknown> = {}): void { s.phase = phase; s.phaseT = 0; ev.push({ k: "phase", phase, round: s.round, game: s.game, ...extra }); }
+function advance(s: PartySim, ev: GameEvent[]): void {
+  switch (s.phase) {
+    case "intro":
+      if (s.ready.every(Boolean) || s.phaseT >= Q.INTRO_S - 1e-9) { setupRound(s); enter(s, "count", ev); }
+      break;
+    case "count":
+      if (s.phaseT >= Q.COUNT_S - 1e-9) { for (let i = 0; i < s.n; i++) s.next[i] = s.buys[i], s.buys[i] = []; enter(s, "play", ev); }
+      break;
+    case "play":
+      if (s.phaseT >= Q.ROUND_S - 1e-9) { s.spots = []; s.lanterns = []; enter(s, "standings", ev, { lake: s.fish.length }); }
+      break;
+    case "standings":
+      if (s.phaseT >= Q.STANDINGS_S - 1e-9) {
+        s.next = s.next.map(() => []);
+        if (s.round <= 3) { s.done = s.done.map((_, i) => s.coins[i] < Q.COST && !s.bots[i] ? true : false); enter(s, "shop", ev); }
+        else nextRound(s, ev);
+      }
+      break;
+    case "shop":
+      if (s.done.every(Boolean) || s.phaseT >= Q.SHOP_S - 1e-9) nextRound(s, ev);
+      break;
+    case "pick": {
+      const L = s.last!;
+      if (s.phaseT >= Q.PICK_S - 1e-9) for (let i = 0; i < s.n; i++) if (L.picks[i] === null) L.picks[i] = 6; // a default for anyone who did not pick
+      if (L.picks.every((p) => p !== null)) {
+        const sum = L.picks.reduce((n: number, p) => n + (p ?? 0), 0);
+        L.fit = sum <= L.cap;
+        for (let i = 0; i < s.n; i++) give(s, i, L.fit ? (L.picks[i] ?? 0) * Q.LAST_MULT : 1, ev);
+        const gone = takeFish(s, L.fit ? sum : L.cap);
+        L.picks.forEach((p, i) => { if (L.fit) s.tookFish[i] += Math.round((gone * (p ?? 0)) / Math.max(1, sum)); });
+        enter(s, "reveal", ev, { picks: L.picks, fit: L.fit, cap: L.cap, sum });
+      }
+      break;
     }
-    case "last": return s.picks[seat] === null && s.phaseT > 3 + r() * 6 && r() < 0.1 ? [{ k: "pick", size: s.coins[seat] >= Math.max(...s.coins) ? 3 : r() < 0.5 ? 10 : 6 }] : [];
+    case "reveal":
+      if (s.phaseT >= Q.REVEAL_EACH * s.n + Q.REVEAL_END - 1e-9) { s.phase = "end"; ev.push({ k: "end" }); }
+      break;
+  }
+}
+function nextRound(s: PartySim, ev: GameEvent[]): void {
+  s.round++;
+  setupRound(s);
+  if (s.game === "last") {
+    const cap = Math.max(6, Math.round(s.fish.length / Q.LAST_DIV));
+    s.last = { cap, fished: s.fish.length < s.start * 0.85, picks: s.boats.map(() => null), fit: null, revealAt: 0 };
+    enter(s, "pick", ev, { cap, fished: s.last.fished });
+  } else enter(s, "intro", ev);
+}
+
+// ---- what one seat may see ----
+const p10 = (v: number): number => Math.round(v * 10);
+export function seesFish(s: PartySim, seat: number, x: number, y: number): boolean {
+  if (s.game !== "night" || seat < 0) return true;
+  const b = s.boats[seat], r = (has(s, seat, "net") ? Q.NIGHT_VIEW_BIG : Q.NIGHT_VIEW);
+  return Math.hypot(b.x - x, b.y - y) < r || s.lanterns.some((l) => Math.hypot(l.x - x, l.y - y) < Q.LANTERN_LIGHT);
+}
+function frameFor(s: PartySim, seat: number) {
+  const game = s.game, live = s.phase === "intro" || s.phase === "count" || s.phase === "play";
+  const len: Record<Phase, number> = { intro: Q.INTRO_S, count: Q.COUNT_S, play: Q.ROUND_S, standings: Q.STANDINGS_S, shop: Q.SHOP_S, pick: Q.PICK_S, reveal: 0, end: 0 };
+  const f: Record<string, unknown> = {
+    phase: s.phase, round: s.round, rounds: GAMES.length, game, left: Math.max(0, Math.ceil(len[s.phase] - s.phaseT)),
+    coins: s.coins, roundCoins: s.roundCoins, ready: s.ready, done: s.done, lake: s.fish.length, start: s.start,
+  };
+  if (live && (game === "koi" || game === "night")) {
+    const me = seat >= 0 ? s.boats[seat] : null;
+    f.b = s.boats.filter((b) => game !== "night" || !me || b === me || Math.hypot(b.x - me.x, b.y - me.y) < Q.NIGHT_BOATS || s.lanterns.some((l) => Math.hypot(b.x - l.x, b.y - l.y) < Q.LANTERN_LIGHT)).map((b) => [b.seat, p10(b.x), p10(b.y), Math.round(b.h * 100), b.gate]);
+    f.f = s.fish.filter((x) => seesFish(s, seat, x.x, x.y)).map((x) => [p10(x.x), p10(x.y), Math.round(x.h * 100), x.adult ? 1 : 0]);
+  }
+  if (live && game === "koi") { f.path = s.path.map(([x, y]) => [p10(x), p10(y)]); f.koi = [p10(s.koi.x), p10(s.koi.y)]; }
+  if (live && game === "scramble") f.spots = s.spots.map((p) => [p.id, p10(p.x), p10(p.y), p.taken >= 0 ? 2 : p.open ? 1 : 0, p.taken]);
+  if (live && game === "tug") f.tug = { needle: Math.round(s.tug.needle * 1000) / 1000, zone: Math.round(s.tug.zone * 1000) / 1000, zw: s.tug.zw, reels: s.boats.map((b) => Math.round(b.reel)) };
+  if (live && game === "night") { f.lanterns = s.lanterns.map((l) => [l.seat, p10(l.x), p10(l.y)]); f.light = Q.LANTERN_LIGHT; if (seat >= 0) f.view = (has(s, seat, "net") ? Q.NIGHT_VIEW_BIG : Q.NIGHT_VIEW); }
+  if (s.last) f.last = { cap: s.last.cap, fished: s.last.fished, picked: s.last.picks.map((p) => p !== null), picks: s.phase === "reveal" || s.phase === "end" ? s.last.picks : null, fit: s.last.fit, mine: seat >= 0 ? s.last.picks[seat] : null };
+  if (seat >= 0) { const b = s.boats[seat]; f.me = { castCd: Math.round(b.castCd * 10) / 10, lanT: Math.round(b.lanT * 10) / 10, stun: b.stun > 0 ? 1 : 0, gate: b.gate, buys: s.buys[seat], next: s.next[seat] }; }
+  return f;
+}
+
+// ---- results ----
+function results(s: PartySim): Results {
+  const left = s.fish.length, next = nextSpring(left), tier = tierOf(next);
+  const scores = s.coins.map((c) => Math.round(c * tier.mult));
+  const [a, y] = counts(s);
+  const best = s.best;
+  const greedy = s.tookFish.indexOf(Math.max(...s.tookFish));
+  const highlights: Highlight[] = [
+    { title: "Best round", text: best ? `{name}: ${best.coins} coins in ${best.game}` : "nobody scored", seat: best?.seat, tkey: "y2_hl_best_t", key: best ? "y2_hl_best" : "y2_hl_best_none", vars: { n: best?.coins ?? 0, game: best ? `@y2_g_${best.game}` : "" } },
+    { title: "Took most from the lake", text: `{name}: ${s.tookFish[greedy]} fish`, seat: greedy, tkey: "y2_hl_took_t", key: "y2_hl_took", vars: { n: s.tookFish[greedy] } },
+    { title: "The last net", text: s.last?.fit ? "held" : "tore", tkey: "y2_hl_last_t", key: s.last?.fit ? "y2_hl_last_fit" : "y2_hl_last_tear", vars: { cap: s.last?.cap ?? 0 } },
+  ];
+  return {
+    seats: s.coins.map((c, i) => ({ seat: i, score: scores[i], place: 1 + scores.filter((v) => v > scores[i]).length, firstScoreS: null, base: c })),
+    lakeLeft: left, highlights,
+    left: { a, y }, next, tier: tier.id,
+    ledger: s.coins.map((c, i) => ({ seat: i, home: c, young: 0, spared: 0, took: s.tookFish[i] })),
+    last: s.last ? { cap: s.last.cap, picks: s.last.picks, fit: s.last.fit } : null,
+  };
+}
+
+// ---- bots (the prototype's yThink, its scramble reactions, its shop and last-net picks) ----
+function bot(s: PartySim, seat: number, r: () => number): PartyInput[] {
+  const kind = s.kinds[seat], b = s.boats[seat];
+  if (s.phase === "intro") return !s.ready[seat] && s.phaseT > 2.5 + (seat % 4) * 1.1 ? [{ k: "ready" }] : [];
+  if (s.phase === "shop") {
+    if (s.done[seat]) return [];
+    if (s.phaseT < 1 + seat * 0.4) return [];
+    const out: PartyInput[] = [];
+    if (s.coins[seat] >= Q.COST && r() < (kind === "greedy" ? 0.7 : 0.35)) out.push({ k: "buy", item: ITEMS[Math.floor(r() * 3)] });
+    out.push({ k: "done" });
+    return out;
+  }
+  if (s.phase === "pick") {
+    if (s.last!.picks[seat] !== null || s.phaseT < 1 + seat * 0.8) return [];
+    const cap = s.last!.cap;
+    const n = kind === "greedy" ? (r() < 0.75 ? 10 : 6) : kind === "keeper" ? (r() < 0.7 ? 3 : 6) : cap > 24 ? 6 : r() < 0.5 ? 3 : 6;
+    return [{ k: "pick", n: n as 3 | 6 | 10 }];
+  }
+  if (s.phase !== "play") return [];
+  if (s.game === "scramble") {
+    // react to an open splash after a beat; greedy is quicker, keeper slower
+    for (const p of s.spots) {
+      if (!p.open || p.taken >= 0) continue;
+      const since = p.t - 0.8, wait = 0.32 + (kind === "greedy" ? 0.2 : kind === "keeper" ? 0.6 : 0.45);
+      if (since >= wait && r() < 0.1) return [{ k: "tap", x: r1(p.x + (r() - 0.5) * 2), y: r1(p.y + (r() - 0.5) * 2) }];
+    }
+    return [];
+  }
+  if (s.game === "tug") {
+    if (b.reel >= 100 || b.stun > 0 || r() > Q.DT * (kind === "greedy" ? 5 : 3.5)) return [];
+    const T = s.tug, inZ = Math.abs(T.needle - T.zone) < T.zw / 2;
+    return inZ || r() < 0.12 ? [{ k: "reel" }] : [];
+  }
+  if (r() > 0.2) return [];
+  if (s.game === "koi") {
+    const gt = s.path[b.gate % s.path.length], k = s.koi;
+    const chase = Math.hypot(k.x - b.x, k.y - b.y) < 18 && kind !== "keeper";
+    return [{ k: "steer", x: r1(chase ? k.x : gt[0]), y: r1(chase ? k.y : gt[1]) }];
+  }
+  if (s.game === "night") {
+    const out: PartyInput[] = [];
+    let best: Fish | null = null, bd = Infinity;
+    for (const f of s.fish) { if (!f.adult || !seesFish(s, seat, f.x, f.y)) continue; const d = Math.hypot(f.x - b.x, f.y - b.y); if (d < bd) { bd = d; best = f; } }
+    if (best) { out.push({ k: "steer", x: r1(best.x - Math.cos(b.h) * 3), y: r1(best.y - Math.sin(b.h) * 3) }); if (bd < 6 && b.castCd <= 0) out.push({ k: "net" }); }
+    else { const a = r() * Math.PI * 2, d = 20 + r() * 25; out.push({ k: "steer", x: r1(Math.cos(a) * d), y: r1(Math.sin(a) * d * 0.6) }); }
+    if (kind === "keeper" && b.lanT <= 0 && r() < 0.06) out.push({ k: "lantern" });
+    return out;
   }
   return [];
 }
 
-// ---- what one seat may see ----
-function frameFor(s: PartySim, seat: number) {
-  const me = seat >= 0 && seat < s.n ? seat : -1;
-  const view = me >= 0 ? s.view[me] : 0;
-  const lit = (f: Fish): boolean => (me >= 0 && Math.hypot(f.x - s.boats[me].x, f.y - s.boats[me].y) <= view) || s.drops.some((d) => Math.hypot(f.x - d.x, f.y - d.y) <= Q.DROP_R);
-  const g = s.phase === "round" ? s.game : null;
-  return {
-    t: s.t, phase: s.phase, round: s.round + 1, game: s.order[Math.min(s.round, 4)], name: NAMES[s.order[Math.min(s.round, 4)]],
-    variant: Q.VARIANTS[s.order[Math.min(s.round, 4)]][s.variant], vi: s.variant,
-    // the choice goes only to the last-placed player; everyone else is told who is choosing
-    variants: s.phase !== "pick" || me === s.picker ? Q.VARIANTS[s.order[Math.min(s.round, 4)]] : [], picking: s.phase === "pick" && me === s.picker,
-    left: Math.max(0, (s.phase === "round" ? Q.ROUND_S : s.phase === "shop" ? Q.SHOP_S : s.phase === "standings" ? Q.STANDINGS_S : s.phase === "pick" ? Q.PICK_S : Q.INTRO_S) - s.phaseT),
-    coins: s.coins, lake: s.lake, lakeStart: s.lakeStart, picker: s.picker, perks: me >= 0 ? s.perks[me] : [],
-    behind: me >= 0 ? s.coins[me] < Math.max(...s.coins) : false,
-    b: g === "koi" || g === "night" ? s.boats.map((b) => [Math.round(b.x), Math.round(b.y), Math.round(b.h * 100)]) : [],
-    shoals: g === "shoal" ? s.shoals.map((sh) => [sh.x, sh.y, sh.n, Math.round((sh.until - s.t) * 1000)]) : [],
-    gates: g === "koi" ? s.gates.map((p) => [Math.round(p.x), Math.round(p.y)]) : [], next: g === "koi" && me >= 0 ? s.nextGate[me] : null,
-    koi: g === "koi" ? [Math.round(s.koi.x), Math.round(s.koi.y), Math.round(s.koi.h * 100)] : null,
-    ropes: g === "tug" ? s.ropes.map((r) => ({ seats: r.seats, pos: r.pos })) : [], needle: g === "tug" ? Math.round(s.needle * 100) / 100 : 0,
-    green: g === "tug" ? (s.ropes.find((r) => r.seats.includes(me))?.seats.length === 1 ? Q.GREEN_SOLO : Q.GREEN) : 0,
-    // Lantern Night: only what this seat's lantern or a dropped lantern lights
-    f: g === "night" ? s.fish.filter(lit).map((f) => [Math.round(f.x), Math.round(f.y), Math.round(f.h * 100)]) : [],
-    view: g === "night" ? Math.round(view) : 0, drops: g === "night" ? s.drops.map((d) => [d.x, d.y, Math.round((d.until - s.t) * 10) / 10]) : [],
-    dropsLeft: me >= 0 ? s.dropsLeft[me] : 0,
-    school: g === "last" ? s.school : 0, myPick: g === "last" && me >= 0 ? s.picks[me] : null, picked: g === "last" ? s.picks.map((p) => p !== null) : [],
-  };
-}
-
-function results(s: PartySim): Results {
-  const seats = s.coins.map((c, seat) => ({ seat, score: c, place: 1 + s.coins.filter((x) => x > c).length, firstScoreS: s.firstScoreAt[seat], rounds: s.roundCoins.map((r) => r[seat]) }));
-  const worst = s.coins.indexOf(Math.min(...s.coins));
-  const close = [...seats].sort((a, b) => a.place - b.place || b.score - a.score);
-  const gap = close.length > 1 ? close[0].score - close[1].score : 0;
-  const highlights: Highlight[] = [
-    { title: "Best round", text: s.best ? `{name}: ${s.best.coins} coins in ${NAMES[s.best.game]}` : "nobody scored", seat: s.best?.seat ?? 0, tkey: "hl_party_best_t", key: s.best ? "hl_party_best" : "hl_party_best_none", vars: s.best ? { n: s.best.coins, round: `@y_round_${s.best.game}` } : {} },
-    { title: "Biggest loss", text: `{name} finished on ${s.coins[worst]} coins`, seat: worst, tkey: "hl_party_loss_t", key: "hl_party_loss", vars: { n: s.coins[worst] } },
-    { title: "Closest call", text: close.length > 1 ? `{name} won by ${gap} coin${gap === 1 ? "" : "s"}` : "a match of one", seat: close[0].seat, tkey: "hl_party_close_t", key: close.length > 1 ? (gap === 1 ? "hl_party_close1" : "hl_party_close") : "hl_party_close_none", vars: { n: gap } },
-  ];
-  return { seats, lakeLeft: s.lake, highlights };
-}
-
 export const party: Mode<PartySim, PartyInput> = {
-  id: "party", model: "party 1.0", seats: Q.SEATS, breeds: false,
+  id: "party", model: PARTY_MODEL, seats: Q.SEATS, breeds: false,
   make, input, step, frameFor, over: (s) => s.phase === "end", results, bot,
 };

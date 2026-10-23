@@ -1,282 +1,143 @@
 import { describe, expect, it } from "vitest";
-import { eventsFor, type Seat } from "../../src/lib/game-platform.ts";
-import { PARTY } from "../../src/lib/game-constants.ts";
-import { party, type PartyInput, type PartySim } from "../../src/lib/modes/party.ts";
+import { botStream, eventsFor, type GameEvent, replay, type Seat } from "../../src/lib/game-platform.ts";
+import { GAMES, party, type PartyInput, type PartySim, seesFish } from "../../src/lib/modes/party.ts";
+import { PARTY as Q } from "../../src/lib/game-constants.ts";
+import { nextSpring, tierOf } from "../../src/lib/lake-world.ts";
 
-// Fishing Party, "party 1.0" (DESIGN.md "Fishing Party"): five rounds of 35 s,
-// each a different game, an 8 s shop between them, the last-placed player's
-// variant pick, a lake that carries over, and Last Net paying double. The
-// server runs every round; the browser only sends taps, steers, reels,
-// lanterns, shop buys, the variant and the secret net size.
-
+// Fishing Party 2.0 (DESIGN.md "Fishing Party 钓鱼派对 (2.0)"), pure logic.
 const people = (n: number): Seat[] => Array.from({ length: n }, (_, i) => ({ seat: i, name: `P${i}`, bot: null, character: "mei" }));
-const make = (n = 2, seed = "party-test", fish = 220): PartySim => party.make(seed, people(n), { fish });
-const step = (s: PartySim, inputs: { seat: number; i: PartyInput }[] = []) => party.step(s, inputs);
-const until = (s: PartySim, pred: () => boolean, inputs: (s: PartySim) => { seat: number; i: PartyInput }[] = () => [], max = 40000) => {
-  const ev = []; for (let i = 0; i < max && !pred(); i++) ev.push(...step(s, inputs(s))); return ev;
-};
-const toRound = (s: PartySim, game: string) => {
-  // force the next round's game (the order is seeded; tests pick the one they check)
-  s.order[s.round] = game as never;
-  until(s, () => s.phase === "round" && s.game === game);
+const botsOf = (n: number): Seat[] => Array.from({ length: n }, (_, i) => ({ seat: i, name: `B${i}`, bot: `bot${i}`, character: "mei" }));
+const LAKE = { fish: 280, adults: 224, young: 56 };
+const make = (seed = "party-test", n = 2): PartySim => party.make(seed, people(n), LAKE);
+const step = (s: PartySim, inputs: { seat: number; i: PartyInput }[] = []): GameEvent[] => party.step(s, inputs);
+const until = (s: PartySim, pred: () => boolean, max = 20000): GameEvent[] => { const all: GameEvent[] = []; for (let k = 0; k < max && !pred(); k++) all.push(...step(s)); return all; };
+const inp = (s: PartySim, seat: number, raw: unknown) => party.input(s, seat, raw);
+const allReady = (s: PartySim) => step(s, s.boats.map((b) => ({ seat: b.seat, i: { k: "ready" } as PartyInput })));
+const toPlay = (s: PartySim) => { if (s.phase === "intro") allReady(s); until(s, () => s.phase === "play"); };
+const toRound = (s: PartySim, r: number) => {
+  // everyone ready at each intro and done at each shop, until round r begins
+  for (let k = 0; k < 40000 && s.round < r; k++) {
+    if (s.phase === "intro" && !s.ready.every(Boolean)) allReady(s);
+    else if (s.phase === "shop" && !s.done.every(Boolean)) step(s, s.boats.filter((b) => !s.done[b.seat]).map((b) => ({ seat: b.seat, i: { k: "done" } as PartyInput })));
+    else step(s);
+  }
 };
 
-describe("the shape of a match", () => {
-  it("five rounds of 35 s, a different game each, Last Net always last, with an 8 s shop between", () => {
+describe("the flow of a round", () => {
+  it("five rounds in DESIGN's order; each opens on its intro card, which ends when everyone is ready (or after 20 s), then 3-2-1 and 28 s", () => {
     const s = make();
-    const games: string[] = [], shops: number[] = [];
-    let shopStart = -1;
-    while (!party.over(s)) {
-      const was = s.phase;
-      step(s);
-      if (s.phase === "round" && was !== "round") games.push(s.game);
-      if (s.phase === "shop" && was !== "shop") shopStart = s.t;
-      if (was === "shop" && s.phase !== "shop") shops.push(Math.round((s.t - shopStart) * 10) / 10);
-    }
-    expect(games.length).toBe(5);
-    expect(new Set(games).size).toBe(5);
-    expect(games[4]).toBe("last");
-    expect(shops.length).toBe(4);
-    for (const d of shops) expect(d).toBeCloseTo(PARTY.SHOP_S, 0);
-  }, 30000);
-
-  it("a second match orders rounds 1 to 4 differently by its seed", () => {
-    const orders = new Set(["a", "b", "c", "d", "e", "f"].map((seed) => make(2, seed).order.slice(0, 4).join()));
-    expect(orders.size).toBeGreaterThan(1);
-    for (const seed of ["a", "b"]) expect(make(2, seed).order[4]).toBe("last");
+    expect(s.phase).toBe("intro"); expect(s.game).toBe("scramble");
+    step(s, [{ seat: 0, i: inp(s, 0, { k: "ready" })! }]);
+    expect(s.phase).toBe("intro");
+    step(s, [{ seat: 1, i: inp(s, 1, { k: "ready" })! }]);
+    expect(s.phase).toBe("count");
+    until(s, () => s.phase === "play");
+    const t0 = s.t; until(s, () => s.phase !== "play");
+    expect(s.t - t0).toBeCloseTo(Q.ROUND_S, 1);
+    expect(s.phase).toBe("standings");
+    const t = make("timeout"); until(t, () => t.phase !== "intro");
+    expect(t.t).toBeCloseTo(Q.INTRO_S, 1);
+    expect(GAMES).toEqual(["scramble", "koi", "tug", "night", "last"]);
   });
-});
-
-describe("Shoal Scramble", () => {
-  it("schools surface for 1.5 s at points the server chooses; the first net there takes the school", () => {
-    const s = make(2, "shoal");
-    toRound(s, "shoal");
-    until(s, () => s.shoals.length > 0);
-    const sh = s.shoals[0];
-    const lake0 = s.lake;
-    const ev = step(s, [{ seat: 1, i: { k: "tap", x: sh.x, y: sh.y } }, { seat: 0, i: { k: "tap", x: sh.x, y: sh.y } }]);
-    const won = ev.find((e) => e.k === "shoal") as unknown as { seat: number; n: number };
-    expect(won.seat).toBe(1); // first in the tick's order
-    expect(s.coins[1]).toBe(won.n);
-    expect(s.coins[0]).toBe(0);
-    expect(s.lake).toBe(lake0 - won.n);
-    expect(sh.until - sh.at).toBeCloseTo(PARTY.SHOAL_UP_S);
+  it("trying it first during the intro scores nothing and takes nothing from the lake", () => {
+    const s = make("practice");
+    const before = s.fish.length;
+    until(s, () => s.spots.some((p) => p.open));
+    const p = s.spots.find((x) => x.open)!;
+    step(s, [{ seat: 0, i: inp(s, 0, { k: "tap", x: p.x, y: p.y })! }]);
+    expect(p.taken).toBe(0);
+    expect(s.coins[0]).toBe(0); expect(s.fish.length).toBe(before);
   });
-
-  it("a tap too far from any school catches nothing", () => {
-    const s = make(2, "shoal2");
-    toRound(s, "shoal");
-    until(s, () => s.shoals.length > 0);
-    const sh = s.shoals[0];
-    step(s, [{ seat: 0, i: { k: "tap", x: sh.x + PARTY.TAP_R * 3, y: sh.y } }]);
-    expect(s.coins[0]).toBe(0);
-  });
-});
-
-describe("Koi Chase", () => {
-  it("every gate passed pays 1, and the first to touch the golden carp scores", () => {
-    const s = make(2, "koi");
-    toRound(s, "koi");
-    const g = s.gates[s.nextGate[0]];
-    s.boats[0].x = g.x - 5; s.boats[0].y = g.y;
-    step(s);
-    expect(s.coins[0]).toBe(1);
-    s.boats[1].x = s.koi.x; s.boats[1].y = s.koi.y;
-    const ev = step(s);
-    expect(ev.find((e) => e.k === "koiCaught")).toMatchObject({ seat: 1 });
-    expect(s.coins[1]).toBe(PARTY.KOI_COINS);
-  });
-});
-
-describe("Tug of Line", () => {
-  it("a reel inside the green pulls, outside it slips, and reels faster than the limit are dropped", () => {
-    const s = make(2, "tug");
-    toRound(s, "tug");
-    // wait for the needle to be in the green
-    until(s, () => Math.abs(s.needle) < PARTY.GREEN / 2 - 0.02);
-    const r0 = s.ropes[0].pos;
-    step(s, [{ seat: 0, i: { k: "reel" } }]);
-    const r1 = s.ropes[0].pos;
-    expect(Math.abs(r1 - r0)).toBeGreaterThan(0);
-    step(s, [{ seat: 0, i: { k: "reel" } }]); // too soon
-    expect(s.ropes[0].pos).toBe(r1);
-    until(s, () => Math.abs(s.needle) > PARTY.GREEN / 2 + 0.1);
-    s.reelAt[0] = -99;
-    const r2 = s.ropes[0].pos;
-    step(s, [{ seat: 0, i: { k: "reel" } }]);
-    expect(Math.sign(s.ropes[0].pos - r2)).toBe(-Math.sign(r1 - r0)); // slipped back
-  });
-
-  it("pairs pull on one big fish, and the winner of each pair lands it", () => {
-    const s = make(4, "tug4");
-    toRound(s, "tug");
-    expect(s.ropes.map((r) => r.seats)).toEqual([[0, 1], [2, 3]]);
-    const coins0 = [...s.coins];
-    until(s, () => s.phase !== "round", (sim) => (Math.abs(sim.needle) < PARTY.GREEN / 2 - 0.02 ? [{ seat: 0, i: { k: "reel" } }, { seat: 2, i: { k: "reel" } }] : []));
-    expect(s.coins[0] - coins0[0]).toBe(PARTY.TUG_COINS);
-    expect(s.coins[2] - coins0[2]).toBe(PARTY.TUG_COINS);
-    expect(s.coins[1]).toBe(coins0[1]);
-  });
-});
-
-describe("Lantern Night", () => {
-  it("each seat sees only the fish within its own lantern, and a dropped lantern lights a spot for everyone for 10 s", () => {
-    const s = make(2, "night");
-    toRound(s, "night");
-    s.boats[0].x = s.boats[0].tx = 200; s.boats[0].y = s.boats[0].ty = 350; s.boats[1].x = s.boats[1].tx = 800; s.boats[1].y = s.boats[1].ty = 350;
-    step(s);
-    const f0 = party.frameFor(s, 0) as { f: number[][] }, f1 = party.frameFor(s, 1) as { f: number[][] };
-    const [b0, b1] = s.boats;
-    for (const f of f0.f) expect(Math.hypot(f[0] - b0.x, f[1] - b0.y)).toBeLessThanOrEqual(PARTY.LANTERN_R + 1);
-    for (const f of f1.f) expect(Math.hypot(f[0] - b1.x, f[1] - b1.y)).toBeLessThanOrEqual(PARTY.LANTERN_R + 1);
-    expect(JSON.stringify(f0.f)).not.toBe(JSON.stringify(f1.f));
-    step(s, [{ seat: 1, i: { k: "drop" } }]);
-    const lit = s.drops[0];
-    s.boats[1].x = 500;
-    step(s);
-    const seen0 = (party.frameFor(s, 0) as { f: number[][] }).f;
-    expect(seen0.some((f) => Math.hypot(f[0] - lit.x, f[1] - lit.y) <= PARTY.DROP_R + 1)).toBe(s.fish.some((f) => Math.hypot(f.x - lit.x, f.y - lit.y) <= PARTY.DROP_R));
-    until(s, () => s.t > lit.until + 0.1);
-    expect(s.drops.length).toBe(0);
-  });
-
-  it("Muddy Water shrinks the leader's view next round", () => {
-    const s = make(2, "muddy");
-    s.coins = [10, 2];
-    toRound(s, "night");
-    const full = s.view[0];
-    s.muddy = [0]; s.view = [full * PARTY.MUDDY, full];
-    s.boats[0].x = s.boats[0].tx = 500; s.boats[0].y = s.boats[0].ty = 350; step(s);
-    for (const f of (party.frameFor(s, 0) as { f: number[][] }).f) expect(Math.hypot(f[0] - s.boats[0].x, f[1] - s.boats[0].y)).toBeLessThanOrEqual(PARTY.LANTERN_R * PARTY.MUDDY + 1);
-  });
-});
-
-describe("the shop and the variant pick", () => {
-  const toShop = (s: PartySim) => until(s, () => s.phase === "shop");
-  it("Big Net, Fast Boat and Bait cost coins and last one round", () => {
-    const s = make(2, "shop");
-    s.coins = [10, 10];
-    toShop(s);
-    step(s, [{ seat: 0, i: { k: "buy", item: "bigNet" } }]);
-    expect(s.coins[0]).toBe(10 - PARTY.SHOP.bigNet.cost);
-    expect(s.perks[0]).toContain("bigNet");
-    until(s, () => s.phase === "round");
-    expect(s.perks[0]).toContain("bigNet");
-    until(s, () => s.phase === "shop" || party.over(s));
-    expect(s.perks[0] ?? []).not.toContain("bigNet");
-  });
-
-  it("only a player behind the leader may buy Muddy Water", () => {
-    const s = make(2, "mud");
-    s.coins = [10, 6];
-    toShop(s);
-    step(s, [{ seat: 0, i: { k: "buy", item: "muddy" } }]);
-    expect(s.perks[0]).not.toContain("muddy");
-    step(s, [{ seat: 1, i: { k: "buy", item: "muddy" } }]);
-    expect(s.muddy).toEqual([0]);
-  });
-
-  it("the last-placed player picks one of two variants for the next round; nobody else can", () => {
-    const s = make(3, "variant");
-    s.coins = [9, 1, 5];
-    toShop(s);
-    expect(s.picker).toBe(1);
-    step(s, [{ seat: 0, i: { k: "variant", v: 1 } }]);
-    expect(s.variant).toBe(0);
-    step(s, [{ seat: 1, i: { k: "variant", v: 1 } }]);
-    expect(s.variant).toBe(1);
-  });
-});
-
-describe("Last Net and the lake", () => {
-  const toLast = (picks: number[], n = picks.length, fish = 220) => {
-    const s = make(n, "last", fish);
-    until(s, () => s.phase === "round" && s.game === "last");
-    const ev = step(s, picks.map((p, seat) => ({ seat, i: { k: "pick", size: p } as PartyInput })));
-    return { s, ev };
-  };
-  it("picks are secret until the round ends", () => {
-    const { s, ev } = toLast([3, 10]);
-    expect(JSON.stringify(party.frameFor(s, 1))).not.toContain('"picks"');
-    expect(JSON.stringify(eventsFor(ev, 1))).not.toMatch(/"size":3/);
-  });
-  it("if the nets together exceed the school, everyone gets 1; otherwise each gets its net; coins are doubled", () => {
-    const small = toLast([3, 6]);
-    const c0 = [...small.s.coins];
-    until(small.s, () => party.over(small.s));
-    expect(small.s.coins[0] - c0[0]).toBe(3 * PARTY.LAST_MULT);
-    expect(small.s.coins[1] - c0[1]).toBe(6 * PARTY.LAST_MULT);
-    const greedy = toLast([10, 10, 10, 10], 4, 60);
-    const g0 = [...greedy.s.coins];
-    until(greedy.s, () => party.over(greedy.s));
-    expect(greedy.s.school).toBeLessThan(40);
-    for (let i = 0; i < 4; i++) expect(greedy.s.coins[i] - g0[i]).toBe(1 * PARTY.LAST_MULT);
-  });
-  it("the school is what the first four rounds left, and the screen is told before round 5", () => {
-    const s = make(2, "carry", 220);
-    const ev = until(s, () => s.phase === "round" && s.game === "last");
-    expect(s.school).toBe(Math.round(s.lake * PARTY.SCHOOL_SHARE));
-    expect(s.lake).toBeLessThanOrEqual(220);
-    expect(ev.some((e) => e.k === "lastWarning")).toBe(true);
-  });
-  it("rounds 1, 2 and 4 draw from the lake, and the results say what is left", () => {
-    const s = make(2, "drain");
-    let took = 0;
-    until(s, () => party.over(s), (sim) => {
-      if (sim.phase === "round" && sim.game === "shoal" && sim.shoals[0]) { took++; return [{ seat: 0, i: { k: "tap", x: sim.shoals[0].x, y: sim.shoals[0].y } }]; }
-      return [];
-    });
-    expect(took).toBeGreaterThan(0);
-    expect(party.results(s).lakeLeft).toBeLessThan(220);
-    expect(party.results(s).highlights.length).toBe(3);
-  });
-});
-
-it("bots play a whole match and buy and pick like players", () => {
-  const seats: Seat[] = [{ seat: 0, name: "P0", bot: null, character: "mei" }, { seat: 1, name: "B (bot)", bot: "bot0", character: "jin" }, { seat: 2, name: "C (bot)", bot: "bot1", character: "lu" }];
-  const s = party.make("bots", seats, { fish: 220 });
-  let r = 7; const rng = () => { r = (r * 16807) % 2147483647; return r / 2147483647; };
-  while (!party.over(s)) { const ins: { seat: number; i: PartyInput }[] = []; for (const st of seats) if (st.bot) for (const i of party.bot(s, st.seat, rng)) ins.push({ seat: st.seat, i }); step(s, ins); }
-  expect(s.coins[1] + s.coins[2]).toBeGreaterThan(0);
-}, 30000);
-
-describe("v3.1: the variant pick is its own screen, and bait reaches only so far", () => {
-  it("after the standings, a 4 s pick screen comes before the shop; only the last-placed player gets the choice", () => {
-    const s = make(3, "v31-pick");
-    s.coins = [9, 1, 5];
-    until(s, () => s.phase === "pick");
-    expect(s.picker).toBe(1);
-    const t0 = s.t;
-    const fp = party.frameFor(s, 1) as { phase: string; variants: string[]; picking: boolean };
-    const fo = party.frameFor(s, 0) as { phase: string; variants: string[]; picking: boolean; picker: number };
-    expect(fp.phase).toBe("pick");
-    expect(fp.picking).toBe(true);
-    expect(fp.variants.length).toBe(2);
-    expect(fo.picking).toBe(false);
-    expect(fo.variants).toEqual([]); // the others are told who is choosing, not the choice
-    expect(fo.picker).toBe(1);
-    step(s, [{ seat: 0, i: { k: "variant", v: 1 } }]);
-    expect(s.variant).toBe(0);
-    step(s, [{ seat: 1, i: { k: "variant", v: 1 } }]);
-    expect(s.variant).toBe(1);
+  it("after rounds 1-3 a 9 s shop: 3 coins an item, for the next round only", () => {
+    const s = make("shop"); toPlay(s);
+    s.coins[0] = 7;
     until(s, () => s.phase === "shop");
-    expect(s.t - t0).toBeCloseTo(PARTY.PICK_S, 0);
+    expect(inp(s, 0, { k: "buy", item: "net" })).not.toBeNull();
+    step(s, [{ seat: 0, i: { k: "buy", item: "net" } }]);
+    expect(s.coins[0]).toBe(4);
+    expect(inp(s, 0, { k: "buy", item: "net" })).toBeNull(); // once
+    expect(inp(s, 1, { k: "buy", item: "fast" })).toBeNull(); // no coins
+    until(s, () => s.phase === "intro");
+    expect(s.round).toBe(2); expect(s.buys[0]).toEqual(["net"]);
+    toPlay(s);
+    expect(s.next[0]).toEqual(["net"]); expect(s.buys[0]).toEqual([]);
   });
+});
 
-  it("bait pulls only fish within two lantern radii of the buyer, and only for 10 s", () => {
-    const s = make(2, "v31-bait");
-    s.order[s.round] = "night";
-    s.perks[0] = ["bait"]; // bought before the round
-    until(s, () => s.phase === "round" && s.game === "night");
-    const b = s.boats[0]; b.x = b.tx = 300; b.y = b.ty = 350;
-    s.fish = [{ x: 300 + PARTY.LANTERN_R * 1.5, y: 350, h: 0 }, { x: 300 + PARTY.LANTERN_R * 3, y: 350, h: 0 }];
-    const d0 = s.fish.map((f) => Math.hypot(f.x - b.x, f.y - b.y));
-    for (let i = 0; i < 20; i++) step(s);
-    const d1 = s.fish.map((f) => Math.hypot(f.x - b.x, f.y - b.y));
-    expect(d1[0]).toBeLessThan(d0[0]); // inside two radii: pulled in
-    expect(s.baitUntil[0]).toBeCloseTo(s.t - 20 * PARTY.DT + PARTY.BAIT_S, 0);
-    // after 10 s the pull stops
-    expect(PARTY.BAIT_S).toBe(10);
-    expect(PARTY.BAIT_R).toBe(2);
+describe("the rounds", () => {
+  it("Shoal Scramble: the first tap within 8 of an open splash takes it: 2 coins and 2 fish out of the lake", () => {
+    const s = make("scramble"); toPlay(s);
+    until(s, () => s.spots.some((p) => p.open && p.taken < 0));
+    const p = s.spots.find((x) => x.open && x.taken < 0)!, before = s.fish.length;
+    step(s, [{ seat: 1, i: inp(s, 1, { k: "tap", x: p.x + 7.5, y: p.y })! }, { seat: 0, i: inp(s, 0, { k: "tap", x: p.x, y: p.y })! }]);
+    expect(p.taken).toBe(1);
+    expect(s.coins).toEqual([0, Q.SCRAMBLE_COINS]);
+    expect(before - s.fish.length).toBe(Q.SCRAMBLE_FISH);
   });
+  it("Koi Chase: gates in order pay 1 coin and 1 fish each", () => {
+    const s = make("koi"); toRound(s, 2); expect(s.game).toBe("koi"); toPlay(s);
+    const b = s.boats[0], g = s.path[0], before = s.fish.length;
+    b.x = b.tx = g[0]; b.y = b.ty = g[1]; s.koi.x = 999; step(s);
+    expect(b.gate).toBe(1); expect(s.coins[0]).toBe(Q.GATE_COINS); expect(before - s.fish.length).toBe(1);
+  });
+  it("Tug of Line: REEL inside the green +9, outside -6 and a stun; finishing pays 6, 4, 2, 1 and takes no fish", () => {
+    const s = make("tug"); toRound(s, 3); expect(s.game).toBe("tug"); toPlay(s);
+    const before = s.fish.length;
+    s.tug.needle = s.tug.zone; step(s, [{ seat: 0, i: { k: "reel" } }]);
+    expect(s.boats[0].reel).toBe(Q.REEL_UP);
+    s.tug.needle = s.tug.zone > 0.5 ? 0 : 1; s.tug.zv = 0; step(s, [{ seat: 0, i: { k: "reel" } }]);
+    expect(s.boats[0].reel).toBe(Q.REEL_UP - Q.REEL_DOWN); expect(s.boats[0].stun).toBeGreaterThan(0);
+    s.boats[1].reel = 95; s.tug.needle = s.tug.zone; step(s, [{ seat: 1, i: { k: "reel" } }]);
+    expect(s.coins[1]).toBe(6); expect(s.fish.length).toBe(before);
+  });
+  it("Lantern Night: a seat's frame holds only the fish within 16 of its boat or 14 of a dropped lantern", () => {
+    const s = make("night"); toRound(s, 4); expect(s.game).toBe("night"); toPlay(s);
+    const f0 = party.frameFor(s, 0) as { f: number[][] };
+    expect(f0.f.length).toBeLessThan(s.fish.length);
+    for (const [x, y] of f0.f) expect(seesFish(s, 0, x / 10, y / 10)).toBe(true);
+    for (const [x, y] of f0.f) expect(Math.hypot(x / 10 - s.boats[0].x, y / 10 - s.boats[0].y)).toBeLessThan(Q.NIGHT_VIEW + 0.2);
+    // a dropped lantern lights a spot for everyone
+    const b1 = s.boats[1]; step(s, [{ seat: 1, i: { k: "lantern" } }]);
+    expect(seesFish(s, 0, b1.x + 3, b1.y)).toBe(true);
+  });
+  it("the Last Net: the school is the lake / 7; picks are secret until all are in; a net that fits pays double, a torn one 1", () => {
+    for (const [a, b, fit] of [[3, 6, true], [10, 10, false]] as const) {
+      const s = make(`last-${a}-${b}`); toRound(s, 5);
+      expect(s.phase).toBe("pick");
+      s.last!.cap = 12; s.coins = [0, 0];
+      step(s, [{ seat: 0, i: inp(s, 0, { k: "pick", n: a })! }]);
+      expect(JSON.stringify(party.frameFor(s, 1))).not.toContain(`"picks":[${a}`);
+      expect((party.frameFor(s, 1) as { last: { picked: boolean[] } }).last.picked).toEqual([true, false]);
+      const before = s.fish.length;
+      step(s, [{ seat: 1, i: inp(s, 1, { k: "pick", n: b })! }]);
+      expect(s.last!.fit).toBe(fit);
+      expect(s.coins).toEqual(fit ? [a * 2, b * 2] : [1, 1]);
+      expect(before - s.fish.length).toBe(fit ? a + b : 12);
+    }
+  });
+});
+
+describe("results", () => {
+  it("score = coins x the tier of next spring; the room keeps what is left, carried through nextSpring()", () => {
+    const s = make("score"); s.coins = [10, 4]; s.phase = "end";
+    const r = party.results(s), tier = tierOf(nextSpring(s.fish.length));
+    expect(r.lakeLeft).toBe(s.fish.length); expect(party.breeds).toBe(false);
+    expect(r.seats.map((x) => x.score)).toEqual([Math.round(10 * tier.mult), Math.round(4 * tier.mult)]);
+  });
+  it("bots play whole parties to the end, and a replay of the stored inputs is exact", () => {
+    for (const seed of ["pb-a", "pb-b"]) {
+      const seats = botsOf(4), s = party.make(seed, seats, LAKE);
+      const inputs = new Map<number, { seat: number; i: unknown }[]>();
+      let evs: GameEvent[] = [];
+      for (let tick = 0; !party.over(s) && tick < 40000; tick++) {
+        const applied: { seat: number; i: PartyInput }[] = [];
+        for (const st of seats) for (const raw of party.bot(s, st.seat, botStream(seed, st.bot!, tick, st.seat))) { const ok = party.input(s, st.seat, raw); if (ok) applied.push({ seat: st.seat, i: ok }); }
+        if (applied.length) inputs.set(tick, applied);
+        evs = evs.concat(eventsFor(party.step(s, applied), 0));
+      }
+      expect(party.over(s)).toBe(true);
+      expect(s.coins.some((c) => c > 0)).toBe(true);
+      expect(party.results(replay(party, seed, seats, LAKE, inputs))).toEqual(party.results(s));
+    }
+  }, 120000);
 });

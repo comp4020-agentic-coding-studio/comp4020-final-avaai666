@@ -56,13 +56,14 @@ describe("highlights travel as codes", () => {
   }
 });
 
-describe("Fishing Party names its round and variant by code", () => {
-  it("frames carry the variant's index, so a page words the round and variant in its own language", () => {
+describe("Fishing Party names its round by code", () => {
+  // party 2.0 (rule change 1): the rounds always run in one order and the
+  // variant pick is gone; a frame carries the game's id and each page words it
+  it("frames carry the game's id, so a page words the round in its own language", () => {
     const s: PartySim = party.make("v", people(2), { fish: 220 });
-    for (let i = 0; i < 200 && s.phase !== "round"; i++) party.step(s, []);
-    const f = party.frameFor(s, 0) as { game: string; vi: number };
-    expect(["shoal", "koi", "tug", "night", "last"]).toContain(f.game);
-    expect([0, 1]).toContain(f.vi);
-    expect(DICT.zh[`y_var_${f.game}_${f.vi}`]).toBeTruthy();
+    for (let i = 0; i < 2000 && s.phase !== "play"; i++) party.step(s, []);
+    const f = party.frameFor(s, 0) as { game: string; round: number };
+    expect(f.game).toBe("scramble"); expect(f.round).toBe(1);
+    for (const g of ["scramble", "koi", "tug", "night", "last"]) for (const lang of ["en", "zh"] as const) expect(DICT[lang][`y2_g_${g}`], `${lang} ${g}`).toBeTruthy();
   });
 });
