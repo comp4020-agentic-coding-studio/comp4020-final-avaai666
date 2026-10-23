@@ -8,10 +8,10 @@ import { openStream, post } from "./play-helpers.ts";
 import { A0, blockedAt, nr, Y0, ZONES } from "../src/lib/lake-world.ts";
 import { RUSH } from "../src/lib/game-constants.ts";
 
-// a steer target, in the v5 lake's own 92 x 64 space (rule change 2): open
+// a steer target, in the v5 lake's own space (rule change 2): open
 // water, not a zone, the island or winter ice, so a wrong point fails loudly
 // here rather than timing out below if the shape ever changes again
-const STEER_X = 43, STEER_Y = 21;
+const STEER_X = 30, STEER_Y = 15; // rule change 8 (the lake at 0.7) moved (43, 21) past open water; this is the same spot
 const isOpenWater = (x: number, y: number) =>
   nr(x, y) < 0.6 && !blockedAt(x, y, 0) && !blockedAt(x, y, 3) && !Object.values(ZONES).some((z) => Math.hypot(x - z.x, y - z.y) < z.r);
 if (!isOpenWater(STEER_X, STEER_Y)) throw new Error(`(${STEER_X}, ${STEER_Y}) is not open water in the current lake shape`);
