@@ -79,6 +79,7 @@ const en = {
 
   // ---- not found ----
   nf_title: "Not found", nf_p: "There is nothing at this address.",
+  play_err_pick: "Pick one of the four games.", play_err_soon: "That game is not built yet: its card says when it is coming.",
 
   // ---- the four games: cards and rules ----
   rush_name: "Boat Rush", rush_one: "Sail out, net fish, and get them home before the gong.", rush_choice: "One more cast, or home now?",
@@ -411,6 +412,7 @@ const zh: Record<Key, string> = {
   readme_en_note: "README 只有英文版。",
 
   nf_title: "找不到", nf_p: "这个网址什么也没有。",
+  play_err_pick: "请从四个游戏里选一个。", play_err_soon: "这个游戏还没做好，卡片上写着什么时候上线。",
 
   rush_name: "开船抢鱼", rush_one: "开船出去撒网，在锣响之前把鱼运回家。", rush_choice: "再撒一网，还是现在回家？",
   rush_goal: "四个季节，每季 45 秒。卸到自家码头的鱼最多的人赢。锣响时还在船上的鱼会坏掉。",

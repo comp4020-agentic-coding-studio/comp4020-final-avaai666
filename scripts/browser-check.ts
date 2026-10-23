@@ -22,9 +22,8 @@ async function matchCheck(mode: string): Promise<void> {
   page.on("console", (msg) => { if (msg.type() === "error") errors.push(msg.text()); });
   page.on("pageerror", (err) => errors.push(String(err)));
 
-  await page.goto(`${base}/play`);
-  await page.click(`.mode-btn[data-mode='${mode}']`);
-  await page.click("#create");
+  await page.goto(`${base}/`); // the one front door
+  await page.click(`.games form:has(input[name=mode][value='${mode}']) button[type=submit]`);
   await page.waitForURL(/\/play\/[A-Z]{4}$/);
   await page.fill("#name", "Mei");
   await page.click(".joinform button[type=submit]");

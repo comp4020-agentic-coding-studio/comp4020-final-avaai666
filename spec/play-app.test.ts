@@ -6,14 +6,26 @@ import { expect, inject, it } from "vitest";
 const baseUrl = inject("baseUrl");
 const at = (path: string): URL => new URL(path, baseUrl);
 
-it("play 1. the lobby shows the four games, each with a Start or its date, and the six fishers", async () => {
-  const res = await fetch(at("/play"));
-  expect(res.status).toBe(200);
+// One front door (CLAUDE.md): "/" is the game's home and lists the four
+// games in both languages. /play was v4's English-only lobby with rush 1.0's
+// rules; Ava approved (23 Oct) sending it to "/" instead of keeping a second,
+// stale front door.
+it("play 1. /play sends you to the one front door, which shows the four games in either language", async () => {
+  const res = await fetch(at("/play"), { redirect: "manual" });
+  expect(res.status).toBe(303);
+  expect(res.headers.get("location")).toBe("/");
+  for (const [lang, names] of [["en", ["Boat Rush", "Fishing Party", "Who&#39;s Poaching", "Lake Holdings"]], ["zh", ["开船抢鱼", "钓鱼派对", "谁在偷鱼", "抢地盘经营"]]] as const) {
+    const html = await (await fetch(at("/"), { headers: { cookie: `lang=${lang}` } })).text();
+    for (const name of names) expect(html, `${lang}: ${name}`).toContain(name);
+  }
+});
+
+it("play 1b. a POST /play with an unknown game answers on the front door, in the visitor's language", async () => {
+  const res = await fetch(at("/play"), { method: "POST", redirect: "manual", headers: { cookie: "lang=zh", "content-type": "application/x-www-form-urlencoded" }, body: "mode=nope" });
+  expect(res.status).toBe(400);
   const html = await res.text();
-  for (const name of ["Boat Rush", "Fishing Party", "Who&#39;s Poaching", "Lake Holdings"]) expect(html).toContain(name);
-  for (const id of ["mei", "wang", "jin", "lu", "lian", "shitou"]) expect(html).toContain(`value="${id}"`);
-  expect(html).toContain("The choice that matters:");
-  expect(html).toMatch(/Coming|Play/);
+  expect(html).toContain('lang="zh"');
+  expect(html).not.toContain("Pick one of the four games.");
 });
 
 it("play 2. a cross-origin POST is refused with 403", async () => {

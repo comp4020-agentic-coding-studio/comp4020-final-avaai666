@@ -6,7 +6,7 @@ import { esc } from "./pages.ts";
 import type { RoomView } from "./lib/game-hub.ts";
 import { DICT, t, type Lang } from "./lib/i18n.ts";
 import { worldForPage } from "./lib/lake-world.ts";
-import { CREW, ICONS, portrait } from "./static/play/art.js";
+import { CREW, portrait } from "./static/play/art.js";
 import { WORLD5_MODES } from "./static/play/world-select.js";
 
 export interface ModeCard {
@@ -72,44 +72,6 @@ function page(title: string, body: string, bodyClass: string, scripts: string): 
 }
 
 const seal = `<div class="seal" aria-hidden="true"><span>明</span><span>年</span><span>无</span><span>鱼</span></div>`;
-const statusOf = (m: ModeCard, ready: string[]): string =>
-  ready.includes(m.id) ? `<span class="status live">Playable now</span>` : `<span class="status soon">Coming: ${esc(m.due)}</span>`;
-
-function modeCardHtml(m: ModeCard, ready: string[]): string {
-  return `<article class="mode-info" data-mode="${m.id}" hidden>
-      <h2>${esc(m.name)}<span lang="zh">${m.zh}</span></h2>
-      <p class="tag">${esc(m.tag)}</p>
-      <div class="facts"><span class="fact">${esc(m.players)}</span><span class="fact">${esc(m.len)}</span>${statusOf(m, ready)}</div>
-      <p class="goal"><b>How you win</b>${esc(m.goal)}</p>
-      <ol class="flow">${m.flow.map((f) => `<li>${esc(f)}</li>`).join("")}</ol>
-      <p class="choice"><b>The choice that matters:</b> ${esc(m.choice)}</p>
-    </article>`;
-}
-
-export function lobbyPage(ready: string[], error?: string): string {
-  const crew = CREW;
-  return page("Next Year, No Fish · Play", `<div class="app">
-  <div class="stage" id="stage"><canvas id="gl" aria-label="The lake, drawn in 3D"></canvas><div class="tags" id="tags"></div></div>
-  <div class="ui" id="ui">
-    <header class="brand">${seal}<div><h1>Next Year, No Fish</h1><p>One shared lake, four ways to play it. <span lang="zh">明年无鱼</span></p></div></header>
-    <form method="post" action="/play" id="open">
-      <div><h3 class="section-h">Choose a game</h3>
-        <div class="modes" role="radiogroup" aria-label="Game modes">${MODE_CARDS.map((m, i) => `<label class="mode-btn" data-mode="${m.id}"><input type="radio" name="mode" value="${m.id}" ${i === 0 ? "checked" : ""} />${ICONS[m.id]}<b>${esc(m.name)}</b><i lang="zh">${m.zh}</i><small class="${ready.includes(m.id) ? "live" : "soon"}">${ready.includes(m.id) ? "Play" : `Coming ${esc(m.due)}`}</small></label>`).join("")}</div>
-      </div>
-      ${MODE_CARDS.map((m) => modeCardHtml(m, ready)).join("")}
-      <section class="crew"><h3 class="section-h">Pick your fisher</h3>
-        <div class="roster">${crew.map((c, i) => `<label class="face-btn" title="${esc(c.name)}"><input type="radio" name="character" value="${c.id}" ${i === 0 ? "checked" : ""} />${portrait(c.id, c.name)}</label>`).join("")}</div>
-        <div class="heroes">${crew.map((c) => `<figure class="hero" data-me="${c.id}" hidden><div class="frame">${portrait(c.id, c.name)}</div><figcaption><b>${esc(c.name)} <span class="zh" lang="zh">${c.zh}</span></b><p><span class="swatch" style="background:${c.color}"></span>${esc(c.line)}</p></figcaption></figure>`).join("")}</div>
-      </section>
-      <div class="cta"><button class="btn primary" type="submit" id="create">Open a room</button><button class="btn ghost" type="button" id="joinbtn">Join with a code</button></div>
-      <p class="lake-note">Every room has its own lake, and it remembers: the next match starts with what the last one left.</p>
-      ${error ? `<p class="toast" role="alert">${esc(error)}</p>` : `<p class="toast" id="toast" role="status"></p>`}
-    </form>
-    <p class="note"><a href="/">The original Next Year, No Fish (five years on one lake)</a> · <a href="/b">Quick Catch (2D, experimental)</a></p>
-  </div>
-</div>`, "play lobby", `<script type="module" src="/static/play/lobby.js"></script>`);
-}
-
 // inner: only the game's stage, its boot data and its script, for the site's
 // room page (src/site-pages.ts), which has the join form and the top bar
 export function roomPage(view: RoomView, error?: string, lang: Lang = "en"): string {

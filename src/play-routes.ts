@@ -10,9 +10,9 @@ import type { GameHub } from "./lib/game-hub.ts";
 import type { GameStore } from "./lib/game-store.ts";
 import { PLAY_INPUT_RATE } from "./lib/game-constants.ts";
 import { log } from "./log.ts";
-import { lobbyPage, roomPage } from "./play-pages.ts";
+import { roomPage } from "./play-pages.ts";
 import { langFrom, t } from "./lib/i18n.ts";
-import { noRoomSitePage, roomSitePage } from "./site-pages.ts";
+import { homePage, noRoomSitePage, roomSitePage } from "./site-pages.ts";
 
 const CODE = /^\/play\/([BCDFGHJKLMNPQRSTVWXZ]{4})(\/game|\/join|\/start|\/stop|\/mode|\/in|\/events|\/summary\.json)?$/;
 const COOKIE_MAX_AGE_S = 365 * 24 * 60 * 60;
@@ -65,7 +65,8 @@ export function createPlayRoutes(hub: GameHub, store: GameStore, staticDir: stri
       } catch { sendJson(res, 404, { ok: false, reason: "not_found" }); }
       return true;
     }
-    if (path === "/play" && method === "GET") { sendHtml(res, 200, lobbyPage(hub.readyModes())); return true; }
+    // one front door (CLAUDE.md): "/" is the game's home, in both languages
+    if (path === "/play" && method === "GET") { redirect(res, "/"); return true; }
     // "Join with a code" on the home page: a plain GET form
     if (path === "/play/join" && method === "GET") {
       const raw = (new URL(req.url ?? "/", "http://x").searchParams.get("code") ?? "").trim().toUpperCase();
@@ -75,8 +76,9 @@ export function createPlayRoutes(hub: GameHub, store: GameStore, staticDir: stri
     if (path === "/play" && method === "POST") {
       const form = new URLSearchParams(await readBody(req, 4096));
       const mode = form.get("mode") ?? "";
-      if (!modeIds.includes(mode)) { sendHtml(res, 400, lobbyPage(hub.readyModes(), "Pick one of the four games.")); return true; }
-      if (!hub.knows(mode)) { sendHtml(res, 409, lobbyPage(hub.readyModes(), "That game is not built yet: its card says when it is coming.")); return true; }
+      const lang = langFrom(req.headers.cookie);
+      if (!modeIds.includes(mode)) { sendHtml(res, 400, homePage(lang, t(lang, "play_err_pick"))); return true; }
+      if (!hub.knows(mode)) { sendHtml(res, 409, homePage(lang, t(lang, "play_err_soon"))); return true; }
       const { code } = hub.createRoom(mode);
       redirect(res, `/play/${code}`);
       return true;
@@ -108,7 +110,7 @@ export function createPlayRoutes(hub: GameHub, store: GameStore, staticDir: stri
         return true;
       }
       log({ event: "refused", action: "play_join", room: code, reason: r.reason });
-      if (r.reason === "no_room") { redirect(res, "/play"); return true; }
+      if (r.reason === "no_room") { redirect(res, "/"); return true; }
       const lang = langFrom(req.headers.cookie), view = hub.view(code, null)!;
       sendHtml(res, 409, roomSitePage(lang, view, hub.history(code) ?? [], originOf(req), t(lang, `join_${r.reason}`)));
       return true;
