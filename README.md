@@ -55,10 +55,18 @@ Enforced, by checks that fail if the claim breaks:
   page of the current site renders in both languages
   (`spec/unit/site-pages.test.ts`).
 
-Measured, not enforced, in 300 bot matches per game
-(`docs/checks/balance-2026-10-15.md`): no strategy won over 41% of four-seat
-Boat Rush, Party or Holdings games; poaching fishers who vote on buoy evidence
-won 67.7%, and 0% if they always skip. These are bots, not people.
+Measured, not enforced, in 300 bot matches per table (the 2.0 modes;
+the v4 numbers stay in `docs/checks/balance-2026-10-15.md`). These are claims
+about the modes' own bots and seeds, not about people:
+- Boat Rush (`docs/checks/balance-rush2-2026-10-23.md`): no bot kind won over
+  41% of random-mix tables (greedy 28.2%); all-keeper tables ended Fair or
+  better in 76.0%, all-greedy in 50.7%.
+- Fishing Party (`docs/checks/balance-party2-2026-10-24.md`): no shop habit
+  won over 40% (Fast Boat always 35.7%).
+- Who's Poaching (`docs/checks/balance-poach2-2026-10-23.md`): fishers won
+  74.3%, and 45.0% if they always skip the vote.
+- Lake Holdings (`docs/checks/balance-hold2-2026-10-24.md`): the greedy bot
+  won 44.3% of random-mix tables, over the 41% target; not yet tuned.
 
 Judged, by watching people: whether they name the choice untold, change plans
 for others, and want a rematch.

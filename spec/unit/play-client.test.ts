@@ -84,6 +84,26 @@ describe("Lake Holdings", () => {
   });
 });
 
+describe("Lake Holdings' ceremony", () => {
+  beforeEach(() => { dom(); });
+
+  it("says the tier multiplies fish and tiles, not fish home, in either language", async () => {
+    const hold = await importJs("../../src/static/play/hold.js");
+    for (const lang of ["en", "zh"] as const) {
+      dom();
+      const { api } = ui(lang);
+      const seats = [{ name: "Ava", character: "mei" }, { name: "Bo", character: "jin" }];
+      const world = Object.assign(fakeWorld5(), { canvas: document.createElement("canvas") });
+      const mode = hold.mount({ world, sound: api.sound, ui: api, send: () => {}, post: () => {}, view: () => ({ mySeat: 0, seats, code: "ABCD" }) });
+      const overlay = document.createElement("div");
+      mode.results({ results: { seats: [{ seat: 0, score: 12, base: 10, fish: 7, tiles: 3 }, { seat: 1, score: 6, base: 5, fish: 3, tiles: 2 }], lakeAfter: 200, highlights: [], extra: { next: 230, left: { a: 180 }, ledger: [{ seat: 0, home: 7 }, { seat: 1, home: 3 }] } }, code: "ABCD" }, overlay);
+      overlay.querySelector<HTMLElement>("[data-cer-skip]")?.click();
+      expect(overlay.textContent).toContain(t(lang, "h2_cer_mult", { mult: 1.2, tier: t(lang, "cer_v_rich") }).slice(0, 4));
+      expect(overlay.textContent).not.toContain(t(lang, "cer_step3_mult", { mult: 1.2, tier: t(lang, "cer_v_rich") }));
+    }
+  });
+});
+
 describe("Who's Poaching", () => {
   beforeEach(() => { dom(); });
 

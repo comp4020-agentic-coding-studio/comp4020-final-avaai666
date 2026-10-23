@@ -411,6 +411,8 @@ export function createHandler({ store, hub, lakeStore, lakeHub, now, readmeHtml,
     if (boat && (path === "/b" || path.startsWith("/b/")) && (await boat(req, res, path, method ?? "GET"))) return;
     if (play && (path === "/play" || path.startsWith("/play/") || path.startsWith("/static/play/") || path.startsWith("/static/vendor/")) && (await play(req, res, path, method ?? "GET"))) return;
 
+    // browsers ask every site for this; an empty answer keeps a 404 out of every page's console
+    if (path === "/favicon.ico" && method === "GET") { res.writeHead(204, { "cache-control": "public, max-age=86400" }); res.end(); return; }
     // "/" is the current game's home; the five-year lake's home is /classic
     if (path === "/" && method === "GET") return sendHtml(res, 200, homePage(langFrom(req.headers.cookie)));
     if (path === "/classic" && method === "GET") {

@@ -219,7 +219,7 @@ export function mount({ world, sound, ui, send, view, post }) {
     const tierOf = (n) => { for (const [min, id, mult] of W.tiers) if (n >= min * W.k) return { id, mult }; return { id: "none", mult: 0.5 }; };
     const next = x.next ?? r.lakeAfter, tier = tierOf(next);
     const data = {
-      a: x.left?.a ?? r.lakeAfter, y: 0, next, tier, unit: t("h2_unit"),
+      a: x.left?.a ?? r.lakeAfter, y: 0, next, tier, unit: t("h2_unit"), multKey: "h2_cer_mult", // fish harvested + tiles, not fish home
       ledger: (x.ledger ?? []).map((l) => ({ seat: l.seat, name: nameOf(l.seat), character: charOf(l.seat), isMe: l.seat === me(), home: l.home, young: 0, spared: 0 })),
       fairShare: Math.max(1, Math.round((x.ledger ?? []).reduce((n, l) => n + l.home, 0) / Math.max(1, (x.ledger ?? []).length))),
       titles: [],

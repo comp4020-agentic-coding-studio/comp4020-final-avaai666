@@ -45,3 +45,9 @@ it("site 5. with lang=zh, / is the Chinese home", async () => {
   expect(html).toContain("和朋友一起玩");
   expect(html).not.toContain("Play with friends");
 });
+
+it("site 6. /favicon.ico answers without an error, so no page logs a 404 in the console", async () => {
+  // browsers ask every site for /favicon.ico; a 404 shows as a console error on every page
+  const res = await fetch(at("/favicon.ico"));
+  expect(res.status).toBe(204);
+});
