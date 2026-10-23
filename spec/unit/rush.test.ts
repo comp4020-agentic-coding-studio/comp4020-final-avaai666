@@ -23,7 +23,7 @@ const addFish = (s: RushSim, x: number, y: number, n: number, spread = 1) => {
   s.schools[0].x = s.schools[0].tx = x; s.schools[0].y = s.schools[0].ty = y; s.schools[0].vx = s.schools[0].vy = 0; s.schools[0].t = 999;
   for (let i = 0; i < n; i++) {
     const fx = (((i * 7) % 5) - 2) * spread / 2, fy = (((i * 3) % 5) - 2) * spread / 2;
-    s.fish.push({ id: s.nextId++, x: x + fx, y: y + fy, h: 0, adult: true, born: -99, cool: 99, scare: 0, sx: 0, sy: 0, big: false, school: 0, ox: fx, oy: fy, ph: 0 });
+    s.fish.push({ id: s.nextId++, x: x + fx, y: y + fy, h: 0, adult: true, scare: 0, sx: 0, sy: 0, big: false, school: 0, ox: fx, oy: fy, ph: 0 });
   }
 };
 // fast-forward past the rest and market of the current season, choosing no card, into the next season
@@ -434,15 +434,13 @@ describe("the ending: next spring, the counterfactual and titles", () => {
 
   it("a hand-computed small example: two seasons, one breed, then one forecast", () => {
     // spring: starts at 100 adults, 20 young; 12 fish caught (10 adult, 2
-    // young), 6 born live during play, none reclaimed; gong at 94 adults,
-    // 24 young (100 - 10 + 0 adult-side is wrong to hand-check against
-    // gongA directly, since live births and maturing blur adult/young —
-    // gongA/gongY are simply what the entry says, as the real sim would
-    // record). Spring breeds, with a 10% Fish Ladder bonus.
-    const spring: SeasonHistory = { startA: 100, startY: 20, caught: 12, young: 2, liveBorn: 6, reclaimed: 0, gongA: 94, gongY: 24, bred: true, bonus: 0.1, reedsExtra: 2 };
+    // young) is the only way the population changes mid-season now, so
+    // gongA/gongY is exactly startA - (caught - young) and startY - young:
+    // 90 adults, 18 young. Spring breeds, with a 10% Fish Ladder bonus.
+    const spring: SeasonHistory = { startA: 100, startY: 20, caught: 12, young: 2, gongA: 90, gongY: 18, bred: true, bonus: 0.1, reedsExtra: 2 };
     // winter: never breeds (bred: false) — its own gongA/gongY is the only
     // thing that matters, since nextSpring() only forecasts once, at the end
-    const winter: SeasonHistory = { startA: 0, startY: 0, caught: 9, young: 1, liveBorn: 3, reclaimed: 0, gongA: 180, gongY: 15, bred: false, bonus: 0, reedsExtra: 0 };
+    const winter: SeasonHistory = { startA: 0, startY: 0, caught: 9, young: 1, gongA: 180, gongY: 15, bred: false, bonus: 0, reedsExtra: 0 };
 
     // scale 1: spring breeds breed(94, 24, 0.1), with +2 Reed Bed fish added
     // to the born count; winter's catch contributes nothing extra (scale 1
@@ -476,10 +474,64 @@ describe("the ending: next spring, the counterfactual and titles", () => {
       }
       expect(s.history.length).toBe(4);
       for (let season = 0; season < 4; season++) expect(s.history[season].caught).toBe(caughtBySeason[season]);
-      // and the population identity: no fish unaccounted for, mid-season
-      for (const h of s.history) expect(h.gongA + h.gongY).toBe(h.startA + h.startY + h.liveBorn + h.reclaimed - h.caught);
+      // the population identity, now exact: no breeding or maturing or
+      // respawn mid-season, so a catch is the only way s.fish changes
+      for (const h of s.history) expect(h.gongA + h.gongY).toBe(h.startA + h.startY - h.caught);
     }
   }, 30000);
+});
+
+describe("no breeding or maturing during play (bug fix: a rush 1.0 leftover against DESIGN and the prototype)", () => {
+  it("during a season, the fish count only ever goes down", () => {
+    for (const seed of ["noplaybreed-1", "noplaybreed-2", "noplaybreed-3"]) {
+      const seats: Seat[] = Array.from({ length: 4 }, (_, i) => ({ seat: i, name: `B${i}`, bot: `bot${i}`, character: "mei" }));
+      const s = makeWithOpts(seed, seats, { fish: 280, adults: 224, young: 56 }, { botKinds: ["greedy", "greedy", "greedy", "greedy"] });
+      let prevCount = s.fish.length, wasPlay = s.phase === "play";
+      for (let tick = 0; !rush.over(s) && tick < 20000; tick++) {
+        const applied: { seat: number; i: RushInput }[] = [];
+        for (const st of seats) for (const raw of rush.bot(s, st.seat, botStream(seed, st.bot!, tick, st.seat))) { const ok = rush.input(s, st.seat, raw); if (ok) applied.push({ seat: st.seat, i: ok }); }
+        rush.step(s, applied);
+        if (wasPlay && s.phase === "play") expect(s.fish.length).toBeLessThanOrEqual(prevCount); // the breed happens exactly on the play -> rest transition, outside this check
+        prevCount = s.fish.length; wasPlay = s.phase === "play";
+      }
+    }
+  }, 30000);
+
+  it("fish at the season start minus fish at the gong equals the fish taken that season, exactly", () => {
+    const seats: Seat[] = [0, 1, 2, 3].map((i) => ({ seat: i, name: `B${i}`, bot: `bot${i}`, character: "mei" }));
+    const seed = "exact-conserve";
+    const s = makeWithOpts(seed, seats, { fish: 280, adults: 224, young: 56 }, { botKinds: ["greedy", "keeper", "steady", "greedy"] });
+    for (let tick = 0; !rush.over(s) && tick < 20000; tick++) {
+      const applied: { seat: number; i: RushInput }[] = [];
+      for (const st of seats) for (const raw of rush.bot(s, st.seat, botStream(seed, st.bot!, tick, st.seat))) { const ok = rush.input(s, st.seat, raw); if (ok) applied.push({ seat: st.seat, i: ok }); }
+      rush.step(s, applied);
+    }
+    for (const h of s.history) expect(h.startA + h.startY - h.caught).toBe(h.gongA + h.gongY);
+  }, 30000);
+
+  it("no young fish becomes an adult before the rest", () => {
+    const seats: Seat[] = [0, 1, 2, 3].map((i) => ({ seat: i, name: `B${i}`, bot: `bot${i}`, character: "mei" }));
+    const seed = "no-early-mature";
+    const s = makeWithOpts(seed, seats, { fish: 280, adults: 0, young: 100 }, { botKinds: ["steady", "steady", "steady", "steady"] });
+    let sawAnyYoung = false;
+    for (let tick = 0; s.phase === "play" && tick < 1200; tick++) {
+      if (s.fish.some((f) => !f.adult)) sawAnyYoung = true;
+      const applied: { seat: number; i: RushInput }[] = [];
+      for (const st of seats) for (const raw of rush.bot(s, st.seat, botStream(seed, st.bot!, tick, st.seat))) { const ok = rush.input(s, st.seat, raw); if (ok) applied.push({ seat: st.seat, i: ok }); }
+      const stillPlaying = s.phase === "play";
+      rush.step(s, applied);
+      // every fish that started young is still young for as long as the step stayed in "play" (the
+      // step that crosses into the gong correctly matures everyone at once — that's the rest's job)
+      if (stillPlaying && s.phase === "play") expect(s.fish.every((f) => !f.adult)).toBe(true);
+    }
+    expect(sawAnyYoung).toBe(true); // the test actually had young fish to watch
+  });
+
+  it("the prototype's first-gong young count: exactly the starting young, no more (no in-season births)", () => {
+    const s = make("first-gong-young", 2, 280); // 224 adults, 56 young, matching the prototype's A0/Y0 ratio closely enough to isolate the young count
+    while (s.phase === "play") step(s);
+    expect(s.history[0].gongY).toBe(56);
+  });
 });
 
 describe("the lake and the record", { timeout: 30000 }, () => {

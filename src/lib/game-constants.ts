@@ -156,19 +156,17 @@ export const RUSH = {
   DT: 0.05, // a tick, seconds (20 a second)
   SEASONS: 4, SEASON_S: 45, RUSH_S: 10, MARKET_S: 14, REST_S: 4.5, REVEAL_S: 2.6, // the market's reveal pause once it closes
   HOLD: 12, SPEED: 15, LOAD_SLOW: 0.35, ACCEL: 6, // a full hold is 35% slower
-  NET_R: 3.5, NET_AHEAD: 4, SINK: 0.5, CAST_CD: 1.0, NET_MAX: 6, SCATTER_R: 2.2, // at most 6 fish a cast; a closing net scares fish within this many net radii
+  NET_R: 3.5, NET_AHEAD: 4, SINK: 0.38, CAST_CD: 1.0, NET_MAX: 6, SCATTER_R: 2.2, // the net closes 0.38 s after a cast (prototype's rCloseNet); at most 6 fish a cast; a closing net scares fish within this many net radii
   DASH_S: 0.4, DASH_MULT: 2.4, DASH_CD: 4,
   RAM_R: 3.4, RAM_DROP: 3, STUN: 0.6, SHIELD: 3,
   DOCK_R: 4, SAFE_R: 11, UNLOAD_EVERY: 0.12, // no ram within 11 of a dock
   LOOSE_S: 8, PICK_R: 2.6,
   KOI_VALUE: 5, KOI_FOR: 10, KOI_STOP: 12, // no golden carp in the last 12 s of a season
-  // SIGHT/MATE/SEP are tuned for the same average neighbour count as rush
-  // 1.0's (about 9, measured directly): schools cluster, so density near a
-  // school centre is much higher than the lake-wide average, and the same
-  // lake-width ratio rush 1.0 used (scaled naively to this much smaller
-  // lake) gave ~64 neighbours per fish, making moveFish's O(fish x
-  // neighbours) cost per tick far too slow for a full match.
-  SIGHT: 0.5, MATE: 0.16, SEP: 0.08, V_ADULT: 4.2, V_FRY: 2.6, BREED_CHANCE: 0.02, COOL: 6, MATURE_S: 20, SHALLOW: 0.72,
+  // SEP keeps fish from stacking exactly on top of each other inside a
+  // school; fish breed and mature only at the rest (DESIGN.md, the
+  // prototype), never mid-season, so no mating/cooldown/maturing constant
+  // lives here any more.
+  SEP: 0.08, V_ADULT: 4.2, V_FRY: 2.6, SHALLOW: 0.72,
   BIG_SHARE: 0.08, BIG_MULT: 2, // 8% of adults are worth 2
   CHAIN_S: 2.6, CHAIN_BONUS: 1, // a chain of 3+ fish within 2.6 s adds 1
   REROLL: 2, // banked fish
