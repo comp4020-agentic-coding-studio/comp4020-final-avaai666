@@ -159,7 +159,7 @@ export const RUSH = {
   NET_R: 3.5, NET_AHEAD: 4, SINK: 0.38, CAST_CD: 1.0, NET_MAX: 6, SCATTER_R: 2.2, // the net closes 0.38 s after a cast (prototype's rCloseNet); at most 6 fish a cast; a closing net scares fish within this many net radii
   DASH_S: 0.4, DASH_MULT: 2.4, DASH_CD: 4,
   RAM_R: 3.4, RAM_DROP: 3, STUN: 0.6, SHIELD: 3,
-  DOCK_R: 4, SAFE_R: 11, UNLOAD_EVERY: 0.12, // no ram within 11 of a dock
+  DOCK_R: 6.5, SAFE_R: 11, UNLOAD_EVERY: 0.1, // unloading starts within 6.5 of the dock (prototype's UNLOAD_R), one fish every 0.1 s; no ram within 11 of a dock
   LOOSE_S: 8, PICK_R: 2.6,
   KOI_VALUE: 5, KOI_FOR: 10, KOI_STOP: 12, // no golden carp in the last 12 s of a season
   // SEP keeps fish from stacking exactly on top of each other inside a

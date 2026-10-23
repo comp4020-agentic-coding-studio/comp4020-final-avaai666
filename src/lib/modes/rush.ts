@@ -43,8 +43,8 @@ interface Loose { id: number; x: number; y: number; vx: number; vy: number; valu
 interface Koi { x: number; y: number; h: number; until: number }
 interface Stats { caught: number; home: number; trips: number; bestTrip: number; lost: number; rams: number; rammed: number; scooped: number; koi: number; youngKilled: number; youngSpared: number }
 interface Boat {
-  seat: number; x: number; y: number; h: number; vx: number; vy: number; tx: number; ty: number;
-  hold: number[]; castCd: number; dashT: number; dashCd: number; stun: number; shield: number; unloadT: number;
+  seat: number; x: number; y: number; h: number; speed: number; vx: number; vy: number; tx: number; ty: number;
+  hold: number[]; castCd: number; dashT: number; dashCd: number; stun: number; shield: number; unloadT: number; trawlT: number;
   docked: boolean; tripValue: number; banked: number; cards: CardId[]; combo: number; lastCatch: number;
   stats: Stats; firstScoreAt: number | null;
 }
@@ -80,10 +80,11 @@ const castCdOf = (b: Boat): number => Q.CAST_CD * (has(b, "quickHands") ? Q.CARD
 const koiValue = (b: Boat): number => (has(b, "goldHook") ? Q.CARDS.goldHook.koiValue! : Q.KOI_VALUE);
 const takesYoung = (b: Boat): boolean => (has(b, "fineMesh") || has(b, "trawl")) && !has(b, "release");
 const speedMult = (b: Boat): number => Q.SPEED * (has(b, "fastHull") ? Q.CARDS.fastHull.speed! : 1);
-// the boat's actual sailing speed right now (prototype's speedOf()): a full
-// hold is LOAD_SLOW slower. Used by a bot to judge how long the trip home
-// will really take, not a flat distance-ignoring constant.
-const speedOf = (b: Boat): number => speedMult(b) * (1 - Q.LOAD_SLOW * (b.hold.length / holdMax(b)));
+// the boat's current top speed (prototype's speedOf()): a full hold is
+// LOAD_SLOW slower, a dash multiplies it. This is steerBoat()'s maxSpeed,
+// and also what a bot uses to judge how long the trip home will really
+// take (not a flat distance-ignoring constant).
+const speedOf = (b: Boat): number => speedMult(b) * (1 - Q.LOAD_SLOW * (b.hold.length / holdMax(b))) * (b.dashT > 0 ? Q.DASH_MULT : 1);
 const holdValue = (b: Boat): number => b.hold.reduce((n, v) => n + v, 0);
 
 const NURSERY_FIRST = 12; // schools 0-11 are adult schools, 12-15 nursery
@@ -174,7 +175,7 @@ function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number
   seats.forEach((_, seat) => {
     const d = dockPos(seat, players), x = d.x - Math.cos(d.inward) * 2, y = d.y - Math.sin(d.inward) * 2;
     s.boats.push({
-      seat, x, y, h: d.inward + Math.PI, vx: 0, vy: 0, tx: x, ty: y, hold: [], castCd: 0, dashT: 0, dashCd: 0, stun: 0, shield: 0, unloadT: 0,
+      seat, x, y, h: d.inward + Math.PI, speed: 0, vx: 0, vy: 0, tx: x, ty: y, hold: [], castCd: 0, dashT: 0, dashCd: 0, stun: 0, shield: 0, unloadT: 0, trawlT: 0,
       docked: true, tripValue: 0, banked: 0, cards: [], combo: 0, lastCatch: -9, firstScoreAt: null,
       stats: { caught: 0, home: 0, trips: 0, bestTrip: 0, lost: 0, rams: 0, rammed: 0, scooped: 0, koi: 0, youngKilled: 0, youngSpared: 0 },
     });
@@ -367,25 +368,40 @@ function moveBoats(s: RushSim, ev: GameEvent[]): void {
     if (b.dashCd > 0) b.dashCd -= dt;
     if (b.dashT > 0) b.dashT -= dt;
     if (b.shield > 0) b.shield -= dt;
-    if (b.stun > 0) { b.stun -= dt; b.vx *= 0.85; b.vy *= 0.85; }
-    else {
+    let nx: number, ny: number;
+    if (b.stun > 0) {
+      // a ram's knockback: the only time a boat moves by raw velocity
+      // instead of steerBoat()'s heading-and-throttle model
+      b.stun -= dt; b.vx *= 0.85; b.vy *= 0.85;
+      nx = b.x + b.vx * dt; ny = b.y + b.vy * dt;
+    } else {
+      // the prototype's steerBoat() (ui.js), the tx/ty branch only: the
+      // client always resolves keys/stick into a target point before
+      // sending steer, so the server never needs the raw-direction branch
+      const maxSpeed = speedOf(b);
       const dx = b.tx - b.x, dy = b.ty - b.y, d = Math.hypot(dx, dy);
-      const load = b.hold.length / holdMax(b);
-      const inReeds = Math.hypot(b.x - ZONES.reeds.x, b.y - ZONES.reeds.y) < ZONES.reeds.r;
-      const v = speedMult(b) * (1 - Q.LOAD_SLOW * load) * (b.dashT > 0 ? Q.DASH_MULT : 1) * (inReeds ? 0.62 : 1);
-      const want = b.dashT > 0 ? 1 : d > 0.4 ? Math.min(1, d / 4) : 0;
-      const dirx = d > 0.4 ? dx / d : Math.cos(b.h), diry = d > 0.4 ? dy / d : Math.sin(b.h);
-      const k = Math.min(1, Q.ACCEL * dt * (b.dashT > 0 ? 3 : 1));
-      b.vx += (dirx * v * want - b.vx) * k; b.vy += (diry * v * want - b.vy) * k;
-      if (inReeds) { const sp = Math.hypot(b.vx, b.vy); if (sp > v) { b.vx *= v / sp; b.vy *= v / sp; } }
+      let want: number | null = null, throttle = 0;
+      if (d > 0.9) { want = Math.atan2(dy, dx); throttle = Math.min(1, d / 4); }
+      if (want !== null) {
+        const diff = Math.atan2(Math.sin(want - b.h), Math.cos(want - b.h));
+        b.h += Math.sign(diff) * Math.min(Math.abs(diff), dt * 3.2);
+        throttle *= Math.max(0.25, Math.cos(Math.min(1.4, Math.abs(diff))));
+      }
+      const inReeds = Math.hypot(b.x - ZONES.reeds.x, b.y - ZONES.reeds.y) < ZONES.reeds.r && nr(b.x, b.y) > 0.6;
+      const slow = inReeds ? 0.62 : 1;
+      b.speed += (maxSpeed * throttle * slow - b.speed) * Math.min(1, dt * 2.6);
+      nx = b.x + Math.cos(b.h) * b.speed * dt; ny = b.y + Math.sin(b.h) * b.speed * dt;
     }
-    let nx = b.x + b.vx * dt, ny = b.y + b.vy * dt;
-    if (nr(nx, ny) > 0.965) { const a = Math.atan2(ny, nx), shoreR = Math.hypot(nx, ny) / nr(nx, ny); nx = Math.cos(a) * shoreR * 0.965; ny = Math.sin(a) * shoreR * 0.965; b.vx *= 0.5; b.vy *= 0.5; }
-    if (blockedAt(nx, ny, s.season)) { nx = b.x; ny = b.y; b.vx *= 0.3; b.vy *= 0.3; }
+    if (nr(nx, ny) > 0.965) { const k = 0.965 / nr(nx, ny); nx *= k; ny *= k; b.speed *= 0.7; }
+    if (iceBlocks(nx, ny, s.season)) { nx = b.x; ny = b.y; b.speed *= 0.3; }
+    const di = Math.hypot(nx - ISLAND.x, ny - ISLAND.y);
+    if (di < ISLAND.r + 2.2) { const a = Math.atan2(ny - ISLAND.y, nx - ISLAND.x); nx = ISLAND.x + Math.cos(a) * (ISLAND.r + 2.2); ny = ISLAND.y + Math.sin(a) * (ISLAND.r + 2.2); b.speed *= 0.8; }
     b.x = nx; b.y = ny;
-    if (Math.hypot(b.vx, b.vy) > 0.8) b.h = Math.atan2(b.vy, b.vx);
     if (b.dashT > 0) for (const f of s.fish) { const fx = f.x - b.x, fy = f.y - b.y, fd = Math.hypot(fx, fy); if (fd < 4 && fd > 0) { f.scare = 0.4; f.sx = fx / fd; f.sy = fy / fd; } }
-    if (has(b, "trawl") && Math.hypot(b.vx, b.vy) > 0.2 && b.hold.length < holdMax(b)) trawlPickup(s, b, ev);
+    if (has(b, "trawl") && b.speed >= 2 && b.hold.length < holdMax(b)) {
+      b.trawlT += dt;
+      if (b.trawlT >= 0.35) { b.trawlT = 0; trawlPickup(s, b, ev); }
+    }
     const d = dockPos(b.seat, s.players);
     const wasDocked = b.docked;
     b.docked = Math.hypot(b.x - d.x, b.y - d.y) < Q.DOCK_R;
@@ -407,7 +423,7 @@ function moveBoats(s: RushSim, ev: GameEvent[]): void {
 function trawlPickup(s: RushSim, b: Boat, ev: GameEvent[]): void {
   for (let i = s.fish.length - 1; i >= 0; i--) {
     const f = s.fish[i];
-    if (Math.hypot(f.x - b.x, f.y - b.y) > 0.26) continue;
+    if (Math.hypot(f.x - b.x, f.y - b.y) > 2.6) continue;
     s.fish.splice(i, 1);
     const val = s.season === 2 ? Q.BIG_MULT : f.big ? Q.BIG_MULT : 1;
     b.hold.push(val); b.stats.caught += val;
@@ -530,7 +546,7 @@ function rams(s: RushSim, ev: GameEvent[]): void {
   for (const a of s.boats) {
     if (a.dashT <= 0) continue;
     for (const v of s.boats) {
-      if (v === a || v.shield > 0 || Math.hypot(a.x - v.x, a.y - v.y) > Q.RAM_R) continue;
+      if (v === a || !v.hold.length || v.shield > 0 || Math.hypot(a.x - v.x, a.y - v.y) > Q.RAM_R) continue;
       if (nearAnyDock(s, v.x, v.y, Q.SAFE_R) || nearAnyDock(s, a.x, a.y, Q.SAFE_R)) continue;
       const max = Q.RAM_DROP + (has(a, "ironBow") ? Q.CARDS.ironBow.dealt! : 0) - (has(v, "ironBow") ? Q.CARDS.ironBow.taken! : 0);
       const drop: number[] = [];
@@ -541,7 +557,7 @@ function rams(s: RushSim, ev: GameEvent[]): void {
       v.stun = Q.STUN; v.shield = Q.SHIELD;
       const ang = Math.atan2(v.y - a.y, v.x - a.x);
       v.vx = Math.cos(ang) * 16; v.vy = Math.sin(ang) * 16;
-      a.dashT = 0; a.vx *= 0.3; a.vy *= 0.3;
+      a.dashT = 0;
       ev.push({ k: "ram", a: a.seat, v: v.seat, n: drop.length });
       break;
     }

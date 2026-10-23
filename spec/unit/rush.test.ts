@@ -223,6 +223,15 @@ describe("rams", () => {
     const all = [...step(s, [{ seat: 0, i: { k: "dash" } }])]; for (let i = 0; i < 4; i++) all.push(...step(s));
     expect(all.some((e) => e.k === "ram")).toBe(false);
   });
+
+  it("an empty-holding boat cannot be rammed (prototype's rushUpdate: !v.hold.length skips it)", () => {
+    const s = make("ram-empty", 2);
+    clearFish(s);
+    put(s, 1, 0, 0); put(s, 0, -2, 0);
+    s.boats[0].tx = 6; s.boats[0].ty = 0;
+    const all = [...step(s, [{ seat: 0, i: { k: "dash" } }])]; for (let i = 0; i < 4; i++) all.push(...step(s));
+    expect(all.some((e) => e.k === "ram")).toBe(false);
+  });
 });
 
 describe("the charge cast and the schools", () => {
@@ -569,5 +578,74 @@ describe("bot kinds: steady, keeper, greedy by seat % 3, unless a script overrid
     const seats: Seat[] = [0, 1, 2, 3].map((i) => ({ seat: i, name: `P${i}`, bot: `bot${i}`, character: "mei" }));
     const s = makeWithOpts("all-greedy", seats, { fish: 280 }, { botKinds: ["greedy", "greedy", "greedy", "greedy"] });
     expect(s.botKinds).toEqual(["greedy", "greedy", "greedy", "greedy"]);
+  });
+});
+
+describe("boats, unloading and schools, as the prototype (port fidelity)", () => {
+  it("unloading starts within 6.5 of the dock, not 4", () => {
+    const s = make("unload-radius", 2);
+    const d = dockPos(0, 2);
+    s.boats[0].hold = [1, 1];
+    // 5 units out: inside UNLOAD_R (6.5) but outside the old DOCK_R (4)
+    put(s, 0, d.x + 5, d.y);
+    step(s);
+    expect(s.boats[0].docked).toBe(true);
+    expect(s.boats[0].hold.length).toBeLessThan(2); // unloading has started
+  });
+
+  it("a fish unloads every 0.1 s, not 0.12", () => {
+    const s = make("unload-rate", 2);
+    s.boats[0].hold = [1, 1, 1];
+    s.boats[0].unloadT = RUSH.UNLOAD_EVERY; // as if just arrived at the dock (moveBoats sets this on the docked transition)
+    until(s, s.t + RUSH.UNLOAD_EVERY - RUSH.DT / 2);
+    expect(s.boats[0].hold.length).toBe(2); // exactly one fish gone by 0.1 s
+  });
+
+  it("Wide Net and Fine Mesh each add 2 to a cast's cap", () => {
+    const s = make("net-cap"); clearFish(s); put(s, 0, 0, 0);
+    s.boats[0].cards = ["wideNet", "fineMesh"];
+    const bx = Math.cos(s.boats[0].h) * RUSH.NET_AHEAD, by = Math.sin(s.boats[0].h) * RUSH.NET_AHEAD;
+    addFish(s, bx, by, RUSH.NET_MAX + 4, 0.15); // more than the base cap, to see the +2+2 bonus land
+    step(s, [{ seat: 0, i: { k: "cast", charge: 0 } }]);
+    until(s, s.t + RUSH.SINK + 0.1);
+    expect(s.boats[0].hold.length).toBe(RUSH.NET_MAX + 4);
+  });
+
+  it("a closing net scares roughly half the nearby fish for 0.5 s, not all of them for 0.8 s", () => {
+    const s = make("scatter-half"); clearFish(s); put(s, 0, 0, 0);
+    const bx = Math.cos(s.boats[0].h) * RUSH.NET_AHEAD, by = Math.sin(s.boats[0].h) * RUSH.NET_AHEAD;
+    // a ring of fish just outside the net, inside the SCATTER_R band, none of them caught
+    for (let i = 0; i < 40; i++) { const a = (i / 40) * Math.PI * 2, r = RUSH.NET_R * 1.8; s.fish.push({ id: s.nextId++, x: bx + Math.cos(a) * r, y: by + Math.sin(a) * r, h: 0, adult: true, scare: 0, sx: 0, sy: 0, big: false, school: 0, ox: 0, oy: 0, ph: 0 }); }
+    step(s, [{ seat: 0, i: { k: "cast", charge: 0 } }]);
+    until(s, s.t + RUSH.SINK + 0.01);
+    const scared = s.fish.filter((f) => f.scare > 0).length;
+    expect(scared).toBeGreaterThan(5);
+    expect(scared).toBeLessThan(35); // not every fish in the band — only about half
+  });
+
+  it("steering turns at a bounded rate and eases speed toward the target (ui.js's steerBoat)", () => {
+    const s = make("steer-turn", 1);
+    const b = s.boats[0];
+    put(s, 0, 0, 0); b.h = 0; b.speed = 0;
+    b.tx = 0; b.ty = 40; // due "south": a 90 degree turn from heading 0
+    step(s);
+    expect(Math.abs(b.h)).toBeCloseTo(RUSH.DT * 3.2, 5); // turned at the capped rate, not instantly
+    expect(b.speed).toBeGreaterThan(0); // already easing toward the target speed
+    expect(b.speed).toBeLessThan(RUSH.SPEED); // but not there yet
+  });
+
+  it("trawl picks up a fish within 2.6 units, not 0.26, about every 0.35 s", () => {
+    const s = make("trawl-radius", 1);
+    const b = s.boats[0];
+    b.cards = ["trawl"];
+    clearFish(s);
+    put(s, 0, 0, 0); b.h = 0; b.tx = 40; b.ty = 0; // sail east, fast
+    until(s, s.t + 1); // get up to speed
+    // pin school 0 right where the fish is placed, so it doesn't drift off
+    // toward wherever placeSchools() put it (same trick as the addFish() helper)
+    s.schools[0].x = s.schools[0].tx = b.x + 2; s.schools[0].y = s.schools[0].ty = b.y; s.schools[0].vx = s.schools[0].vy = 0; s.schools[0].t = 999;
+    s.fish.push({ id: s.nextId++, x: b.x + 2, y: b.y, h: 0, adult: true, scare: 0, sx: 0, sy: 0, big: false, school: 0, ox: 0, oy: 0, ph: 0 });
+    until(s, s.t + 0.4);
+    expect(b.hold.length).toBe(1);
   });
 });
