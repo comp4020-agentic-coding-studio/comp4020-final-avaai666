@@ -194,25 +194,24 @@ export const RUSH_MODEL = "rush 2.0";
 // the same numbers rush 2.0 was tuned and measured with
 export const LIFE = { DT: RUSH.DT, SEP: RUSH.SEP, V_ADULT: RUSH.V_ADULT, V_FRY: RUSH.V_FRY, SHALLOW: RUSH.SHALLOW, BIG_SHARE: RUSH.BIG_SHARE } as const;
 
-// ---- Who's Poaching, "poach 1.0" (DESIGN.md "Who's Poaching") ----
-// Distances are in sim units (the lake is 1000 x 700; the 3D lake is a
-// tenth, so "6 units" in DESIGN.md is 60 here).
+// ---- Who's Poaching, "poach 2.0" (DESIGN.md "Who's Poaching 谁在偷鱼 (2.0)") ----
+// In lake-world.ts's units (the 92 x 64 lake), like rush 2.0. The numbers
+// are the prototype's PO (docs/prototypes/v10/poach.js).
+export const POACH_MODEL = "poach 2.0";
 export const POACH = {
-  W: 1000, H: 700, RX: 460, RY: 315, DT: 0.05,
-  DAYS: 3, DAY_S: 75, MEETING_S: 90, DUSK_S: 4, // dusk: the day's announcement before the meeting
-  SPEED: 120, ACCEL: 5,
-  NET_R: 36, NET_AHEAD: 36, CAST_CD: 1.2, SINK: 0.5,
-  FINE_R: 48, FINE_CD: 1.5, // the fine net: wider, faster, takes fry
-  FISH: 160, FRY: 120, // grown fish and fry at dawn of day 1 (fry are the lake's health)
-  QUOTA: 60, // village quota of grown fish over three days
-  HEALTH_LINE: 40, // percent of the starting fry; below it the poacher wins
-  INSPECT_R: 60, INSPECT_S: 3, // stay within 60 for 3 s to see a basket
-  PLANT_R: 50, PLANT_S: 2, SPLASH_R: 100, // plant: 2 s alongside; boats within 100 see a splash
-  BUOY_R: 70, // a buoy logs every boat that passes within this
-  POACHERS_AT: 7, WARDEN_AT: 6, // two poachers at 7 seats, a warden at 6
-  NO_EXILE_COST: 5, // a meeting that exiles nobody costs the lake this much health
-  V_FISH: 30, V_FRY: 18,
-  SEATS: { min: 4, max: 8, botFill: 5 },
+  DT: 0.05,
+  DAYS: 3, ROLE_S: 8, DAY_S: 70, MEET_S: 55, TALLY_S: 4, EXILE_S: 6, // the role card, a day, a meeting at most, the tally, the exile
+  VIEW: 24, // your lantern's circle: the server sends nothing beyond it by day
+  BUOY_R: 15, BUOY_VIEW: 10.5, // a buoy logs boats within 15, and lights a circle of 10.5 for its owner
+  INSPECT_R: 8, INSPECT_S: 1.5, REPORT_R: 11,
+  NET_CD: 2, NET_MAX: 3, NET_R: 3.4, NET_AHEAD: 4, // everyone's net: adults only, at most 3
+  FINE_CD: 13, FINE_R: 5.2, FINE_MAX: 22, FINE_FIRST: 8, NURSERY_EXTRA: 14, // the poacher's fine net; its first is ready 8-16 s into a day; in the reeds or lotus it finds up to 14 more young
+  TASK_R: 5.5, TASK_S: 2.5, TASKS_A_DAY: 3, TASK_FISH: 2,
+  SIGHT_S: 0.5, // how often a boat's sightings, path and buoy logs are written
+  LINE: 40, NO_EXILE: 5, NIGHT: 4, // % of the start: the line, the cost of no exile, a night with the poacher free (6% less 2% recovery)
+  EXTRA_YOUNG: 40, // young fish added in the reeds at the start of a match (DESIGN "Lake health")
+  SPEED: 12.5, POACHERS_AT: 7, WIN_BONUS: 20, SAYS_MAX: 4,
+  SEATS: { min: 4, max: 8, botFill: 6 },
 } as const;
 export const BAYS = ["North Bay", "East Bay", "South Bay", "West Bay"] as const;
 

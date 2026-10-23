@@ -1,334 +1,678 @@
-// Who's Poaching, "poach 1.0" (DESIGN.md "Who's Poaching"). Fishers, one
-// poacher (two at 7 seats), a warden at 6. Three days of fishing for the
-// village quota, each ending with the fry lost in each bay, and a meeting of
-// set phrases and a vote after the first two. Roles are secret: frameFor
-// sends a seat only its own role, and inspection results only to the
-// inspector, until a role is revealed by exile or by the end.
+// Who's Poaching, "poach 2.0" (DESIGN.md "Who's Poaching 谁在偷鱼 (2.0)").
+// Four to eight boats on the v5 lake: one poacher (two at seven or more),
+// the rest fishers. A role card, then three days of 70 s, each ending in a
+// meeting at dusk (or earlier, on a report). By day everyone sails inside
+// a lantern's circle: the server sends a seat only the boats, fish and dead
+// young fish within VIEW of its own boat (or of its own buoy), never the rest
+// (CLAUDE.md "a seat's frame holds no boat, fish or evidence outside its
+// lantern's view"). Fishers do tasks at named places (each worth fish for
+// the village), inspect boats, drop a buoy and report dead fish; the
+// poacher's tasks are a cover, and its fine net takes young fish and leaves
+// a patch of them floating, seen by every boat within VIEW. At the meeting
+// each seat speaks only in lines built from what it actually knows (the
+// poacher gets plausible lies), and everyone still in votes.
 //
-// Pure and deterministic: the lake and the roles draw only from the match's
-// "lake" and "roles" streams.
-import { BAYS, POACH as Q } from "../game-constants.ts";
+// Pure and deterministic: the lake draws only from the match's "lake"
+// stream (lake-life.ts's schools and fish), the roles from "roles"; a bot's
+// decisions come from the stream the platform gives it for that tick. step()
+// never reads a bot's mind, so a replay that does not run the bots is exact.
+import { POACH as Q, POACH_MODEL } from "../game-constants.ts";
 import { type GameEvent, type Highlight, type Mode, type Results, type Seat, streamOf } from "../game-platform.ts";
+import { BAYS, dockPos, ISLAND, nextSpring, nr, type PlaceId, placeOf, tierOf, ZONES } from "../lake-world.ts";
+import { counts, type Fish, moveFish, newFish, NURSERY_FIRST, type School, seedFish, updateSchools } from "./lake-life.ts";
 
-export type Role = "fisher" | "poacher" | "warden";
-export type Bay = (typeof BAYS)[number];
-type Phrase = { p: "was"; bay: Bay } | { p: "inspected"; target: number; fry: number } | { p: "suspect"; target: number } | { p: "vouch"; target: number } | { p: "skip" };
+export type Role = "fisher" | "poacher";
+type Phase = "role" | "day" | "meeting" | "tally" | "exile" | "end";
+
+// A line said at the meeting, as a code each page words in its own language.
+export type Line =
+  | { k: "was"; place: PlaceId }
+  | { k: "insp"; i: number; res: "clean" | "fry" }
+  | { k: "sawnet"; i: number }
+  | { k: "saw"; i: number; place: PlaceId }
+  | { k: "buoy"; place: PlaceId; ids: number[] }
+  | { k: "sus"; i: number }
+  | { k: "vouch"; i: number }
+  | { k: "skip" };
+
 export type PoachInput =
   | { k: "steer"; x: number; y: number }
-  | { k: "cast" } | { k: "fine" } | { k: "dump" } | { k: "buoy" }
-  | { k: "inspect"; target: number } | { k: "plant"; target: number } | { k: "patrol"; target: number }
-  | ({ k: "say" } & Phrase)
+  | { k: "net" } | { k: "inspect" } | { k: "buoy" } | { k: "report" } | { k: "fine" } | { k: "dump" }
+  | { k: "say"; line: Line }
   | { k: "vote"; target: number | null };
 
-interface Fish { x: number; y: number; h: number; adult: boolean }
+// the task spots (the prototype's TASKS): a verb and a named place
+export const TASKS: { id: string; verb: string; place: PlaceId; x: number; y: number }[] = [
+  { id: "t1", verb: "net", place: "north", x: -16, y: -42 },
+  { id: "t2", verb: "count", place: "reeds", x: ZONES.reeds.x * 0.9, y: ZONES.reeds.y * 0.9 },
+  { id: "t3", verb: "lotus", place: "lotus", x: ZONES.lotus.x * 0.9, y: ZONES.lotus.y * 0.9 },
+  { id: "t4", verb: "trap", place: "east", x: 60, y: -2 },
+  { id: "t5", verb: "sluice", place: "river", x: ZONES.river.x * 0.9, y: ZONES.river.y * 0.9 },
+  { id: "t6", verb: "incense", place: "island", x: ISLAND.x - 2, y: ISLAND.y + 12 },
+  { id: "t7", verb: "mend", place: "south", x: 2, y: 30 },
+  { id: "t8", verb: "trap", place: "west", x: -62, y: 8 },
+  { id: "t9", verb: "net", place: "east", x: 40, y: -30 },
+];
+
+interface Task { id: string; verb: string; place: PlaceId; x: number; y: number; p: number; done: boolean }
 interface Boat {
-  seat: number; x: number; y: number; h: number; tx: number; ty: number; vx: number; vy: number;
-  fish: number; fry: number; castCd: number; fineCd: number;
-  inspect: { target: number; t: number } | null; plant: { target: number; t: number } | null;
-  patrolled: boolean; caught: number; fineCasts: number; inspections: number; firstScoreAt: number | null;
-  mind: { spot: [number, number] | null; spotT: number; said: boolean; voted: boolean };
+  seat: number; x: number; y: number; h: number; speed: number; tx: number; ty: number;
+  netCd: number; fineCd: number; fry: number; caught: number; taskFish: number; youngKilled: number; fineCasts: number;
+  tasks: Task[]; buoy: boolean; insp: { target: number; t: number } | null;
+  known: Record<number, { res: "clean" | "fry"; n: number; day: number }>; // what this seat learned by inspecting
+  witnessed: Record<number, number>; // seat -> fine nets this seat saw it cast
+  saw: { i: number; x: number; y: number; t: number }[]; // sightings today, every SIGHT_S
+  path: [number, number][]; // where this boat was today, every SIGHT_S
+  mind: { hunt: [number, number] | null; wander: [number, number] | null; inspected: Record<number, boolean>; lines: Line[] | null; sayAt: number; voteAt: number; meet: number };
 }
+interface Patch { id: number; x: number; y: number; t: number; day: number; by: number; seenBy: number[]; reported: boolean; dump: boolean }
+interface Buoy { owner: number; x: number; y: number; place: PlaceId; day: number; log: { i: number; t: number }[]; last: Record<number, number> }
+interface Said { seat: number; line: Line; at: number }
 export interface PoachSim {
-  tick: number; t: number; phaseT: number; day: number; phase: "day" | "dusk" | "meeting" | "end";
-  rng: () => number; n: number; roles: Role[]; out: boolean[]; boats: Boat[]; fish: Fish[];
-  fryStart: number; fryDead: number; health: number; quota: number; exiledInnocents: number;
-  bayLoss: Record<Bay, number>; buoys: { seat: number; day: number; x: number; y: number; passed: number[] }[];
-  said: { seat: number; text: string; day: number; p: Phrase["p"]; bay?: string; target?: number; fry?: number }[]; votes: (number | null | undefined)[];
-  history: { day: number; exiled: number | null; role: Role | null }[]; winner: "fishers" | "poacher" | null;
+  tick: number; t: number; phase: Phase; phaseT: number; day: number; season: number;
+  n: number; rng: () => number; roles: Role[]; out: boolean[]; bots: boolean[];
+  boats: Boat[]; fish: Fish[]; schools: School[]; nextId: number;
+  start: number; roomFish: number; patches: Patch[]; buoys: Buoy[];
+  meeting: { n: number; reason: "dusk" | "report"; by: number | null; patch: number | null; says: Said[]; votes: (number | null | undefined)[]; final: boolean } | null;
+  tally: { votes: (number | null | undefined)[]; out: number | null } | null;
+  exiled: { seat: number; role: Role; day: number }[];
+  nightLoss: number[]; // the % the lake lost each night
+  poacherPath: [number, number][]; poacherNets: [number, number][];
+  winner: "fishers" | "poacher" | null; endReason: "caught" | "lake" | "survived" | null;
 }
 
-export function bayOf(x: number, y: number): Bay {
-  const a = Math.atan2((y - Q.H / 2) / Q.RY, (x - Q.W / 2) / Q.RX);
-  if (a > -Math.PI / 4 && a <= Math.PI / 4) return "East Bay";
-  if (a > Math.PI / 4 && a <= (3 * Math.PI) / 4) return "South Bay";
-  if (a > -(3 * Math.PI) / 4 && a <= -Math.PI / 4) return "North Bay";
-  return "West Bay";
-}
-const ell = (x: number, y: number): number => Math.hypot((x - Q.W / 2) / Q.RX, (y - Q.H / 2) / Q.RY);
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }): number => Math.hypot(a.x - b.x, a.y - b.y);
-const alive = (s: PoachSim, seat: number): boolean => seat >= 0 && seat < s.n && !s.out[seat];
-const isPoacher = (s: PoachSim, seat: number): boolean => s.roles[seat] === "poacher";
+const isIn = (s: PoachSim, seat: number): boolean => seat >= 0 && seat < s.n && !s.out[seat];
+export const health = (s: PoachSim): number => Math.round(((s.fish.length) / Math.max(1, s.start)) * 1000) / 10;
+const alive = (s: PoachSim): Boat[] => s.boats.filter((b) => !s.out[b.seat]);
+const watchersOf = (s: PoachSim, b: Boat): Boat[] => alive(s).filter((o) => o !== b && dist(o, b) < Q.VIEW);
+const dayClock = (s: PoachSim): number => Math.round(s.phaseT * 10) / 10; // seconds into the day
 
-function make(seed: string, seats: Seat[], lake: { fish: number }): PoachSim {
-  const n = seats.length, rng = streamOf(seed, "lake"), rr = streamOf(seed, "roles");
+function shuffle<T>(rng: () => number, arr: T[]): T[] { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number; young?: number }): PoachSim {
+  const n = seats.length, rr = streamOf(seed, "roles");
   const roles: Role[] = seats.map(() => "fisher");
-  const order = seats.map((_, i) => i);
-  for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rr() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
-  const poachers = n >= Q.POACHERS_AT ? 2 : 1;
-  for (let k = 0; k < poachers; k++) roles[order[k]] = "poacher";
-  if (n >= Q.WARDEN_AT) roles[order[poachers]] = "warden";
-  // the room's lake sets how many fish there are; fry are the lake's future
-  const scale = Math.max(0.3, lake.fish / 220);
-  const fish: Fish[] = [];
-  const place = (adult: boolean): Fish => { let x, y; do { x = Q.W / 2 + (rng() * 2 - 1) * Q.RX; y = Q.H / 2 + (rng() * 2 - 1) * Q.RY; } while (ell(x, y) > 0.86); return { x, y, h: rng() * 6.28, adult }; };
-  for (let i = 0; i < Math.round(Q.FISH * scale); i++) fish.push(place(true));
-  for (let i = 0; i < Math.round(Q.FRY * scale); i++) fish.push(place(false));
-  const boats: Boat[] = seats.map((_, seat) => {
-    const a = (seat / n) * Math.PI * 2, x = Q.W / 2 + Math.cos(a) * Q.RX * 0.7, y = Q.H / 2 + Math.sin(a) * Q.RY * 0.7;
-    return { seat, x, y, h: a + Math.PI, tx: x, ty: y, vx: 0, vy: 0, fish: 0, fry: 0, castCd: 0, fineCd: 0, inspect: null, plant: null, patrolled: false, caught: 0, fineCasts: 0, inspections: 0, firstScoreAt: null, mind: { spot: null, spotT: 0, said: false, voted: false } };
-  });
-  const fryStart = fish.filter((f) => !f.adult).length;
-  return {
-    tick: 0, t: 0, phaseT: 0, day: 1, phase: "day", rng, n, roles, out: seats.map(() => false), boats, fish,
-    fryStart, fryDead: 0, health: 100, quota: 0, exiledInnocents: 0,
-    bayLoss: { "North Bay": 0, "East Bay": 0, "South Bay": 0, "West Bay": 0 }, buoys: [], said: [], votes: seats.map(() => undefined), history: [], winner: null,
+  const order = shuffle(rr, seats.map((_, i) => i));
+  for (let k = 0; k < (n >= Q.POACHERS_AT ? 2 : 1); k++) roles[order[k]] = "poacher";
+  const s: PoachSim = {
+    tick: 0, t: 0, phase: "role", phaseT: 0, day: 0, season: 0,
+    n, rng: streamOf(seed, "lake"), roles, out: seats.map(() => false), bots: seats.map((x) => x.bot !== null),
+    boats: [], fish: [], schools: [], nextId: 1, start: 0, roomFish: lake.fish, patches: [], buoys: [],
+    meeting: null, tally: null, exiled: [], nightLoss: [], poacherPath: [], poacherNets: [], winner: null, endReason: null,
   };
+  const a0 = lake.adults ?? Math.round(lake.fish * 0.8), y0 = lake.young ?? Math.round(lake.fish * 0.2);
+  seedFish(s, a0, y0);
+  // the reeds are full of young fish: that is what the fine net is for (DESIGN "Lake health")
+  for (let i = 0; i < Q.EXTRA_YOUNG; i++) s.fish.push(newFish(s, null, null, false, NURSERY_FIRST + (i % 4)));
+  s.start = s.fish.length;
+  for (const seat of seats) {
+    const d = dockPos(seat.seat, n), x = d.x - Math.cos(d.inward) * 2, y = d.y - Math.sin(d.inward) * 2;
+    s.boats.push({
+      seat: seat.seat, x, y, h: d.inward + Math.PI, speed: 0, tx: x, ty: y, netCd: 0, fineCd: 0, fry: 0, caught: 0, taskFish: 0, youngKilled: 0, fineCasts: 0,
+      tasks: [], buoy: false, insp: null, known: {}, witnessed: {}, saw: [], path: [],
+      mind: { hunt: null, wander: null, inspected: {}, lines: null, sayAt: 0, voteAt: 0, meet: 0 },
+    });
+  }
+  return s;
 }
 
-const seatOk = (s: PoachSim, t: unknown): t is number => Number.isInteger(t) && (t as number) >= 0 && (t as number) < s.n;
+// ---- inputs: validated against the phase, the role and what the seat knows ----
+const PLACES: PlaceId[] = ["reeds", "lotus", "river", "island", "north", "east", "south", "west"];
+const seatOk = (s: PoachSim, v: unknown): v is number => Number.isInteger(v) && (v as number) >= 0 && (v as number) < s.n;
+function lineOf(s: PoachSim, raw: unknown): Line | null {
+  const o = raw as Record<string, unknown> | null;
+  if (!o || typeof o !== "object") return null;
+  switch (o.k) {
+    case "was": return PLACES.includes(o.place as PlaceId) ? { k: "was", place: o.place as PlaceId } : null;
+    case "insp": return seatOk(s, o.i) && (o.res === "clean" || o.res === "fry") ? { k: "insp", i: o.i, res: o.res } : null;
+    case "sawnet": return seatOk(s, o.i) ? { k: "sawnet", i: o.i } : null;
+    case "saw": return seatOk(s, o.i) && PLACES.includes(o.place as PlaceId) ? { k: "saw", i: o.i, place: o.place as PlaceId } : null;
+    case "buoy": return PLACES.includes(o.place as PlaceId) && Array.isArray(o.ids) && o.ids.length <= 4 && o.ids.every((i) => seatOk(s, i)) ? { k: "buoy", place: o.place as PlaceId, ids: o.ids as number[] } : null;
+    case "sus": case "vouch": return seatOk(s, o.i) ? { k: o.k, i: o.i } : null;
+    case "skip": return { k: "skip" };
+  }
+  return null;
+}
+const sameLine = (a: Line, b: Line): boolean => JSON.stringify(a) === JSON.stringify(b);
 function input(s: PoachSim, seat: number, raw: unknown): PoachInput | null {
   const o = raw as Record<string, unknown> | null;
-  if (!o || typeof o !== "object" || s.out[seat] || s.phase === "end") return null;
-  const day = s.phase === "day", meet = s.phase === "meeting";
+  if (!o || typeof o !== "object" || !isIn(s, seat)) return null;
+  const day = s.phase === "day", meet = s.phase === "meeting", poacher = s.roles[seat] === "poacher";
   switch (o.k) {
-    case "steer": { const x = Number(o.x), y = Number(o.y); return day && Number.isFinite(x) && Number.isFinite(y) ? { k: "steer", x: Math.round(Math.max(0, Math.min(Q.W, x))), y: Math.round(Math.max(0, Math.min(Q.H, y))) } : null; }
-    case "cast": case "buoy": return day ? { k: o.k } : null;
-    case "fine": case "dump": return day && isPoacher(s, seat) ? { k: o.k } : null;
-    case "inspect": return day && seatOk(s, o.target) && o.target !== seat ? { k: "inspect", target: o.target } : null;
-    case "plant": return day && isPoacher(s, seat) && seatOk(s, o.target) && o.target !== seat ? { k: "plant", target: o.target } : null;
-    case "patrol": return day && s.roles[seat] === "warden" && seatOk(s, o.target) && o.target !== seat ? { k: "patrol", target: o.target } : null;
-    case "vote": return meet && ((o.target === null && s.day < Q.DAYS) || (seatOk(s, o.target) && alive(s, o.target))) ? { k: "vote", target: o.target as number | null } : null;
+    case "steer": {
+      const x = Number(o.x), y = Number(o.y);
+      if (!day || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+      return { k: "steer", x: Math.round(Math.max(-92, Math.min(92, x)) * 10) / 10, y: Math.round(Math.max(-64, Math.min(64, y)) * 10) / 10 };
+    }
+    case "net": case "inspect": case "buoy": case "report": return day ? { k: o.k } : null;
+    case "fine": case "dump": return day && poacher ? { k: o.k } : null;
     case "say": {
       if (!meet) return null;
-      if (o.p === "was" && (BAYS as readonly string[]).includes(o.bay as string)) return { k: "say", p: "was", bay: o.bay as Bay };
-      if (o.p === "inspected" && seatOk(s, o.target) && Number.isInteger(o.fry) && (o.fry as number) >= 0 && (o.fry as number) <= 20) return { k: "say", p: "inspected", target: o.target, fry: o.fry as number };
-      if ((o.p === "suspect" || o.p === "vouch") && seatOk(s, o.target)) return { k: "say", p: o.p, target: o.target };
-      if (o.p === "skip") return { k: "say", p: "skip" };
-      return null;
+      const line = lineOf(s, o.line); if (!line) return null;
+      // suspect, vouch and skip are open to all; anything else must be one of
+      // this seat's own lines (what it knows, or for a poacher, its lies)
+      if (line.k === "sus" || line.k === "vouch") return isIn(s, line.i) && line.i !== seat ? { k: "say", line } : null;
+      if (line.k === "skip") return { k: "say", line };
+      return linesFor(s, seat).some((l) => sameLine(l, line)) ? { k: "say", line } : null;
+    }
+    case "vote": {
+      if (!meet || !s.meeting) return null;
+      if (o.target === null) return s.meeting.final ? null : { k: "vote", target: null };
+      return seatOk(s, o.target) && isIn(s, o.target) && o.target !== seat ? { k: "vote", target: o.target } : null;
     }
   }
   return null;
 }
 
-function killFry(s: PoachSim, f: Fish): void { s.fryDead++; s.bayLoss[bayOf(f.x, f.y)]++; s.health = Math.round(Math.max(0, s.health - 100 / Math.max(1, s.fryStart)) * 10) / 10; }
-
+// ---- the day ----
+function nearestOther(s: PoachSim, b: Boat, r: number): Boat | null {
+  let best: Boat | null = null, bd = r;
+  for (const o of alive(s)) { if (o === b) continue; const d = dist(o, b); if (d < bd) { bd = d; best = o; } }
+  return best;
+}
+function unreportedNear(s: PoachSim, b: Boat): Patch | null {
+  return s.patches.find((p) => p.day === s.day && !p.reported && dist(p, b) < Q.REPORT_R) ?? null;
+}
 function apply(s: PoachSim, seat: number, i: PoachInput, ev: GameEvent[]): void {
   const b = s.boats[seat];
-  if (s.out[seat]) return;
-  if (i.k === "steer") { b.tx = i.x; b.ty = i.y; }
-  if (i.k === "cast" && b.castCd <= 0) {
-    b.castCd = Q.CAST_CD;
+  if (!b || s.out[seat]) return;
+  if (s.phase === "meeting") { applyMeeting(s, seat, i, ev); return; }
+  if (s.phase !== "day") return;
+  if (i.k === "steer") { b.tx = i.x; b.ty = i.y; return; }
+  if (i.k === "net" && b.netCd <= 0) {
+    b.netCd = Q.NET_CD;
     const x = b.x + Math.cos(b.h) * Q.NET_AHEAD, y = b.y + Math.sin(b.h) * Q.NET_AHEAD;
-    let n = 0;
-    s.fish = s.fish.filter((f) => { if (f.adult && Math.hypot(f.x - x, f.y - y) < Q.NET_R) { n++; return false; } return true; });
-    b.fish += n; b.caught += n; s.quota += n; if (n) b.firstScoreAt ??= s.t;
-    ev.push({ k: "catch", seat, n, x, y });
-  }
-  if (i.k === "fine" && b.fineCd <= 0) {
-    b.fineCd = Q.FINE_CD; b.fineCasts++;
-    const x = b.x + Math.cos(b.h) * Q.NET_AHEAD, y = b.y + Math.sin(b.h) * Q.NET_AHEAD;
-    let n = 0, fry = 0;
-    s.fish = s.fish.filter((f) => {
-      if (Math.hypot(f.x - x, f.y - y) >= Q.FINE_R) return true;
-      if (f.adult) n++; else { fry++; killFry(s, f); }
-      return false;
-    });
-    b.fish += n; b.fry += fry; b.caught += n; s.quota += n; if (n) b.firstScoreAt ??= s.t;
-    // the catch looks like any other to everyone else; only the poacher hears about the fry
-    ev.push({ k: "catch", seat, n, x, y });
-    if (fry) ev.push({ k: "fry", seat, fry, to: [seat] });
-  }
-  if (i.k === "dump" && b.fry > 0) { ev.push({ k: "dumped", seat, fry: b.fry, to: [seat] }); b.fry = 0; }
-  if (i.k === "buoy" && !s.buoys.some((u) => u.seat === seat && u.day === s.day)) {
-    s.buoys.push({ seat, day: s.day, x: Math.round(b.x), y: Math.round(b.y), passed: [] });
-    ev.push({ k: "buoy", seat, x: Math.round(b.x), y: Math.round(b.y) });
-  }
-  if (i.k === "inspect") { if (b.inspect?.target !== i.target) b.inspect = { target: i.target, t: 0 }; b.inspect.t += Q.DT; }
-  if (i.k === "plant") { if (b.plant?.target !== i.target) b.plant = { target: i.target, t: 0 }; b.plant.t += Q.DT; }
-  if (i.k === "patrol" && !b.patrolled && alive(s, i.target)) {
-    b.patrolled = true; b.inspections++;
-    ev.push({ k: "inspected", by: seat, target: i.target, fish: s.boats[i.target].fish, fry: s.boats[i.target].fry, patrol: true, to: [seat] });
-  }
-  if (i.k === "say") {
-    const name = (t: number) => `{seat${t}}`;
-    const text = i.p === "was" ? `I was in ${i.bay}.` : i.p === "inspected" ? `I inspected ${name(i.target)}: ${i.fry ? `${i.fry} fry` : "clean"}.` : i.p === "suspect" ? `I suspect ${name(i.target)}.` : i.p === "vouch" ? `I vouch for ${name(i.target)}.` : "Skip.";
-    // the page words the phrase from its code, in each viewer's language (DESIGN.md "Languages")
-    const code = i.p === "was" ? { bay: i.bay.split(" ")[0].toLowerCase() } : i.p === "inspected" ? { target: i.target, fry: i.fry } : i.p === "suspect" || i.p === "vouch" ? { target: i.target } : {};
-    s.said.push({ seat, text, day: s.day, p: i.p, ...code });
-    ev.push({ k: "said", seat, text });
-  }
-  if (i.k === "vote" && s.votes[seat] === undefined) { s.votes[seat] = i.target; ev.push({ k: "voted", seat }); }
-}
-
-// held actions: an inspection or a plant counts only while the boat stays close and keeps at it
-function heldActions(s: PoachSim, held: Set<number>, ev: GameEvent[]): void {
-  for (const b of s.boats) {
-    if (b.inspect) {
-      const t = s.boats[b.inspect.target];
-      if (!held.has(b.seat * 100 + 1) || !alive(s, t.seat) || dist(b, t) > Q.INSPECT_R) b.inspect = null;
-      else if (b.inspect.t >= Q.INSPECT_S - 1e-9) {
-        b.inspections++;
-        ev.push({ k: "inspected", by: b.seat, target: t.seat, fish: t.fish, fry: t.fry, to: [b.seat] });
-        ev.push({ k: "looked", to: [t.seat] });
-        b.inspect = null;
-      }
-    }
-    if (b.plant) {
-      const t = s.boats[b.plant.target];
-      if (!held.has(b.seat * 100 + 2) || !alive(s, t.seat) || dist(b, t) > Q.PLANT_R || b.fry === 0) b.plant = null;
-      else if (b.plant.t >= Q.PLANT_S - 1e-9) {
-        t.fry += b.fry; b.fry = 0; b.plant = null;
-        const see = s.boats.filter((o) => o.seat !== b.seat && alive(s, o.seat) && dist(o, b) <= Q.SPLASH_R).map((o) => o.seat);
-        if (see.length) ev.push({ k: "splash", x: Math.round(b.x), y: Math.round(b.y), near: b.seat, to: see });
-      }
-    }
-  }
-}
-
-function moveDay(s: PoachSim): void {
-  for (const b of s.boats) {
-    if (s.out[b.seat]) continue;
-    if (b.castCd > 0) b.castCd -= Q.DT;
-    if (b.fineCd > 0) b.fineCd -= Q.DT;
-    const dx = b.tx - b.x, dy = b.ty - b.y, d = Math.hypot(dx, dy);
-    const want = d > 4 ? Math.min(1, d / 40) : 0, k = Math.min(1, Q.ACCEL * Q.DT);
-    b.vx += ((d > 4 ? dx / d : 0) * Q.SPEED * want - b.vx) * k; b.vy += ((d > 4 ? dy / d : 0) * Q.SPEED * want - b.vy) * k;
-    b.x += b.vx * Q.DT; b.y += b.vy * Q.DT;
-    const e = ell(b.x, b.y); if (e > 0.95) { b.x = Q.W / 2 + (b.x - Q.W / 2) * 0.95 / e; b.y = Q.H / 2 + (b.y - Q.H / 2) * 0.95 / e; }
-    if (Math.hypot(b.vx, b.vy) > 8) b.h = Math.atan2(b.vy, b.vx);
-    for (const u of s.buoys) if (u.day === s.day && u.seat !== b.seat && !u.passed.includes(b.seat) && Math.hypot(b.x - u.x, b.y - u.y) < Q.BUOY_R) u.passed.push(b.seat);
-  }
-  for (const f of s.fish) {
-    f.h += (s.rng() - 0.5) * 0.6;
-    if (ell(f.x, f.y) > 0.85) f.h = Math.atan2(Q.H / 2 - f.y, Q.W / 2 - f.x) + (s.rng() - 0.5);
-    const v = f.adult ? Q.V_FISH : Q.V_FRY;
-    f.x += Math.cos(f.h) * v * Q.DT; f.y += Math.sin(f.h) * v * Q.DT;
-  }
-}
-
-function settleVote(s: PoachSim, ev: GameEvent[]): void {
-  const tally = new Map<number, number>(); let skips = 0;
-  s.votes.forEach((v, seat) => { if (s.out[seat]) return; if (v === null || v === undefined) skips++; else tally.set(v, (tally.get(v) ?? 0) + 1); });
-  const top = Math.max(0, ...tally.values());
-  const leaders = [...tally].filter(([, n]) => n === top).map(([t]) => t);
-  const last = s.day >= Q.DAYS;
-  // the last meeting has no Skip: the most votes go. A tie is drawn by the server when
-  // everyone voted; if anyone abstained (did not vote by 90 s), a tie exiles nobody
-  const abstained = s.votes.some((v, seat) => !s.out[seat] && v === undefined);
-  if (top === 0 || (!last && (leaders.length > 1 || skips >= top)) || (last && leaders.length > 1 && abstained)) {
-    s.history.push({ day: s.day, exiled: null, role: null });
-    s.health = Math.round(Math.max(0, s.health - Q.NO_EXILE_COST) * 10) / 10;
-    ev.push({ k: "noexile", tally: Object.fromEntries(tally), skips, cost: Q.NO_EXILE_COST, health: s.health, reason: "unwatched" }); // the page says: the poacher worked the night unwatched
+    let got = 0;
+    s.fish = s.fish.filter((f) => { if (got < Q.NET_MAX && f.adult && Math.hypot(f.x - x, f.y - y) < Q.NET_R) { got++; return false; } return true; });
+    b.caught += got;
+    ev.push({ k: "net", seat, x: r1(x), y: r1(y), n: got, to: viewersOf(s, x, y, seat) });
     return;
   }
-  const x = leaders.length > 1 ? leaders[Math.floor(s.rng() * leaders.length)] : leaders[0];
-  s.out[x] = true;
-  if (!isPoacher(s, x)) s.exiledInnocents++;
-  s.history.push({ day: s.day, exiled: x, role: s.roles[x] });
-  ev.push({ k: "exiled", seat: x, role: s.roles[x], tally: Object.fromEntries(tally), skips });
+  if (i.k === "fine" && b.fineCd <= 0 && s.roles[seat] === "poacher") {
+    b.fineCd = Q.FINE_CD; b.fineCasts++;
+    const x = b.x + Math.cos(b.h) * Q.NET_AHEAD, y = b.y + Math.sin(b.h) * Q.NET_AHEAD;
+    let n = 0, young = 0;
+    s.fish = s.fish.filter((f) => {
+      if (n >= Q.FINE_MAX || Math.hypot(f.x - x, f.y - y) >= Q.FINE_R + (f.adult ? 0 : 1.5)) return true;
+      n++; if (!f.adult) young++; return false;
+    });
+    // a fine net in the reeds or the lotus always finds young fish: the nursery
+    if (Math.hypot(x - ZONES.reeds.x, y - ZONES.reeds.y) < ZONES.reeds.r || Math.hypot(x - ZONES.lotus.x, y - ZONES.lotus.y) < ZONES.lotus.r) {
+      let extra = Math.min(Q.FINE_MAX - n, Q.NURSERY_EXTRA);
+      const order = s.fish.map((f, k) => [k, f.adult ? 1e9 : Math.hypot(f.x - x, f.y - y)] as const).filter((e) => e[1] < 1e9).sort((p, q) => p[1] - q[1]);
+      const gone = new Set<number>();
+      for (const [k] of order) { if (extra <= 0) break; gone.add(k); extra--; n++; young++; }
+      s.fish = s.fish.filter((_, k) => !gone.has(k));
+    }
+    b.fry += young; b.youngKilled += young; b.caught += n - young;
+    const witnesses = watchersOf(s, b).map((w) => w.seat);
+    const p: Patch = { id: s.nextId++, x: r1(x), y: r1(y), t: dayClock(s), day: s.day, by: seat, seenBy: [...witnesses], reported: false, dump: false };
+    s.patches.push(p); s.poacherNets.push([p.x, p.y]);
+    for (const w of witnesses) s.boats[w].witnessed[seat] = (s.boats[w].witnessed[seat] ?? 0) + 1;
+    ev.push({ k: "fine", seat, x: p.x, y: p.y, n, young, to: [seat] });
+    for (const w of witnesses) ev.push({ k: "sawnet", seat, x: p.x, y: p.y, to: [w] });
+    return;
+  }
+  if (i.k === "dump" && s.roles[seat] === "poacher" && b.fry > 0) {
+    const witnesses = watchersOf(s, b).map((w) => w.seat);
+    s.patches.push({ id: s.nextId++, x: r1(b.x), y: r1(b.y), t: dayClock(s), day: s.day, by: seat, seenBy: [...witnesses], reported: false, dump: true });
+    b.fry = 0;
+    ev.push({ k: "dumped", seat, to: [seat] });
+    return;
+  }
+  if (i.k === "inspect" && !b.insp) {
+    const tg = nearestOther(s, b, Q.INSPECT_R);
+    if (!tg) return;
+    b.insp = { target: tg.seat, t: 0 };
+    ev.push({ k: "insp_go", seat, target: tg.seat, to: [seat] });
+    return;
+  }
+  if (i.k === "buoy" && !b.buoy) {
+    b.buoy = true;
+    s.buoys.push({ owner: seat, x: r1(b.x), y: r1(b.y), place: placeOf(b.x, b.y), day: s.day, log: [], last: {} });
+    ev.push({ k: "buoy", seat, to: [seat] });
+    return;
+  }
+  if (i.k === "report") {
+    const p = unreportedNear(s, b);
+    if (!p) return;
+    p.reported = true;
+    startMeeting(s, ev, "report", seat, p.id);
+  }
+}
+const r1 = (v: number): number => Math.round(v * 10) / 10;
+// the seats that can see a point right now (their boat or their buoy within VIEW), plus `also`
+function viewersOf(s: PoachSim, x: number, y: number, also: number): number[] {
+  const out = new Set<number>([also]);
+  for (const o of alive(s)) if (Math.hypot(o.x - x, o.y - y) < Q.VIEW) out.add(o.seat);
+  for (const bu of s.buoys) if (bu.day === s.day && Math.hypot(bu.x - x, bu.y - y) < Q.BUOY_VIEW) out.add(bu.owner);
+  for (let k = 0; k < s.n; k++) if (s.out[k]) out.add(k); // the exiled watch everything
+  return [...out];
 }
 
-function checkWin(s: PoachSim, ev: GameEvent[], endOfDay3: boolean): void {
-  if (s.winner) return;
-  const poachersLeft = s.roles.some((r, i) => r === "poacher" && !s.out[i]);
-  if (s.health < Q.HEALTH_LINE) s.winner = "poacher";
-  else if (s.exiledInnocents >= 2) s.winner = "poacher";
-  else if (!poachersLeft) s.winner = "fishers";
-  else if (endOfDay3) s.winner = "poacher";
-  if (s.winner) { s.phase = "end"; ev.push({ k: "end", winner: s.winner, roles: s.roles }); }
+function moveBoats(s: PoachSim): void {
+  const dt = Q.DT;
+  for (const b of alive(s)) {
+    if (b.netCd > 0) b.netCd -= dt;
+    if (b.fineCd > 0) b.fineCd -= dt;
+    // the prototype's steerBoat() (ui.js), as rush.ts uses it
+    const dx = b.tx - b.x, dy = b.ty - b.y, d = Math.hypot(dx, dy);
+    let throttle = 0;
+    if (d > 0.9) {
+      const want = Math.atan2(dy, dx), diff = Math.atan2(Math.sin(want - b.h), Math.cos(want - b.h));
+      b.h += Math.sign(diff) * Math.min(Math.abs(diff), dt * 3.2);
+      throttle = Math.min(1, d / 4) * Math.max(0.25, Math.cos(Math.min(1.4, Math.abs(diff))));
+    }
+    const inReeds = Math.hypot(b.x - ZONES.reeds.x, b.y - ZONES.reeds.y) < ZONES.reeds.r && nr(b.x, b.y) > 0.6;
+    b.speed += (Q.SPEED * throttle * (inReeds ? 0.62 : 1) - b.speed) * Math.min(1, dt * 2.6);
+    let nx = b.x + Math.cos(b.h) * b.speed * dt, ny = b.y + Math.sin(b.h) * b.speed * dt;
+    if (nr(nx, ny) > 0.965) { const k = 0.965 / nr(nx, ny); nx *= k; ny *= k; b.speed *= 0.7; }
+    const di = Math.hypot(nx - ISLAND.x, ny - ISLAND.y);
+    if (di < ISLAND.r + 2.2) { const a = Math.atan2(ny - ISLAND.y, nx - ISLAND.x); nx = ISLAND.x + Math.cos(a) * (ISLAND.r + 2.2); ny = ISLAND.y + Math.sin(a) * (ISLAND.r + 2.2); b.speed *= 0.8; }
+    b.x = nx; b.y = ny;
+  }
+}
+
+function dayTick(s: PoachSim, ev: GameEvent[]): void {
+  moveBoats(s); updateSchools(s); moveFish(s);
+  const dt = Q.DT;
+  for (const b of alive(s)) {
+    // tasks: stay inside the ring for TASK_S
+    for (const tk of b.tasks) {
+      if (tk.done) continue;
+      if (Math.hypot(tk.x - b.x, tk.y - b.y) < Q.TASK_R) {
+        tk.p += dt;
+        if (tk.p >= Q.TASK_S - 1e-9) {
+          tk.done = true;
+          if (s.roles[b.seat] === "fisher") b.taskFish += Q.TASK_FISH;
+          ev.push({ k: "task", seat: b.seat, id: tk.id, all: b.tasks.every((x) => x.done), to: [b.seat] });
+        }
+      }
+    }
+    // inspecting: stay close for INSPECT_S
+    if (b.insp) {
+      const tg = s.boats[b.insp.target];
+      if (s.out[tg.seat] || dist(tg, b) > Q.INSPECT_R + 2) { ev.push({ k: "insp_lost", seat: b.seat, to: [b.seat] }); b.insp = null; }
+      else {
+        b.insp.t += dt;
+        if (b.insp.t >= Q.INSPECT_S - 1e-9) {
+          const res = tg.fry > 0 ? "fry" : "clean";
+          b.known[tg.seat] = { res, n: tg.fry, day: s.day }; b.insp = null;
+          ev.push({ k: "insp", seat: b.seat, target: tg.seat, res, n: tg.fry, to: [b.seat] });
+          ev.push({ k: "inspected", seat: tg.seat, to: [tg.seat] });
+        }
+      }
+    }
+  }
+  // what each boat sees, every SIGHT_S: sightings, buoy logs, dead fish seen, everyone's path
+  const el = dayClock(s);
+  if (Math.round(s.phaseT / Q.DT) % Math.round(Q.SIGHT_S / Q.DT) === 0) {
+    for (const b of alive(s)) {
+      b.path.push([r1(b.x), r1(b.y)]);
+      for (const o of alive(s)) if (o !== b && dist(o, b) < Q.VIEW) b.saw.push({ i: o.seat, x: r1(o.x), y: r1(o.y), t: el });
+      if (s.roles[b.seat] === "poacher") s.poacherPath.push([r1(b.x), r1(b.y)]);
+    }
+    for (const bu of s.buoys) {
+      if (bu.day !== s.day) continue;
+      for (const o of alive(s)) if (Math.hypot(o.x - bu.x, o.y - bu.y) < Q.BUOY_R && (bu.last[o.seat] ?? -99) < el - 8) { bu.last[o.seat] = el; bu.log.push({ i: o.seat, t: el }); }
+    }
+    for (const p of s.patches) if (p.day === s.day) for (const b of alive(s)) if (!p.seenBy.includes(b.seat) && dist(p, b) < Q.VIEW) p.seenBy.push(b.seat);
+  }
+  if (health(s) < Q.LINE) { endMatch(s, ev, "poacher", "lake"); return; }
+  if (s.phaseT >= Q.DAY_S - 1e-9) startMeeting(s, ev, "dusk", null, null);
+}
+
+function startDay(s: PoachSim, ev: GameEvent[]): void {
+  s.day++; s.phase = "day"; s.phaseT = 0; s.meeting = null; s.tally = null;
+  const spots = shuffle(s.rng, TASKS);
+  for (const b of s.boats) {
+    const d = dockPos(b.seat, s.n);
+    b.x = d.x - Math.cos(d.inward) * 2; b.y = d.y - Math.sin(d.inward) * 2; b.h = d.inward + Math.PI; b.tx = b.x; b.ty = b.y; b.speed = 0;
+    b.fry = 0; b.buoy = false; b.insp = null; b.saw = []; b.path = []; b.netCd = 0;
+    b.fineCd = Q.FINE_FIRST + s.rng() * Q.FINE_FIRST;
+    b.tasks = shuffle(s.rng, spots).slice(0, Q.TASKS_A_DAY).map((t) => ({ ...t, p: 0, done: false }));
+  }
+  ev.push({ k: "day", day: s.day });
+}
+
+// ---- the meeting ----
+function startMeeting(s: PoachSim, ev: GameEvent[], reason: "dusk" | "report", by: number | null, patch: number | null): void {
+  s.phase = "meeting"; s.phaseT = 0;
+  for (const b of s.boats) b.insp = null;
+  s.meeting = { n: (s.meeting?.n ?? 0) + 1, reason, by, patch, says: [], votes: s.boats.map(() => undefined), final: s.day >= Q.DAYS };
+  ev.push({ k: "meeting", day: s.day, reason, by, place: patch !== null ? placeOf(s.patches.find((p) => p.id === patch)!.x, s.patches.find((p) => p.id === patch)!.y) : null });
+}
+function applyMeeting(s: PoachSim, seat: number, i: PoachInput, ev: GameEvent[]): void {
+  const m = s.meeting!;
+  if (i.k === "say") {
+    if (m.says.some((x) => x.seat === seat && sameLine(x.line, i.line))) return; // each line once
+    if (m.says.filter((x) => x.seat === seat).length >= Q.SAYS_MAX) return;
+    m.says.push({ seat, line: i.line, at: Math.round(s.phaseT * 10) / 10 });
+    ev.push({ k: "say", seat, line: i.line });
+  }
+  if (i.k === "vote") {
+    if (m.votes[seat] !== undefined) return;
+    m.votes[seat] = i.target;
+    ev.push({ k: "voted", seat });
+    if (alive(s).every((b) => m.votes[b.seat] !== undefined)) tally(s, ev);
+  }
+}
+// the place a boat spent most of today
+function mostPlace(b: Boat): PlaceId {
+  const c: Partial<Record<PlaceId, number>> = {};
+  for (const [x, y] of b.path) { const p = placeOf(x, y); c[p] = (c[p] ?? 0) + 1; }
+  return (Object.entries(c).sort((p, q) => (q[1] as number) - (p[1] as number))[0]?.[0] as PlaceId) ?? "south";
+}
+// a boat this seat saw close to a patch of dead fish, around the time it appeared
+function nearPatches(s: PoachSim, b: Boat): { i: number; place: PlaceId }[] {
+  const out: { i: number; place: PlaceId }[] = [];
+  for (const p of s.patches) if (p.day === s.day) for (const w of b.saw) if (w.i !== b.seat && Math.abs(w.t - p.t) < 8 && Math.hypot(w.x - p.x, w.y - p.y) < 14) out.push({ i: w.i, place: placeOf(p.x, p.y) });
+  return out;
+}
+// the lines this seat may say: what it knows, or, for the poacher, plausible lies
+export function linesFor(s: PoachSim, seat: number): Line[] {
+  const b = s.boats[seat]; if (!b || s.out[seat]) return [];
+  const out: Line[] = [];
+  const others = alive(s).filter((o) => o.seat !== seat);
+  if (s.roles[seat] === "fisher") {
+    out.push({ k: "was", place: mostPlace(b) });
+    for (const [i, k] of Object.entries(b.known)) if (k.day === s.day) out.push({ k: "insp", i: +i, res: k.res });
+    for (const i of Object.keys(b.witnessed)) out.push({ k: "sawnet", i: +i });
+    for (const n of nearPatches(s, b).slice(0, 2)) out.push({ k: "saw", i: n.i, place: n.place });
+    const bu = s.buoys.find((x) => x.owner === seat && x.day === s.day);
+    const ids = bu ? [...new Set(bu.log.filter((l) => l.i !== seat).map((l) => l.i))].slice(0, 3) : [];
+    if (bu && ids.length) out.push({ k: "buoy", place: bu.place, ids });
+  } else {
+    // the poacher: somewhere away from today's dead fish, and someone who was near them
+    const evPlaces = new Set(s.patches.filter((p) => p.day === s.day).map((p) => placeOf(p.x, p.y)));
+    for (const place of BAYS.map((x) => x.id).filter((id) => !evPlaces.has(id)).slice(0, 2)) out.push({ k: "was", place });
+    // a scapegoat: someone seen near the dead fish, else someone fixed by the day (not a fresh draw per frame)
+    const near = nearPatches(s, b).find((x) => s.roles[x.i] !== "poacher");
+    const today = s.patches.find((p) => p.day === s.day);
+    const fallback = others.filter((o) => s.roles[o.seat] !== "poacher")[(s.day * 7 + seat) % Math.max(1, others.filter((o) => s.roles[o.seat] !== "poacher").length)];
+    if (near) out.push({ k: "saw", i: near.i, place: near.place });
+    else if (today && fallback) out.push({ k: "saw", i: fallback.seat, place: placeOf(today.x, today.y) });
+    if (fallback) out.push({ k: "insp", i: fallback.seat, res: "clean" });
+  }
+  const seen = new Set<string>();
+  return out.filter((l) => { const k = JSON.stringify(l); if (seen.has(k)) return false; seen.add(k); return true; });
+}
+function tally(s: PoachSim, ev: GameEvent[]): void {
+  const m = s.meeting!;
+  const c = new Map<number, number>();
+  for (const v of m.votes) if (v !== null && v !== undefined) c.set(v, (c.get(v) ?? 0) + 1);
+  const ranked = [...c.entries()].sort((p, q) => q[1] - p[1] || p[0] - q[0]);
+  let out: number | null = null;
+  if (ranked.length && (ranked.length === 1 || ranked[0][1] > ranked[1][1])) out = ranked[0][0];
+  else if (ranked.length && m.final) { const top = ranked.filter((r) => r[1] === ranked[0][1]); out = top[Math.floor(s.rng() * top.length)][0]; }
+  else if (!ranked.length && m.final) { const left = alive(s); out = left[Math.floor(s.rng() * left.length)].seat; }
+  s.tally = { votes: [...m.votes], out };
+  s.phase = "tally"; s.phaseT = 0;
+  ev.push({ k: "tally", votes: m.votes.map((v) => (v === undefined ? null : v)), out });
+}
+function exile(s: PoachSim, ev: GameEvent[]): void {
+  const out = s.tally!.out;
+  s.phase = "exile"; s.phaseT = 0;
+  if (out === null) {
+    // no exile: in the night the poacher works unwatched (DESIGN: the lake loses 5%)
+    const lost = killYoung(s, Math.round(s.start * Q.NO_EXILE / 100));
+    ev.push({ k: "exile", seat: null, lost });
+    return;
+  }
+  s.out[out] = true;
+  s.exiled.push({ seat: out, role: s.roles[out], day: s.day });
+  ev.push({ k: "exile", seat: out, role: s.roles[out] });
+}
+function killYoung(s: PoachSim, n: number): number {
+  let gone = 0;
+  for (let k = 0; k < n && s.fish.length; k++) {
+    let j = s.fish.findIndex((f) => !f.adult); if (j < 0) j = 0;
+    s.fish.splice(j, 1); gone++;
+  }
+  return gone;
+}
+function afterExile(s: PoachSim, ev: GameEvent[]): void {
+  const poachers = s.boats.filter((b) => s.roles[b.seat] === "poacher");
+  if (poachers.every((b) => s.out[b.seat])) { endMatch(s, ev, "fishers", "caught"); return; }
+  if (health(s) < Q.LINE) { endMatch(s, ev, "poacher", "lake"); return; }
+  if (s.day >= Q.DAYS) { endMatch(s, ev, "poacher", "survived"); return; }
+  // at night the poacher goes out again; the lake recovers a little (DESIGN: 6% less 2%)
+  const night = killYoung(s, Math.round(s.start * Q.NIGHT / 100));
+  s.nightLoss.push(Q.NIGHT);
+  for (const b of poachers) if (!s.out[b.seat]) b.youngKilled += Math.round(night / poachers.filter((p) => !s.out[p.seat]).length);
+  ev.push({ k: "night", lost: night, pct: Q.NIGHT });
+  if (health(s) < Q.LINE) { endMatch(s, ev, "poacher", "lake"); return; }
+  startDay(s, ev);
+}
+function endMatch(s: PoachSim, ev: GameEvent[], winner: "fishers" | "poacher", why: "caught" | "lake" | "survived"): void {
+  s.phase = "end"; s.winner = winner; s.endReason = why; s.phaseT = 0;
+  ev.push({ k: "end", winner, why });
 }
 
 function step(s: PoachSim, inputs: { seat: number; i: PoachInput }[]): GameEvent[] {
   const ev: GameEvent[] = [];
   if (s.phase === "end") return ev;
-  const held = new Set<number>();
-  for (const { seat, i } of inputs) {
-    if (i.k === "inspect") held.add(seat * 100 + 1);
-    if (i.k === "plant") held.add(seat * 100 + 2);
-    apply(s, seat, i, ev);
-  }
-  s.tick++; s.t = Math.round(s.tick * Q.DT * 1000) / 1000; s.phaseT += Q.DT;
-  if (s.phase === "day") {
-    heldActions(s, held, ev);
-    moveDay(s);
-    checkWin(s, ev, false);
-    if (s.phase === "day" && s.phaseT >= Q.DAY_S - 1e-9) {
-      ev.push({ k: "dusk", day: s.day, bays: { ...s.bayLoss }, health: s.health, quota: s.quota });
-      s.bayLoss = { "North Bay": 0, "East Bay": 0, "South Bay": 0, "West Bay": 0 };
-      for (const b of s.boats) { b.inspect = null; b.plant = null; }
-      s.phase = "dusk"; s.phaseT = 0; // every day ends in a meeting; day 3's is the last, and has no Skip
-    }
-  } else if (s.phase === "dusk") {
-    if (s.phaseT >= Q.DUSK_S - 1e-9) { s.phase = "meeting"; s.phaseT = 0; s.votes = s.boats.map(() => undefined); for (const b of s.boats) { b.mind.said = false; b.mind.voted = false; } ev.push({ k: "meeting", day: s.day }); }
-  } else if (s.phase === "meeting") {
-    // a meeting ends at the first tick after everyone still in has voted (votes
-    // cast in this tick are counted next tick, 50 ms later), or at 90 s
-    const everyone = s.boats.every((b) => s.out[b.seat] || s.votes[b.seat] !== undefined) && !inputs.some((x) => x.i.k === "vote");
-    if (s.phaseT >= Q.MEETING_S - 1e-9 || everyone) {
-      settleVote(s, ev);
-      checkWin(s, ev, s.day >= Q.DAYS);
-      if (!s.winner) { s.day++; s.phase = "day"; s.phaseT = 0; for (const b of s.boats) { b.patrolled = false; b.fish = 0; } ev.push({ k: "dawn", day: s.day }); }
-    }
-  }
+  for (const { seat, i } of inputs) apply(s, seat, i, ev);
+  if (s.phase === "day") dayTick(s, ev);
+  s.tick++;
+  s.t = Math.round(s.tick * Q.DT * 1000) / 1000;
+  s.phaseT = Math.round((s.phaseT + Q.DT) * 1000) / 1000;
+  if (s.phase === "role" && s.phaseT >= Q.ROLE_S - 1e-9) startDay(s, ev);
+  else if (s.phase === "meeting" && s.phaseT >= Q.MEET_S - 1e-9) tally(s, ev);
+  else if (s.phase === "tally" && s.phaseT >= Q.TALLY_S - 1e-9) exile(s, ev);
+  else if (s.phase === "exile" && s.phaseT >= Q.EXILE_S - 1e-9) afterExile(s, ev);
   return ev;
 }
 
-// ---- a bot (practice only): fishes, inspects now and then, votes on what it has seen ----
-function bot(s: PoachSim, seat: number, r: () => number): PoachInput[] {
-  const b = s.boats[seat];
-  if (s.out[seat] || s.phase === "end") return [];
-  if (s.phase === "meeting") {
-    if (!b.mind.said && s.phaseT > 4 + seat && r() < 0.05) { b.mind.said = true; return [{ k: "say", p: "was", bay: bayOf(b.x, b.y) }]; }
-    if (!b.mind.voted && s.phaseT > 15 + seat * 2 && r() < 0.05) {
-      b.mind.voted = true;
-      const suspects = s.boats.filter((o) => o.seat !== seat && !s.out[o.seat] && !(isPoacher(s, seat) && isPoacher(s, o.seat)));
-      const pick = isPoacher(s, seat) ? suspects[Math.floor(r() * suspects.length)] : r() < 0.5 ? suspects[Math.floor(r() * suspects.length)] : null;
-      return [{ k: "vote", target: pick ? pick.seat : null }];
-    }
-    return [];
-  }
-  if (s.phase !== "day" || r() > 0.25) return [];
-  if (!b.mind.spot || s.t > b.mind.spotT) { const f = s.fish[Math.floor(r() * s.fish.length)]; b.mind.spot = f ? [f.x, f.y] : [Q.W / 2, Q.H / 2]; b.mind.spotT = s.t + 4; }
-  const out: PoachInput[] = [{ k: "steer", x: Math.round(b.mind.spot[0]), y: Math.round(b.mind.spot[1]) }];
-  if (isPoacher(s, seat)) { out.push({ k: r() < 0.4 ? "fine" : "cast" }); if (b.fry > 4 && r() < 0.3) out.push({ k: "dump" }); }
-  else out.push({ k: "cast" });
-  return out;
-}
-
 // ---- what one seat may see ----
+const p10 = (v: number): number => Math.round(v * 10);
+export function canSee(s: PoachSim, seat: number, x: number, y: number): boolean {
+  if (seat < 0 || s.out[seat] || s.phase === "end") return true; // a watcher, the exiled and the end see everything
+  const me = s.boats[seat];
+  if (Math.hypot(me.x - x, me.y - y) < Q.VIEW) return true;
+  return s.buoys.some((bu) => bu.owner === seat && bu.day === s.day && Math.hypot(bu.x - x, bu.y - y) < Q.BUOY_VIEW);
+}
 function frameFor(s: PoachSim, seat: number) {
-  const me = seat >= 0 && seat < s.n ? s.boats[seat] : null;
-  const role = me ? s.roles[seat] : null;
-  // a role is shown only to its owner, to a fellow poacher, or after exile;
-  // at the end, the "end" event and the results reveal every role
-  const roles = s.roles.map((r, i) => (s.out[i] || i === seat || (role === "poacher" && r === "poacher") ? r : null));
+  const ghost = seat < 0 || s.out[seat] === true;
+  const me = seat >= 0 ? s.boats[seat] : null;
+  const role = seat >= 0 ? s.roles[seat] : null;
+  const partners = role === "poacher" ? s.boats.filter((b) => b.seat !== seat && s.roles[b.seat] === "poacher").map((b) => b.seat) : [];
+  const showAll = ghost || s.phase === "end";
+  const day = s.phase === "day";
+  const boatsSeen = s.boats.filter((b) => !s.out[b.seat] && (b.seat === seat || showAll || !day || canSee(s, seat, b.x, b.y)));
+  const f: Record<string, unknown> = {
+    phase: s.phase, day: s.day, days: Q.DAYS, left: Math.max(0, Math.ceil(phaseLength(s) - s.phaseT)),
+    health: health(s), line: Q.LINE, role, partners, out: s.out.map((o, i) => (o ? i : -1)).filter((i) => i >= 0),
+    // boats: [seat, x*10, y*10, h*100, inspecting]
+    b: boatsSeen.map((b) => [b.seat, p10(b.x), p10(b.y), Math.round(b.h * 100), b.insp ? 1 : 0]),
+  };
+  if (day || showAll) {
+    f.f = s.fish.filter((x) => showAll || canSee(s, seat, x.x, x.y)).map((x) => [p10(x.x), p10(x.y), Math.round(x.h * 100), x.adult ? 1 : 0]);
+    f.ev = s.patches.filter((p) => p.day === s.day && (showAll || canSee(s, seat, p.x, p.y))).map((p) => [p.id, p10(p.x), p10(p.y), p.reported ? 1 : 0]);
+  }
+  if (me && !ghost && s.phase !== "end") {
+    f.me = {
+      netCd: Math.max(0, Math.round(me.netCd * 10) / 10), fineCd: role === "poacher" ? Math.max(0, Math.round(me.fineCd * 10) / 10) : 0, fineMax: Q.FINE_CD,
+      fry: role === "poacher" ? me.fry : 0, caught: me.caught, taskFish: me.taskFish,
+      tasks: me.tasks.map((t) => [t.id, t.verb, t.place, p10(t.x), p10(t.y), Math.min(100, Math.round((t.p / Q.TASK_S) * 100)), t.done ? 1 : 0]),
+      buoy: me.buoy, buoyAt: (() => { const bu = s.buoys.find((x) => x.owner === seat && x.day === s.day); return bu ? [p10(bu.x), p10(bu.y)] : null; })(),
+      insp: me.insp ? [me.insp.target, Math.round((me.insp.t / Q.INSPECT_S) * 100)] : null,
+      canInspect: day && !me.insp && nearestOther(s, me, Q.INSPECT_R) !== null,
+      canReport: day && unreportedNear(s, me) !== null,
+      seen: day ? watchersOf(s, me).length : 0,
+    };
+  }
+  if (s.meeting && (s.phase === "meeting" || s.phase === "tally" || s.phase === "exile")) f.m = meetingFor(s, seat);
+  if (s.tally && (s.phase === "tally" || s.phase === "exile")) f.tally = { votes: s.tally.votes.map((v) => (v === undefined ? null : v)), out: s.tally.out, role: s.phase === "exile" && s.tally.out !== null ? s.roles[s.tally.out] : null };
+  if (s.phase === "end") f.end = { winner: s.winner, why: s.endReason, roles: s.roles, path: thin(s.poacherPath, 240), nets: s.poacherNets };
+  return f;
+}
+function phaseLength(s: PoachSim): number {
+  return { role: Q.ROLE_S, day: Q.DAY_S, meeting: Q.MEET_S, tally: Q.TALLY_S, exile: Q.EXILE_S, end: 0 }[s.phase];
+}
+function thin<T>(arr: T[], max: number): T[] { if (arr.length <= max) return arr; const k = arr.length / max; return Array.from({ length: max }, (_, i) => arr[Math.floor(i * k)]); }
+// the meeting, as this seat knows it: the map (its own path, its sightings,
+// the dead fish it saw or that were reported, every buoy and its log), the
+// table (everyone's lines, who has voted) and its own lines to say
+function meetingFor(s: PoachSim, seat: number) {
+  const m = s.meeting!;
+  const me = seat >= 0 ? s.boats[seat] : null, ghost = seat < 0 || s.out[seat];
+  const last: Record<number, { i: number; x: number; y: number; t: number }> = {};
+  for (const w of me?.saw ?? []) last[w.i] = w;
+  const reported = m.patch !== null ? s.patches.find((p) => p.id === m.patch) : null;
   return {
-    t: s.t, phase: s.phase, day: s.day, days: Q.DAYS,
-    left: Math.max(0, (s.phase === "day" ? Q.DAY_S : s.phase === "meeting" ? Q.MEETING_S : Q.DUSK_S) - s.phaseT),
-    health: s.health, line: Q.HEALTH_LINE, quota: s.quota, quotaGoal: Q.QUOTA,
-    role, partners: role === "poacher" ? s.roles.flatMap((r, i) => (r === "poacher" && i !== seat ? [i] : [])) : [],
-    known: roles.map((r, i) => (r !== null && i !== seat ? { seat: i, role: r } : null)).filter(Boolean),
-    out: s.out,
-    // my basket is mine to see; others' baskets only by inspecting
-    mine: me ? { fish: me.fish, fry: me.fry, buoyUsed: s.buoys.some((u) => u.seat === seat && u.day === s.day), patrolled: me.patrolled, inspecting: me.inspect ? { target: me.inspect.target, t: Math.round(me.inspect.t * 10) / 10 } : null, planting: me.plant ? Math.round(me.plant.t * 10) / 10 : null } : null,
-    b: s.boats.map((b) => [b.seat, Math.round(b.x), Math.round(b.y), Math.round(b.h * 100), s.out[b.seat] ? 1 : 0]),
-    f: s.phase === "day" ? s.fish.map((f) => [Math.round(f.x), Math.round(f.y), Math.round(f.h * 100), f.adult ? 1 : 0]) : [],
-    buoys: s.buoys.filter((u) => u.day === s.day).map((u) => ({ seat: u.seat, x: u.x, y: u.y, passed: s.phase === "day" ? [] : u.passed })),
-    said: s.said.filter((x) => x.day === s.day).map(({ text: _text, ...code }) => code),
-    voted: s.phase === "meeting" ? s.votes.map((v) => v !== undefined) : [], canSkip: s.day < Q.DAYS,
-    history: s.history,
+    n: m.n, reason: m.reason, by: m.by, place: reported ? placeOf(reported.x, reported.y) : null, final: m.final,
+    says: m.says.map((x) => ({ seat: x.seat, line: x.line })),
+    voted: m.votes.map((v, i) => (v !== undefined ? i : -1)).filter((i) => i >= 0),
+    myVote: seat >= 0 ? m.votes[seat] ?? undefined : undefined,
+    path: me && !ghost ? thin(me.path, 160).map(([x, y]) => [p10(x), p10(y)]) : [],
+    seen: Object.values(last).map((w) => [w.i, p10(w.x), p10(w.y), Math.round(w.t)]),
+    patches: s.patches.filter((p) => p.day === s.day && (ghost || p.reported || (seat >= 0 && p.seenBy.includes(seat)) || p.by === seat)).map((p) => [p10(p.x), p10(p.y), Math.round(p.t), p.reported ? 1 : 0]),
+    buoys: s.buoys.filter((bu) => bu.day === s.day).map((bu) => ({ owner: bu.owner, x: p10(bu.x), y: p10(bu.y), place: bu.place, log: bu.log.filter((l) => l.i !== bu.owner).map((l) => [l.i, Math.round(l.t)]) })),
+    known: me && !ghost ? Object.fromEntries(Object.entries(me.known).map(([i, k]) => [i, k.res])) : {},
+    witnessed: me && !ghost ? Object.keys(me.witnessed).map(Number) : [],
+    lines: me && !ghost && s.phase === "meeting" ? linesFor(s, seat) : [],
   };
 }
 
+// ---- the end ----
 function results(s: PoachSim): Results {
-  const fishersWin = s.winner === "fishers";
+  const winner = s.winner ?? "poacher";
+  const [a, y] = counts(s);
+  // the lake keeps what this match left, as a share of what the room brought
+  // (the 40 extra young in the reeds were this match's own)
+  const left = Math.round((health(s) / 100) * s.roomFish);
+  const next = nextSpring(left), tier = tierOf(next);
   const seats = s.boats.map((b) => {
-    const won = isPoacher(s, b.seat) ? !fishersWin : fishersWin;
-    return { seat: b.seat, score: won ? 1 : 0, place: won ? 1 : 2, firstScoreS: b.firstScoreAt, role: s.roles[b.seat], caught: b.caught, quota: b.caught };
+    const base = b.caught + b.taskFish, won = (winner === "fishers") === (s.roles[b.seat] === "fisher");
+    return { seat: b.seat, base, score: Math.round(base * tier.mult) + (won ? Q.WIN_BONUS : 0), won };
   });
-  const p = s.boats.filter((b) => isPoacher(s, b.seat));
-  const sharp = [...s.boats].sort((a, b) => b.inspections - a.inspections)[0];
-  const exiled = s.history.filter((h) => h.exiled !== null);
+  const order = seats.map((x) => x.score);
+  const poachers = s.boats.filter((b) => s.roles[b.seat] === "poacher");
+  const pr = poachers[0];
+  const sharp = [...s.boats].filter((b) => s.roles[b.seat] === "fisher").sort((p, q) => Object.keys(q.known).length - Object.keys(p.known).length)[0];
   const highlights: Highlight[] = [
-    { title: "The poacher", text: `{name} poached with ${p.reduce((n, b) => n + b.fineCasts, 0)} fine-net casts`, seat: p[0].seat, tkey: "hl_poach_poacher_t", key: "hl_poach_poacher", vars: { n: p.reduce((n, b) => n + b.fineCasts, 0) } },
-    { title: "Sharpest eyes", text: sharp.inspections ? `{name} looked in ${sharp.inspections} baskets` : "nobody inspected a basket", seat: sharp.seat, tkey: "hl_poach_eyes_t", key: sharp.inspections ? "hl_poach_eyes" : "hl_poach_eyes_none", vars: { n: sharp.inspections } },
-    { title: "Closest call", text: exiled.length ? `day ${exiled[0].day}: the village exiled a ${exiled[0].role}` : `the lake ended at ${Math.round(s.health)}% (the line is ${Q.HEALTH_LINE}%)`, seat: exiled[0]?.exiled ?? p[0].seat, tkey: "hl_poach_close_t", key: exiled.length ? "hl_poach_close" : "hl_poach_close_lake", vars: exiled.length ? { day: exiled[0].day, role: `@g_role_${exiled[0].role}` } : { health: Math.round(s.health), line: Q.HEALTH_LINE } },
+    { title: "The poacher", text: `{name} cast ${pr?.fineCasts ?? 0} fine nets`, seat: pr?.seat, tkey: "p2_hl_poacher_t", key: "p2_hl_poacher", vars: { n: pr?.fineCasts ?? 0 } },
+    { title: "Sharpest eyes", text: sharp && Object.keys(sharp.known).length ? `{name} inspected ${Object.keys(sharp.known).length} boats` : "nobody inspected a boat", seat: sharp?.seat, tkey: "p2_hl_eyes_t", key: sharp && Object.keys(sharp.known).length ? "p2_hl_eyes" : "p2_hl_eyes_none", vars: { n: sharp ? Object.keys(sharp.known).length : 0 } },
+    { title: "The lake", text: `ended at ${Math.round(health(s))}% (the line is ${Q.LINE}%)`, tkey: "p2_hl_lake_t", key: "p2_hl_lake", vars: { h: Math.round(health(s)), line: Q.LINE } },
   ];
-  const adults = s.fish.filter((f) => f.adult).length, fry = s.fish.length - adults;
-  return { seats, lakeLeft: Math.round((adults + fry * 0.5) * 220 / (Q.FISH + Q.FRY * 0.5)), highlights, winner: s.winner, roles: s.roles, health: s.health };
+  return {
+    seats: seats.map((x) => ({ seat: x.seat, score: x.score, place: 1 + order.filter((v) => v > x.score).length, firstScoreS: null, base: x.base, won: x.won })),
+    lakeLeft: left, highlights,
+    winner, why: s.endReason, roles: s.roles, health: health(s), tier: tier.id, next,
+    left: { a, y },
+    ledger: s.boats.map((b) => ({ seat: b.seat, home: b.caught + b.taskFish, young: b.youngKilled, spared: 0 })),
+    exiled: s.exiled,
+    replay: { path: thin(s.poacherPath, 240), nets: s.poacherNets },
+  };
+}
+
+// ---- bots (the prototype's pThink, and its meeting talk and votes) ----
+function bot(s: PoachSim, seat: number, r: () => number): PoachInput[] {
+  const b = s.boats[seat];
+  if (!b || s.out[seat]) return [];
+  if (s.phase === "meeting") return botMeeting(s, b, r);
+  if (s.phase !== "day" || r() > 0.2) return [];
+  const out: PoachInput[] = [];
+  const steer = (x: number, y: number) => { if (Math.hypot(x - b.tx, y - b.ty) > 1) out.push({ k: "steer", x: r1(x), y: r1(y) }); };
+  const el = s.phaseT, fisher = s.roles[seat] === "fisher";
+  // fishers: go to dead fish they can see, and report them
+  const p = s.patches.find((x) => x.day === s.day && !x.reported && dist(x, b) < Q.VIEW);
+  if (p && fisher) { if (dist(p, b) < Q.REPORT_R - 1) { if (r() < 0.5) return [{ k: "report" }]; } else { steer(p.x, p.y); return out; } }
+  if (b.insp) { const tg = s.boats[b.insp.target]; steer(tg.x, tg.y); return out; }
+  if (!fisher) {
+    const eyes = watchersOf(s, b).length;
+    if (b.fry > 0 && alive(s).some((o) => o !== b && dist(o, b) < 13) && r() < 0.4) return [{ k: "dump" }];
+    if (b.fineCd <= 0 && el > 6 && (eyes === 0 || (eyes === 1 && r() < 0.06))) {
+      const nx = b.x + Math.cos(b.h) * Q.NET_AHEAD, ny = b.y + Math.sin(b.h) * Q.NET_AHEAD;
+      const nearYoung = s.fish.some((f) => !f.adult && Math.hypot(f.x - nx, f.y - ny) < 7);
+      if (nearYoung || r() < 0.25) { b.mind.hunt = null; return [{ k: "fine" }]; }
+    }
+    if (b.fineCd <= 3 && !b.mind.hunt) {
+      // go where the young fish are and nobody else is
+      const spots: [number, number][] = [[ZONES.reeds.x * 0.75, ZONES.reeds.y * 0.75], [ZONES.reeds.x * 0.65, ZONES.reeds.y * 0.85], [ZONES.lotus.x * 0.75, ZONES.lotus.y * 0.75], waterPoint(r, 0.75)];
+      b.mind.hunt = spots.map((sp) => [sp, alive(s).filter((o) => o !== b && Math.hypot(o.x - sp[0], o.y - sp[1]) < 32).length + r() * 0.5] as const).sort((p2, q) => p2[1] - q[1])[0][0];
+    }
+    if (b.mind.hunt) { steer(b.mind.hunt[0], b.mind.hunt[1]); if (Math.hypot(b.mind.hunt[0] - b.x, b.mind.hunt[1] - b.y) < 4 || b.fineCd > 5) b.mind.hunt = null; return out; }
+  } else {
+    if (!b.buoy && el > 6 && r() < 0.03) return [{ k: "buoy" }];
+    const tg = alive(s).find((o) => o !== b && !b.mind.inspected[o.seat] && dist(o, b) < Q.INSPECT_R);
+    if (tg && r() < 0.25) { b.mind.inspected[tg.seat] = true; return [{ k: "inspect" }]; }
+    if (r() < 0.02) out.push({ k: "net" });
+  }
+  const tk = b.tasks.find((x) => !x.done);
+  if (tk) steer(tk.x + ((seat % 3) - 1) * 1.5, tk.y + (seat % 2) * 1.5);
+  else {
+    if (!b.mind.wander || Math.hypot(b.mind.wander[0] - b.x, b.mind.wander[1] - b.y) < 4) b.mind.wander = waterPoint(r, 0.8);
+    if (b.mind.wander) steer(b.mind.wander[0], b.mind.wander[1]);
+  }
+  return out;
+}
+// a point on open water from the bot's own stream (never the lake's)
+function waterPoint(r: () => number, maxK: number): [number, number] {
+  for (let k = 0; k < 40; k++) { const x = (r() * 2 - 1) * 88, y = (r() * 2 - 1) * 60; if (nr(x, y) < maxK && Math.hypot(x - ISLAND.x, y - ISLAND.y) > 11) return [x, y]; }
+  return [0, 20];
+}
+// how much a bot suspects another boat (the prototype's susOf)
+function suspicion(s: PoachSim, b: Boat, o: Boat, r: () => number): number {
+  if (o === b) return -99;
+  let sc = r() * 0.8;
+  sc += (b.witnessed[o.seat] ?? 0) * 10;
+  const k = b.known[o.seat]; if (k) sc += k.res === "fry" ? 9 : -5;
+  sc += nearPatches(s, b).filter((x) => x.i === o.seat).length * 2.6;
+  for (const bu of s.buoys) if (bu.day === s.day) for (const p of s.patches) if (p.day === s.day) for (const l of bu.log) if (l.i === o.seat && Math.abs(l.t - p.t) < 9 && Math.hypot(bu.x - p.x, bu.y - p.y) < 20) sc += 1.6;
+  for (const sy of s.meeting?.says ?? []) {
+    if (sy.seat === b.seat) continue;
+    const w = sy.seat === o.seat ? 0 : 1, l = sy.line;
+    if (l.k === "sus" && l.i === o.seat) sc += 1.2 * w;
+    if (l.k === "sawnet" && l.i === o.seat) sc += 4 * w;
+    if (l.k === "insp" && l.i === o.seat) sc += (l.res === "fry" ? 3.5 : -1.5) * w;
+    if (l.k === "vouch" && l.i === o.seat) sc -= 1 * w;
+    if (l.k === "saw" && l.i === o.seat) sc += 1.2 * w;
+    if ((l.k === "sus" || l.k === "sawnet") && l.i === b.seat && sy.seat === o.seat) sc += 2.5;
+  }
+  if (s.roles[b.seat] === "poacher") sc = s.roles[o.seat] === "poacher" ? -99 : sc * 0.3 + r() * 2;
+  return sc;
+}
+function botMeeting(s: PoachSim, b: Boat, r: () => number): PoachInput[] {
+  const m = s.meeting!;
+  if (b.mind.meet !== m.n) {
+    // plan this meeting: up to two lines, then a vote at 15-25 s
+    b.mind.meet = m.n;
+    const mine = linesFor(s, b.seat);
+    const fisher = s.roles[b.seat] === "fisher";
+    const pickL: Line[] = [];
+    if (fisher) {
+      const pri = (l: Line) => ({ sawnet: 0, insp: 1, saw: 2, buoy: 3, was: 4 } as Record<string, number>)[l.k] ?? 9;
+      pickL.push(...[...mine].sort((p, q) => pri(p) - pri(q)).slice(0, 2));
+    } else {
+      pickL.push(mine[0]);
+      const blame = mine.find((l) => l.k === "saw" || l.k === "insp");
+      if (blame && r() < 0.7) pickL.push(blame);
+    }
+    b.mind.lines = pickL.filter(Boolean);
+    b.mind.sayAt = 2 + b.seat * 1.6 + r() * 1.5;
+    b.mind.voteAt = 15 + r() * 10;
+  }
+  if (m.votes[b.seat] !== undefined) return [];
+  if (b.mind.lines && b.mind.lines.length && s.phaseT >= b.mind.sayAt) {
+    const line = b.mind.lines.shift()!;
+    b.mind.sayAt = s.phaseT + 4 + r() * 1.5;
+    return [{ k: "say", line }];
+  }
+  if (s.phaseT >= b.mind.voteAt) {
+    const ranked = alive(s).filter((o) => o !== b).map((o) => [o, suspicion(s, b, o, r)] as const).sort((p, q) => q[1] - p[1]);
+    const [top, sc] = ranked[0];
+    const out: PoachInput[] = [];
+    if (sc > 1.2 && m.says.filter((x) => x.seat === b.seat).length < 3 && (s.roles[b.seat] === "fisher" ? sc > 4 : true) && r() < 0.5) out.push({ k: "say", line: { k: "sus", i: top.seat } });
+    out.push({ k: "vote", target: m.final || sc > (s.roles[b.seat] === "poacher" ? 1.5 : 3) ? top.seat : null });
+    return out;
+  }
+  return [];
 }
 
 export const poach: Mode<PoachSim, PoachInput> = {
-  id: "poach", model: "poach 1.0", seats: Q.SEATS, breeds: false,
+  id: "poach", model: POACH_MODEL, seats: Q.SEATS, breeds: false,
   make, input, step, frameFor, over: (s) => s.phase === "end", results, bot,
 };

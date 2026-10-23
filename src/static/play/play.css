@@ -416,3 +416,74 @@ body.play.in-room { overflow: hidden; }
 /* on a phone the top bar's second row (sound, details) sits where the
    minimap would; the minimap goes below it */
 @media (max-width: 640px) { #mini { top: calc(max(10px, env(safe-area-inset-top, 0px)) + 98px); } }
+
+/* ---- Who's Poaching 2.0 ---- */
+/* the lantern's circle: everything beyond it is dark (the server does not send it either) */
+.po-fog { position: absolute; inset: 0; z-index: 2; pointer-events: none; background: radial-gradient(circle var(--fr, 160px) at var(--fx, 50%) var(--fy, 50%), rgba(8,10,22,0) 0%, rgba(8,10,22,0) 72%, rgba(8,10,22,.9) 100%); }
+.po-fog[hidden], .po-seen[hidden] { display: none; }
+.po-status .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.po-rolechip { font-family: var(--display); font-weight: 800; font-size: 13px; padding: 1px 10px; border-radius: 999px; }
+.po-rolechip.f { background: rgba(69,164,140,.25); color: #8fe0c8; } .po-rolechip.p { background: rgba(207,59,46,.3); color: #ff9a86; }
+#po-seen { color: #8fe0c8; font-weight: 700; } #po-seen.watched { color: var(--paper); }
+.po-health { display: flex; justify-content: space-between; align-items: baseline; margin-top: 6px; } .po-health b { font-family: var(--display); font-size: 18px; }
+.po-hbar { position: relative; height: 8px; } .po-hbar i { display: block; height: 100%; border-radius: 99px; }
+.po-line { position: absolute; top: -3px; bottom: -3px; width: 3px; background: #ff8a7a; border-radius: 2px; }
+.po-tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13.5px; }
+.po-tasks li::before { content: "○ "; color: var(--gold); } .po-tasks li.done { color: var(--mist); text-decoration: line-through; } .po-tasks li.done::before { content: "✓ "; color: var(--jade); }
+.po-tasks b { color: var(--gold); }
+.po-pads { flex-wrap: wrap; justify-content: flex-end; }
+.po-pads .pad { flex: 1 1 30%; min-width: 0; }
+.po-pads .pad.small { font-size: 13px; padding: 10px 6px; }
+.po-pads .pad.gold { background: var(--gold); color: var(--ink); } .po-pads .pad.jade { background: #2f7f6d; color: var(--paper); }
+.po-pads .pad.pulse { animation: po-pulse 1s ease-in-out infinite; }
+@keyframes po-pulse { 50% { transform: scale(1.06); box-shadow: 0 0 0 4px rgba(232,184,77,.5); } }
+.po-pads .pad .cd { position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(to top, rgba(0,0,0,.45) var(--p, 0%), transparent var(--p, 0%)); pointer-events: none; }
+.po-pads .pad { position: relative; }
+.po-pads .pad:disabled { opacity: .45; }
+.po-keys { margin: 0; color: var(--mist); }
+.po-face { display: inline-block; width: 54px; height: 64px; border-radius: 8px; overflow: hidden; flex: none; vertical-align: middle; }
+.po-face svg { width: 100%; height: 100%; display: block; }
+.po-face.small { width: 40px; height: 48px; } .po-face.tiny { width: 22px; height: 26px; border-radius: 5px; }
+.po-role { text-align: center; justify-items: center; }
+.po-role .po-bigface .po-face { width: 120px; height: 144px; border-radius: 14px; }
+.po-who { font-family: var(--brush), var(--display); font-size: 56px; line-height: 1.05; }
+.po-role.f .po-who { color: #8fe0c8; } .po-role.p .po-who { color: #ff8a7a; }
+.po-crew { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.po-partner { color: #ff9a86; font-weight: 700; margin: 0; }
+.po-meet { width: min(1100px, 100%); }
+.po-mhead { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+.po-mhead .lede { margin: 4px 0 0; }
+.po-mt { text-align: right; } .po-mt b { display: block; font-family: var(--display); font-size: 30px; color: var(--gold); } .po-mt small { color: var(--mist); }
+.po-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 14px; }
+.po-mapbox { display: grid; gap: 6px; min-width: 0; } .po-mapbox canvas { width: 100%; height: auto; border-radius: 12px; background: #13202a; }
+.po-legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--mist); } .po-legend .ev { color: #ff8a7a; } .po-legend .bu { color: #ffb45a; } .po-legend .pa { color: var(--gold); }
+.po-side { display: grid; gap: 10px; min-width: 0; align-content: start; }
+.po-seats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.po-seat { position: relative; display: flex; gap: 8px; align-items: start; text-align: left; color: inherit; font: inherit; background: var(--chip); border: 1.5px solid var(--line); border-radius: 12px; padding: 7px; min-width: 0; cursor: pointer; }
+.po-seat .po-face { width: 44px; height: 52px; }
+.po-seat b { display: block; font-family: var(--display); font-size: 14px; }
+.po-seat.sel { border-color: var(--gold); } .po-seat.out { opacity: .4; } .po-seat:disabled { cursor: default; }
+.po-say { display: block; font-size: 12.5px; margin-top: 3px; padding: 2px 7px; border-radius: 8px; background: rgba(245,234,214,.08); }
+.po-say.acc { background: rgba(207,59,46,.22); } .po-say.vouch { background: rgba(69,164,140,.22); }
+.po-known { display: block; font-size: 11.5px; font-weight: 800; color: #8fe0c8; } .po-known.bad { color: #ff8a7a; }
+.po-vb { position: absolute; top: 5px; right: 6px; font-size: 10.5px; font-weight: 800; padding: 0 6px; border-radius: 99px; background: var(--gold); color: var(--ink); }
+.po-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chipbtn.acc { border-color: rgba(207,59,46,.6); } .chipbtn.vouch { border-color: rgba(69,164,140,.6); } .chipbtn:disabled { opacity: .4; }
+.po-menu { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px; border-radius: 12px; background: rgba(232,184,77,.1); }
+.po-menu .chipbtn.vote { background: var(--lacquer); color: var(--paper); }
+.po-votes { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+.po-exile { text-align: center; justify-items: center; min-height: 200px; align-content: center; }
+.po-exile .po-face { width: 110px; height: 132px; }
+.po-bigface.drift { animation: po-drift 5s ease-in forwards; }
+@keyframes po-drift { to { transform: translateY(-30px) rotate(-6deg); opacity: .25; } }
+.po-typed { font-family: var(--display); font-size: 22px; min-height: 1.4em; } .po-typed.bad { color: #ff8a7a; } .po-typed.good { color: #8fe0c8; }
+.po-roles { display: flex; flex-wrap: wrap; gap: 6px; }
+.po-rolepill .swatch { width: 12px; height: 12px; border-radius: 99px; display: inline-block; }
+.po-rolepill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px; border-radius: 99px; background: rgba(69,164,140,.18); font-size: 13px; } .po-rolepill.p { background: rgba(207,59,46,.3); }
+@media (max-width: 760px) {
+  .po-grid { grid-template-columns: 1fr; }
+  .po-seats { grid-template-columns: 1fr 1fr; }
+  .po-seat .po-face { width: 34px; height: 40px; }
+  .po-who { font-size: 44px; }
+  .po-mhead h2 { font-size: 22px; }
+}

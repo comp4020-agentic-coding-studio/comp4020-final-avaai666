@@ -1,14 +1,15 @@
 import { expect, inject, it } from "vitest";
 import { joinRoom, openRoom, openStream, post } from "./play-helpers.ts";
 
-// Who's Poaching on /play over HTTP, against the RUNNING app (never
+// Who's Poaching 2.0 on /play over HTTP, against the RUNNING app (never
 // production): four people in one room, each with their own cookie. Each
 // stream carries only its own role; a fisher's stream never names the
-// poacher before the end. They skip every vote, so the poacher survives day
-// 3; then the results reveal every role, and one of them asks for the rematch.
+// poacher before the end. They skip the first two votes and vote out an
+// innocent at the last, so the poacher survives day 3; then the results
+// reveal every role, and one of them asks for the rematch.
 const baseUrl = inject("baseUrl");
 
-it("poach 1. four people play Who's Poaching from the lobby to the results and a rematch", { timeout: 420_000 }, async () => {
+it("poach 1. four people play Who's Poaching 2.0 from the room to the results and a rematch", { timeout: 480_000 }, async () => {
   const code = await openRoom(baseUrl, "poach");
   const names = ["Ava", "Bo", "Cy", "Di"], chars = ["mei", "wang", "jin", "lu"];
   const jars: string[] = [];
@@ -21,31 +22,33 @@ it("poach 1. four people play Who's Poaching from the lobby to the results and a
   const roles = gos.map((g) => JSON.parse(g.data).frame.role);
   expect(roles.filter((r) => r === "poacher").length).toBe(1);
   expect(roles.filter((r) => r === "fisher").length).toBe(3);
-  const go = JSON.parse(gos[0].data);
-  await new Promise((r) => setTimeout(r, Math.max(0, go.startedAt - go.serverNow) + 300));
+  expect(JSON.parse(gos[0].data).frame.phase).toBe("role");
+  const p = roles.indexOf("poacher"), f = (p + 1) % 4;
 
-  // day 1: everyone fishes; the poacher uses the fine net
-  const p = roles.indexOf("poacher");
-  for (let i = 0; i < 4; i++) expect((await post(baseUrl, code, "in", jars[i], { k: "cast" })).status).toBe(200);
+  // day 1: the role card, then the day
+  await streams[0].next((e) => e.event === "frame" && JSON.parse(e.data).f.phase === "day", 30_000);
+  expect((await post(baseUrl, code, "in", jars[f], { k: "net" })).status).toBe(200);
   expect((await post(baseUrl, code, "in", jars[p], { k: "fine" })).status).toBe(200);
-  expect((await post(baseUrl, code, "in", jars[(p + 1) % 4], { k: "fine" })).status).toBe(409); // a fisher has no fine net
-  expect((await post(baseUrl, code, "in", jars[0], { k: "say", p: "hello", text: "free text" })).status).toBe(409);
+  expect((await post(baseUrl, code, "in", jars[f], { k: "fine" })).status).toBe(409); // a fisher has no fine net
+  expect((await post(baseUrl, code, "in", jars[f], { k: "say", line: { k: "sus", i: p } })).status).toBe(409); // no talking by day
 
-  // two meetings: everyone skips
-  for (const day of [1, 2]) {
-    await Promise.all(streams.map((s) => s.next((e) => e.event === "frame" && JSON.parse(e.data).ev.some((x: { k: string }) => x.k === "meeting"), 100_000)));
-    expect((await post(baseUrl, code, "in", jars[1], { k: "say", p: "was", bay: "East Bay" })).status).toBe(200);
-    for (let i = 0; i < 4; i++) expect((await post(baseUrl, code, "in", jars[i], { k: "vote", target: null })).status).toBe(200);
-    await streams[0].next((e) => e.event === "frame" && JSON.parse(e.data).ev.some((x: { k: string }) => x.k === "dawn"), 20_000);
-    expect(day).toBeGreaterThan(0);
+  // three meetings: two skipped, the last votes out an innocent
+  for (const day of [1, 2, 3]) {
+    const meet = JSON.parse((await streams[f].next((e) => e.event === "frame" && JSON.parse(e.data).f.phase === "meeting", 100_000)).data).f;
+    expect(meet.m.final).toBe(day === 3);
+    // free text is refused; a fisher cannot claim to have seen a fine net it never saw
+    expect((await post(baseUrl, code, "in", jars[f], { k: "say", line: { k: "free", text: "hello" } })).status).toBe(409);
+    if (!meet.m.witnessed.includes(p)) expect((await post(baseUrl, code, "in", jars[f], { k: "say", line: { k: "sawnet", i: p } })).status).toBe(409);
+    expect((await post(baseUrl, code, "in", jars[f], { k: "say", line: meet.m.lines[0] })).status).toBe(200);
+    const innocent = (p + 2) % 4, other = (p + 3) % 4;
+    for (let i = 0; i < 4; i++) {
+      const target = day < 3 ? null : i === innocent ? other : innocent;
+      expect((await post(baseUrl, code, "in", jars[i], { k: "vote", target })).status, `day ${day} seat ${i}`).toBe(200);
+    }
+    if (day < 3) await streams[0].next((e) => e.event === "frame" && JSON.parse(e.data).f.phase === "day", 30_000);
   }
 
-  // the last meeting has no Skip (DESIGN v3.2): everyone votes, for an innocent, so the poacher survives day 3
-  await streams[0].next((e) => e.event === "frame" && JSON.parse(e.data).ev.some((x: { k: string }) => x.k === "meeting"), 100_000);
-  const innocent = (p + 1) % 4;
-  for (let i = 0; i < 4; i++) await post(baseUrl, code, "in", jars[i], { k: "vote", target: i === innocent ? (p + 2) % 4 : innocent });
-
-  const end = JSON.parse((await streams[0].next((e) => e.event === "room" && JSON.parse(e.data).state === "end", 100_000)).data);
+  const end = JSON.parse((await streams[0].next((e) => e.event === "room" && JSON.parse(e.data).state === "end", 60_000)).data);
   expect(end.results.extra.winner).toBe("poacher");
   expect(end.results.extra.roles[p]).toBe("poacher");
   expect(end.results.highlights.length).toBe(3);
@@ -54,7 +57,7 @@ it("poach 1. four people play Who's Poaching from the lobby to the results and a
   for (let i = 0; i < 4; i++) {
     if (i === p) continue;
     const raw = streams[i].raw();
-    const before = raw.slice(0, raw.indexOf('"k":"end"'));
+    const before = raw.slice(0, raw.indexOf('"phase":"end"'));
     expect(before).not.toContain("poacher");
     expect(before).toContain('"role":"fisher"');
   }

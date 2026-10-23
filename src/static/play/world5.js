@@ -464,7 +464,8 @@ export function createWorld5(canvas, stage, world, opts = {}) {
     mctx.fillStyle = seasonIx === 3 ? "#5c8f98" : "#2a7f80"; mctx.fill(); mctx.lineWidth = 2; mctx.strokeStyle = "#d9c08a"; mctx.stroke();
     mctx.fillStyle = "#8a8a50"; mctx.beginPath(); mctx.arc(mx(island.x), mz(island.z), island.r * (w / 300) * 1.5, 0, 6.28); mctx.fill();
     for (const d of DOCKS) { mctx.fillStyle = "#efe1c2"; mctx.beginPath(); mctx.arc(mx(d.wx), mz(d.wz), 3, 0, 6.28); mctx.fill(); }
-    for (const b of boats.values()) { if (!reveal(b)) continue; mctx.fillStyle = b.color ?? "#f5ead6"; mctx.beginPath(); mctx.arc(mx(b.x), mz(b.z), 4, 0, 6.28); mctx.fill(); }
+    // a hidden boat (Who's Poaching: outside your lantern) is not on the minimap either
+    for (const b of boats.values()) { if (!reveal(b) || !b.mesh.visible) continue; mctx.fillStyle = b.color ?? "#f5ead6"; mctx.beginPath(); mctx.arc(mx(b.x), mz(b.z), 4, 0, 6.28); mctx.fill(); }
   }
 
   // ---- input: keys, a thumb stick on phones, tap/click on the water ----
@@ -571,9 +572,10 @@ export function createWorld5(canvas, stage, world, opts = {}) {
   }
   onResize(); requestAnimationFrame(loop);
 
+  // k and tiers are here so a mode never reaches into the page's own boot JSON for them
   return {
     THREE, scene, camera, toon, makeLantern, glowSprite, toWorld, toSim, zones, island, docks: DOCKS,
-    k: world.k, tiers: world.tiers, // so a mode never reaches into the page's own boot JSON for these
+    k: world.k, tiers: world.tiers,
     setSeason, setNight: (v) => { nightTarget = v; }, setLanterns: (l) => { lanterns = l; },
     setDocks, boat, drawBoat, clearBoats, boats, setFish, setKoi, prop, sweepProps, clearProps,
     ripple, netDrop, floatText, setLabels, screenToSim,

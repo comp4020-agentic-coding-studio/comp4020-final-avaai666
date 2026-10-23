@@ -87,15 +87,17 @@ describe("Who's Poaching", () => {
   beforeEach(() => { dom(); });
 
   it("drawing a frame in which a boat is out does not throw (the label for a boat that is out is worded from the dictionary)", async () => {
+    // Who's Poaching 2.0 (rule change 1): poach.js draws through world5.js, with 2.0's frame
     const poach = await importJs("../../src/static/play/poach.js");
     dom();
     const { api } = ui("en");
-    const world = fakeWorld();
+    const world = Object.assign(fakeWorld5(), { boats: new Map() });
     let draw: (dt: number, time: number) => void = () => {};
     world.onFrame = ((fn: typeof draw) => { draw = fn; }) as never;
-    document.body.appendChild(Object.assign(document.createElement("div"), { id: "p-pads" }));
-    const mode = poach.mount({ world, sound: api.sound, ui: api, send: () => {}, view: () => ({ mySeat: 0, seats: [{ name: "Ava", character: "mei" }, { name: "Bo", character: "jin" }] }) });
-    const frame = { t: 0, phase: "day", day: 1, days: 3, left: 70, health: 100, line: 40, quota: 0, quotaGoal: 60, role: "fisher", partners: [], known: [], out: [0, 1], mine: { fish: 0, fry: 0, buoyUsed: false, patrolled: false, inspecting: null, planting: null }, b: [[0, 100, 100, 0, 0], [1, 300, 300, 0, 1]], f: [], buoys: [], said: [], voted: [], canSkip: true, history: [] };
+    const mode = poach.mount({ world, sound: api.sound, ui: api, send: () => {}, post: () => {}, view: () => ({ mySeat: 0, seats: [{ name: "Ava", character: "mei" }, { name: "Bo", character: "jin" }] }) });
+    const frame = { phase: "day", day: 1, days: 3, left: 70, health: 100, line: 40, role: "fisher", partners: [], out: [1],
+      b: [[0, 100, 100, 0, 0]], f: [], ev: [],
+      me: { netCd: 0, fineCd: 0, fineMax: 13, fry: 0, caught: 0, taskFish: 0, tasks: [["t1", "net", "north", -160, -420, 0, 0]], buoy: false, buoyAt: null, insp: null, canInspect: false, canReport: false, seen: 0 } };
     mode.start(frame, { seats: [{ name: "Ava", character: "mei" }, { name: "Bo", character: "jin" }] });
     expect(() => draw(0.05, 12.5)).not.toThrow();
   });

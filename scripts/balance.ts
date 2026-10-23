@@ -18,7 +18,7 @@ import { Worker, isMainThread, parentPort, workerData } from "node:worker_thread
 import { botStream, type Seat } from "../src/lib/game-platform.ts";
 import { hold, type HoldInput, type HoldSim } from "../src/lib/modes/hold.ts";
 import { party, type PartyInput, type PartySim } from "../src/lib/modes/party.ts";
-import { poach, type PoachInput, type PoachSim } from "../src/lib/modes/poach.ts";
+import { health, poach, type PoachInput } from "../src/lib/modes/poach.ts";
 import { tierOf, type TierId } from "../src/lib/lake-world.ts";
 import { DEFAULT_BOT_KINDS, makeWithOpts as rushMakeWithOpts, rush, type RushInput } from "../src/lib/modes/rush.ts";
 
@@ -89,34 +89,12 @@ const HOLD_STRATS: Strat[] = [
   { name: "lantern puller", shape: holdPlay((s, seat, c) => (c === "claim" ? claimEdge(s, seat) : c === "lantern" || c === "net" ? freeOwn(s, seat)[0]?.id ?? null : null)) },
 ];
 
-// ---- Who's Poaching: how the table votes (everyone at the table) ----
-type Table = "always skip" | "accused most" | "buoy evidence";
-const TABLES: Table[] = ["always skip", "accused most", "buoy evidence"];
-function poachVote(s: PoachSim, seat: number, table: Table, r: () => number): PoachInput | null {
-  if (s.phase !== "meeting" || s.out[seat] || s.votes[seat] !== undefined || s.phaseT < 6 + seat) return null;
-  const alive = s.boats.filter((b) => !s.out[b.seat] && b.seat !== seat).map((b) => b.seat);
-  if (table === "always skip") return s.day < 3 ? { k: "vote", target: null } : null; // no Skip at the last meeting: they abstain
-  if (s.roles[seat] === "poacher") return { k: "vote", target: alive.filter((x) => s.roles[x] !== "poacher")[Math.floor(r() * alive.length)] ?? null };
-  if (table === "accused most") {
-    const n = new Map<number, number>();
-    for (const x of s.said.filter((y) => y.day === s.day)) { const m = x.text.match(/^I suspect \{seat(\d+)\}/); if (m) n.set(+m[1], (n.get(+m[1]) ?? 0) + 1); }
-    const top = [...n].filter(([t]) => alive.includes(t)).sort((a, b) => b[1] - a[1])[0];
-    return { k: "vote", target: top ? top[0] : null };
-  }
-  // buoy evidence: whoever passed today's buoys most often (the poacher roams to fish)
-  const seen = new Map<number, number>();
-  for (const u of s.buoys.filter((b) => b.day === s.day)) for (const p of u.passed) seen.set(p, (seen.get(p) ?? 0) + 1);
-  const top = [...seen].filter(([t]) => alive.includes(t)).sort((a, b) => b[1] - a[1])[0];
-  return { k: "vote", target: top ? top[0] : null };
-}
-function poachSay(s: PoachSim, seat: number, r: () => number): PoachInput | null {
-  // each fisher accuses someone it saw near fry losses: here, at random among the living (a weak signal)
-  if (s.phase !== "meeting" || s.out[seat] || s.phaseT < 2 || s.said.some((x) => x.day === s.day && x.seat === seat) || r() > 0.2) return null;
-  const alive = s.boats.filter((b) => !s.out[b.seat] && b.seat !== seat).map((b) => b.seat);
-  const t = alive[Math.floor(r() * alive.length)];
-  return t === undefined ? null : { k: "say", p: "suspect", target: t };
-}
-
+// ---- Who's Poaching 2.0: six bots (poach.ts's own bot(): tasks, inspecting,
+// buoys, reports, the poacher's fine net, the meeting's lines and votes). Two
+// tables: the bots as written, and the same bots except that fishers skip
+// every vote they may skip (the last meeting has no skip). ----
+type Table = "bots as written" | "fishers always skip";
+const TABLES: Table[] = ["bots as written", "fishers always skip"];
 // ---- running matches ----
 const seatsOf = (n: number): Seat[] => Array.from({ length: n }, (_, i) => ({ seat: i, name: `B${i} (bot)`, bot: `bot${i}`, character: "mei" }));
 
@@ -166,22 +144,21 @@ function playRush(table: RushTable, seed: number, n: number): { seats: { kind: s
   return { seats: res.seats.map((x) => ({ kind: botKinds[x.seat], place: x.place })), tier: tierOf(res.lakeLeft).id, altTier: counterfactual.tierId };
 }
 
-function playPoach(table: Table, seed: number): boolean {
-  const n = 5, seats = seatsOf(n), secret = `balance-poach-${table}-${seed}`;
-  const s = poach.make(secret, seats, { fish: 220 });
-  for (let tick = 0; !poach.over(s) && tick < 40000; tick++) {
+function playPoach(table: Table, seed: number): { fishers: boolean; health: number; day: number; caughtDay: number | null } {
+  const n = 6, seats = seatsOf(n), secret = `balance-poach-${table}-${seed}`;
+  const s = poach.make(secret, seats, { fish: 280, adults: 224, young: 56 });
+  for (let tick = 0; !poach.over(s) && tick < 60000; tick++) {
     const applied: { seat: number; i: PoachInput }[] = [];
     for (const st of seats) {
-      const r = botStream(secret, st.bot!, tick, st.seat);
-      const own = poach.bot(s, st.seat, r).filter((i) => i.k !== "vote" && i.k !== "say");
-      // fishers drop a buoy early each day where they are, so the evidence exists
-      if (s.phase === "day" && s.phaseT > 5 && s.phaseT < 6 && s.roles[st.seat] !== "poacher") own.push({ k: "buoy" });
-      const v = poachVote(s, st.seat, table, r), w = poachSay(s, st.seat, r);
-      for (const i of [...own, ...(w ? [w] : []), ...(v ? [v] : [])]) { const ok = poach.input(s, st.seat, i); if (ok) applied.push({ seat: st.seat, i: ok }); }
+      for (let raw of poach.bot(s, st.seat, botStream(secret, st.bot!, tick, st.seat))) {
+        if (table === "fishers always skip" && raw.k === "vote" && s.roles[st.seat] === "fisher" && !s.meeting?.final) raw = { k: "vote", target: null };
+        const ok = poach.input(s, st.seat, raw); if (ok) applied.push({ seat: st.seat, i: ok });
+      }
     }
     poach.step(s, applied);
   }
-  return s.winner === "fishers";
+  const caught = s.exiled.find((x) => x.role === "poacher");
+  return { fishers: s.winner === "fishers", health: health(s), day: s.day, caughtDay: caught ? caught.day : null };
 }
 
 // ---- workers ----
@@ -192,7 +169,7 @@ if (!isMainThread) {
     if (j.mode === "rush") out.push(playRush(j.rushTable!, j.seed, 4));
     if (j.mode === "party") out.push(playRotating(party, PARTY_STRATS, j.seed, 4));
     if (j.mode === "hold") out.push(playRotating(hold, HOLD_STRATS, j.seed, 4));
-    if (j.mode === "poach") out.push({ table: j.table, fishers: playPoach(j.table!, j.seed) });
+    if (j.mode === "poach") out.push({ table: j.table, ...playPoach(j.table!, j.seed) });
   }
   parentPort!.postMessage(out);
 } else {
@@ -216,8 +193,13 @@ if (!isMainThread) {
   for (const m of modes) {
     const rows = flat.filter((x: any) => x.job.mode === m) as { job: Job; r: any }[];
     if (m === "poach") {
-      const lines = TABLES.map((t) => { const rs = rows.filter((x) => x.job.table === t); const w = rs.filter((x) => x.r.fishers).length, [lo, hi] = wilson(w, rs.length); return `| ${t} | ${rs.length} | ${w} | ${pct(w / rs.length)} | ${pct(lo)}–${pct(hi)} |`; });
-      sections[m] = `## Who's Poaching (5 bots, 1 poacher; fishers' win rate by how the table votes)\n\n| Table behaviour | Matches | Fishers won | Rate | 95% interval |\n|---|---|---|---|---|\n${lines.join("\n")}\n`;
+      const lines = TABLES.map((t) => {
+        const rs = rows.filter((x) => x.job.table === t); const w = rs.filter((x) => x.r.fishers).length, [lo, hi] = wilson(w, rs.length);
+        const day = (d: number) => rs.filter((x) => x.r.caughtDay === d).length;
+        const meanH = rs.reduce((n, x) => n + x.r.health, 0) / rs.length;
+        return `| ${t} | ${rs.length} | ${w} | ${pct(w / rs.length)} | ${pct(lo)}–${pct(hi)} | ${day(1)} / ${day(2)} / ${day(3)} | ${meanH.toFixed(1)}% |`;
+      });
+      sections[m] = `## Who's Poaching 2.0 (6 bots, 1 poacher; poach.ts's own bots)\n\n| Table | Matches | Fishers won | Rate | 95% interval | Poacher voted out on day 1 / 2 / 3 | Mean lake health at the end |\n|---|---|---|---|---|---|---|\n${lines.join("\n")}\n`;
       continue;
     }
     if (m === "rush") {
@@ -275,11 +257,17 @@ if (!isMainThread) {
   const oldParts = old.split(/^(?=## )/m).filter((x) => x.startsWith("## "));
   const part = (m: string) => sections[m] ?? oldParts.find((x) => x.startsWith(TITLES[m])) ?? "";
   const notes = oldParts.filter((x) => x.startsWith("## Before") || x.startsWith("## Changes")).map((x) => x.trimEnd() + "\n");
-  writeFileSync(file, head + ["rush", "party", "hold", "poach"].map((m) => (m === "rush" ? oldParts.find((x) => x.startsWith(TITLES.rush)) ?? "" : part(m))).filter(Boolean).map((x) => x.trimEnd() + "\n").join("\n") + (notes.length ? "\n" + notes.join("\n") : ""));
+  // poach 2.0 writes its own file below; the 2026-10-15 file keeps poach 1.0's table as history
+  writeFileSync(file, head + ["rush", "party", "hold", "poach"].map((m) => (m === "rush" || m === "poach" ? oldParts.find((x) => x.startsWith(TITLES[m])) ?? "" : part(m))).filter(Boolean).map((x) => x.trimEnd() + "\n").join("\n") + (notes.length ? "\n" + notes.join("\n") : ""));
   if (sections.rush) {
     const rfile = "docs/checks/balance-rush2-2026-10-23.md";
     const rhead = `# Balance, Boat Rush 2.0, 2026-10-23 (bots only)\n\nWritten by \`node scripts/balance.ts rush\`. Every match here is bots against bots, 4 seats, src/lib/modes/rush.ts's own bot() in one of three kinds (steady, keeper, greedy). A real room always draws seat % 3; this harness also runs whole tables of one kind (all-greedy, all-keeper, all-steady) and a seeded random mix, on the seeds \`balance-rush-<table>-1\` to \`-${N}\`, through makeWithOpts's script-only override (src/lib/modes/rush.ts), to measure prompt-17 step 5's three targets, which seat % 3 alone cannot (there is never an all-greedy table that way). These are claims about these bots and seeds, not about how people play. 95% intervals are Wilson intervals.\n\n`;
     writeFileSync(rfile, rhead + sections.rush.trimEnd() + "\n");
+  }
+  if (sections.poach) {
+    const pfile = "docs/checks/balance-poach2-2026-10-23.md";
+    const phead = `# Balance, Who's Poaching 2.0, 2026-10-23 (bots only)\n\nWritten by \`node scripts/balance.ts poach\`. Every match here is six bots (src/lib/modes/poach.ts's own bot()) on a fresh room's lake, on the seeds \`balance-poach-<table>-1\` to \`-${N}\`. These are claims about these bots and seeds, not about how people play: the bots read evidence more carefully, and lie less well, than a table of people. 95% intervals are Wilson intervals.\n\n`;
+    writeFileSync(pfile, phead + sections.poach.trimEnd() + "\n");
   }
   for (const m of modes) console.log(sections[m]);
   console.log(`(${jobs.length} matches in ${Math.round((performance.now() - t0) / 1000)} s on ${W} workers)`);

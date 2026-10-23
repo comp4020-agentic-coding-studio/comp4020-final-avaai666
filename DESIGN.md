@@ -1,4 +1,4 @@
-# Next Year, No Fish (明年无鱼): design v5.0.1
+# Next Year, No Fish (明年无鱼): design v5.1
 
 ## What it is
 
@@ -75,7 +75,7 @@ runs.
 | Mode | Follows | Built in |
 |---|---|---|
 | Boat Rush | v5.0 (rush 2.0) | session 17, part A |
-| Who's Poaching | v4.0 (poach 1.0) | part B |
+| Who's Poaching | v5.0 (poach 2.0) | session 18 (23 Oct, in chat) |
 | Lake Holdings | v4.0 (holdings 1.0) | part C |
 | Fishing Party | v4.0 (party 1.0) | part C |
 
@@ -366,6 +366,22 @@ ending in a meeting of at most 55 s. About 7 minutes.
 
 An exiled player becomes a ghost: they see everything and cannot act.
 
+**How poach 2.0 settles what the text above leaves open** (session 18):
+- the role card lasts 8 s for everyone (the server's clock, not a button), the
+  tally 4 s and the exile 6 s;
+- a seat may say at most 4 lines a meeting, each line once; suspect, vouch
+  and skip are open to everyone, any other line must be one the server built
+  for that seat (what it knows, or, for the poacher, its lies);
+- a tie exiles nobody, except at the last meeting, where the tied seats are
+  drawn from the match's own stream (and if nobody voted at all, any seat
+  still in);
+- a buoy lights a circle of 10.5 units for its owner (the prototype's
+  0.7 × 15);
+- the room's lake keeps the match's health as a share of what the room
+  brought (the 40 extra young fish were the match's own), then
+  `nextSpring()`;
+- bots fill the room to six boats.
+
 **Lake health** = fish now ÷ fish at the start of the match, as a
 percentage. The start includes 40 extra young fish in the reeds.
 
@@ -518,8 +534,8 @@ coordinates straight into `world.js`'s drawing calls, so rescaling its
 `toWorld` for the new shape would put their boats and fish somewhere that
 makes no sense in it (on the new island, say, which their space has no room
 for). A mode switches from `world.js` to `world5.js` only when it is itself
-rebuilt to v5.0 (Boat Rush next, then Who's Poaching in part B, Holdings and
-Party in part C) and its own client script is rewritten to world5.js's API
+rebuilt to v5.0 (Boat Rush first, then Who's Poaching, then Holdings and
+Party) and its own client script is rewritten to world5.js's API
 (`setCameraMode(mode, target)`, not world.js's `setCamera(pos, look)`) —
 `src/static/play/world-select.js`'s `WORLD5_MODES` list says which modes
 have moved, and starts empty. `world.js` is deleted only once no mode uses
@@ -646,6 +662,7 @@ Lake Holdings becomes turn-based; Boat Rush has four seasons of 45 s.
 
 ## Changelog
 
+- v5.1 (23 Oct, session 18): Who's Poaching 2.0 is built (poach 2.0 on the v5 lake): the role card, the lantern's circle, tasks, inspect, buoy, report, the fine net and its dead fish, the meeting's map and lines, the tally, the exile, the night, the ceremony. What the section left open is settled under "How poach 2.0 settles…". poach 1.0's numbers made the lake die on day 1 (a fine net every 1.5 s); its tests are replaced by 2.0's.
 - v5.0.1: net 4.5, cooldown 0.7 (rule change 7, balance report docs/checks/balance-rush2-2026-10-23.md).
 - v5.0 (19 Oct, session 17): the design for all four games, step by step (prototype v10, docs/prototypes/v10/). The world is shared: one lake shape (92 × 64, an island, named places), seasons, K = 340, one ending ceremony. Boat Rush 2.0 is built first: four 45 s seasons with a rest and a market between them. Who's Poaching 2.0, Lake Holdings 2.0 and Fishing Party 2.0 follow. v4.0's mode sections moved word for word to docs/design-history/four-games-v4.0.md. Rule changes approved in the session 17 prompt: the lake shape and start (230 adults, 50 young), Boat Rush's browser-only practice (above), the shared ceremony, shared client modules, crash fixes in frozen code, and the removals listed under each mode.
 
