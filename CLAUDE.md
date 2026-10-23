@@ -108,6 +108,9 @@ Scope
   the mode scripts import. Each mode keeps one script of its own. Every module
   a page loads must be served: spec/play-app.test.ts checks it. Still no
   framework and no build step.
+- A change to a /play client script is not done until scripts/browser-check.ts
+  has started a match of that mode in a real browser with no console errors.
+  Green unit tests are not enough.
 - Art is SVG and Three.js code in this repo, written by Claude in chat or in
   a session, and said so in PROCESS.md. Nothing is generated at run time and
   no image model is used.

@@ -113,11 +113,12 @@ describe("nothing that only informs takes a tap", () => {
 });
 
 describe("worldModuleFor(): each /play mode loads exactly one world module, and the right one", () => {
-  it("every mode still on v4.0 (rush 1.0, poach, party, hold) loads world.js, not world5.js", () => {
-    // rush moves to WORLD5_MODES only in the same commit that rewrites rush.js to world5.js's
-    // API (setCameraMode, not world.js's setCamera): a real browser check (scripts/browser-check.ts)
-    // caught this exact mismatch (world.setCamera is not a function) when rush was added here early.
-    for (const mode of ["rush", "poach", "party", "hold"]) expect(worldModuleFor(mode)).toBe("world.js");
+  it("rush is on v5.0 (world5.js); poach, party and hold are still on v4.0 (world.js)", () => {
+    // rush moved here in the same commit that rewrote rush.js to world5.js's API
+    // (setCameraMode, not world.js's setCamera): left out of 5fc2940, caught by the
+    // world-calls-exist check below and by a real browser check (scripts/browser-check.ts).
+    expect(worldModuleFor("rush")).toBe("world5.js");
+    for (const mode of ["poach", "party", "hold"]) expect(worldModuleFor(mode)).toBe("world.js");
   });
 
   it("a mode listed in WORLD5_MODES loads world5.js", () => {
@@ -125,6 +126,53 @@ describe("worldModuleFor(): each /play mode loads exactly one world module, and 
     const WAS = [...WORLD5_MODES];
     WORLD5_MODES.push("some-future-mode");
     try { expect(worldModuleFor("some-future-mode")).toBe("world5.js"); } finally { WORLD5_MODES.length = 0; WORLD5_MODES.push(...WAS); }
+  });
+});
+
+// A mode's client script calls world.<method>(...) on whichever module
+// worldModuleFor() gives it; if that module's own createWorld()/createWorld5()
+// never returns that method, the call throws the moment the match starts
+// ("world.setCameraMode is not a function") and no unit test (which never
+// executes the browser script) sees it. This is a static check over the
+// scripts' own source: it would have caught 5fc2940 leaving rush off
+// WORLD5_MODES while rush.js already called world5.js's setCameraMode.
+describe("each mode's world.* calls exist on the world module it is actually given", () => {
+  const PLAY = new URL("../../src/static/play/", import.meta.url);
+  const src = (name: string) => readFileSync(new URL(`${name}.js`, PLAY), "utf8");
+
+  // depth-aware split of a `return { ... }` object literal's top-level keys,
+  // so a method body's own commas (e.g. end() { a(); b(); }) are not split on
+  function topLevelKeys(body: string): Set<string> {
+    const names = new Set<string>();
+    let depth = 0, seg = "";
+    const flush = () => { const t = seg.trim(); const m = t.match(/^([A-Za-z_$][A-Za-z0-9_$]*)/); if (m) names.add(m[1]); seg = ""; };
+    for (const ch of body) {
+      if (ch === "{" || ch === "(" || ch === "[") depth++;
+      else if (ch === "}" || ch === ")" || ch === "]") depth--;
+      if (ch === "," && depth === 0) { flush(); continue; }
+      seg += ch;
+    }
+    flush();
+    return names;
+  }
+  function apiOf(moduleFile: string): Set<string> {
+    const body = src(moduleFile.replace(/\.js$/, ""));
+    const m = body.match(/\n  return \{([\s\S]*?)\n  \};\n\}/);
+    if (!m) throw new Error(`no top-level "return { ... };" found in ${moduleFile}`);
+    return topLevelKeys(m[1]);
+  }
+  function worldCallsOf(modeFile: string): Set<string> {
+    const body = src(modeFile);
+    return new Set([...body.matchAll(/\bworld\.([A-Za-z_$][A-Za-z0-9_$]*)/g)].map((m) => m[1]));
+  }
+
+  it("every call a mode script makes on `world.*` is a key the module worldModuleFor() gives it actually returns", () => {
+    for (const mode of ["rush", "poach", "party", "hold"]) {
+      const moduleFile = worldModuleFor(mode);
+      const api = apiOf(moduleFile), calls = worldCallsOf(mode);
+      const missing = [...calls].filter((c) => !api.has(c));
+      expect(missing, `${mode}.js calls world.{${missing.join(", ")}}, not on ${moduleFile}`).toEqual([]);
+    }
   });
 });
 
