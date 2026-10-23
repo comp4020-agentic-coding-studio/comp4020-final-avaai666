@@ -172,9 +172,9 @@ const en = {
   rush_hud: "Most fish home wins", poach_hud: "Find the poacher · keep the lake above 40%", party_hud: "Most coins wins", hold_hud: "Tiles + fish harvested",
   rush_a1: "Tap the water", rush_a1s: "Sail there", rush_a2: "CAST · hold to widen", rush_a2s: "Net the fish at your bow", rush_a3: "DASH", rush_a3s: "Ram a full boat: up to 3 fish spill",
   rush_extra: "Between seasons, pick one of three cards. Red cards catch more but kill the young fish: next year's fish.",
-  poach_a1: "Tap the water", poach_a1s: "Sail and fish", poach_a2: "Stay beside a boat", poach_a2s: "3 s to look in its basket", poach_a3: "BUOY", poach_a3s: "Logs every boat that passes",
-  party_a1: "Tap", party_a1s: "Aim, steer, reel", party_a2: "SHOP", party_a2s: "8 s between rounds", party_a3: "PICK", party_a3s: "Small, medium or huge net, in secret",
-  hold_a1: "Pick a card", hold_a1s: "Net, Pond, Fence, Cormorant, Lantern, Claim", hold_a2: "Tap a hex", hold_a2s: "Place it; see what it paid last tide", hold_a3: "Tide", hold_a3s: "Every 15 s the lake pays out",
+  poach_a1: "Tap the water", poach_a1s: "Sail and do your three tasks", poach_a2: "INSPECT", poach_a2s: "Stay alongside a boat 1.5 s: young fish aboard are evidence", poach_a3: "BUOY", poach_a3s: "Logs every boat that passes",
+  party_a1: "TRY IT", party_a1s: "Every round can be tried before it counts", party_a2: "SHOP", party_a2s: "9 s after rounds 1-3", party_a3: "PICK", party_a3s: "A net of 3, 6 or 10, in secret",
+  hold_a1: "Pick a card", hold_a1s: "The Flag, plus two drawn", hold_a2: "Tap a tile", hold_a2s: "See what it will do, then tap again to place", hold_a3: "Harvest", hold_a3s: "After each season: nets, ponds, lanterns, cormorants",
 
   // ---- the room's shared HUD, start card and results ----
   g_connecting: "connecting…", g_live: "live", g_reconnecting: "reconnecting…",
@@ -577,9 +577,9 @@ const zh: Record<Key, string> = {
   rush_hud: "运回家的鱼最多的人赢", poach_hud: "找出偷渔人 · 让湖的健康保持在 40% 以上", party_hud: "金币最多的人赢", hold_hud: "水域 + 收获的鱼",
   rush_a1: "点水面", rush_a1s: "开到那里", rush_a2: "撒网 · 按住撒得更大", rush_a2s: "捞船头前方的鱼", rush_a3: "冲刺", rush_a3s: "撞满载的船：最多撞掉 3 条",
   rush_extra: "两季之间三选一。红色的卡捞得多，但会捞死小鱼——那是明年的鱼。",
-  poach_a1: "点水面", poach_a1s: "开船捕鱼", poach_a2: "停在别人船边", poach_a2s: "3 秒就能看他的鱼篓", poach_a3: "浮标", poach_a3s: "记录经过的每一条船",
-  party_a1: "点", party_a1s: "瞄准、开船、收线", party_a2: "商店", party_a2s: "回合之间 8 秒", party_a3: "选网", party_a3s: "暗中选小网、中网或大网",
-  hold_a1: "选一张卡", hold_a1s: "渔网、鱼塘、围栏、鸬鹚、灯笼、占地", hold_a2: "点一块地", hold_a2s: "放下去；看它上一次的收成", hold_a3: "结算", hold_a3s: "每 15 秒湖结算一次",
+  poach_a1: "点水面", poach_a1s: "开船，做你的三件任务", poach_a2: "检查", poach_a2s: "在别人船边停 1.5 秒：船上有小鱼就是证据", poach_a3: "浮标", poach_a3s: "记录经过的每一条船",
+  party_a1: "先试试", party_a1s: "每回合都能先试，不算分", party_a2: "商店", party_a2s: "第 1-3 回合后 9 秒", party_a3: "选网", party_a3s: "暗中选 3、6 或 10 的网",
+  hold_a1: "选一张卡", hold_a1s: "旗子，再加两张抽到的", hold_a2: "点一块地", hold_a2s: "先看效果，再点一下放下", hold_a3: "收成", hold_a3s: "每季结束：渔网、鱼塘、灯笼、鸬鹚",
 
   g_connecting: "连接中…", g_live: "在线", g_reconnecting: "重新连接中…",
   g_stop: "结束这局", g_stop_confirm: "为所有人结束这一局？不会计分。", g_stop_fail: "没能结束",
@@ -845,9 +845,9 @@ export function t(lang: Lang, key: string, vars: Record<string, string | number>
 // The four games, in the order the mock shows them, with what is the same in
 // both languages.
 export const GAMES = [
-  { id: "rush", color: "#c8372d", players: "2–4", min: "2½" },
-  { id: "party", color: "#c9921f", players: "2–4", min: "6" },
-  { id: "poach", color: "#2b8571", players: "4–8", min: "8" },
-  { id: "hold", color: "#5a6fb0", players: "2–4", min: "3" },
+  { id: "rush", color: "#c8372d", players: "2–4", min: "4" },
+  { id: "party", color: "#c9921f", players: "2–4", min: "5" },
+  { id: "poach", color: "#2b8571", players: "4–8", min: "7" },
+  { id: "hold", color: "#5a6fb0", players: "2–4", min: "5" },
 ] as const;
 export type GameId = (typeof GAMES)[number]["id"];
