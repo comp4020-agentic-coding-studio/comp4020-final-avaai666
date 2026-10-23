@@ -372,6 +372,7 @@ body.play.in-room { overflow: hidden; }
   .topbar .goalclock { flex: 1 1 calc(100% - 48px); order: 1; }
   .topbar .hostmenu, .topbar #sound { order: 2; }
   .topbar .hostmenu { margin-left: 48px; }
+  .topbar .hostmenu .menu-list { right: auto; left: 0; } /* on a phone the menu sits at the left of the second row */
   .room .hudtoggle { top: calc(max(10px, env(safe-area-inset-top, 0px)) + 48px); }
   .room .hud { top: calc(max(10px, env(safe-area-inset-top, 0px)) + 86px); }
 }
@@ -383,7 +384,7 @@ body.play.in-room { overflow: hidden; }
 .overlay > .count { pointer-events: none; }
 /* the host menu: Stop match lives behind a ⋯ button */
 .hostmenu { position: relative; }
-.hostmenu .menu-list { position: absolute; left: 0; max-width: calc(100vw - 24px); top: calc(100% + 6px); z-index: 12; min-width: 180px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px; display: grid; gap: 4px; }
+.hostmenu .menu-list { position: absolute; right: 0; max-width: calc(100vw - 24px); top: calc(100% + 6px); z-index: 12; min-width: 180px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px; display: grid; gap: 4px; }
 .hostmenu .menu-list button { text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: 8px; font-weight: 700; }
 .hostmenu .menu-list button:hover { background: var(--chip); }
 .hostmenu .menu-list .danger { color: #ff8a7a; }

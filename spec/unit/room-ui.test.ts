@@ -209,3 +209,13 @@ describe("every page scrolls", () => {
     expect(play).toMatch(/body\s*\{[^}]*overflow:\s*hidden/);
   });
 });
+
+describe("the host menu", () => {
+  it("opens leftward from the ⋯ button on wide screens, so \"Stop match\" is on screen (it opened off the right edge, over the HUD)", () => {
+    // the ⋯ button is the last thing in the top bar, at the right edge: a list anchored left: 0 ran 180 px past the screen
+    const play = readFileSync(new URL("../../src/static/play/play.css", import.meta.url), "utf8");
+    const base = play.match(/\n\.hostmenu \.menu-list \{([^}]*)\}/)![1];
+    expect(base).toMatch(/(^|;)\s*right:\s*0/);
+    expect(base).not.toMatch(/(^|;)\s*left:\s*0/);
+  });
+});
