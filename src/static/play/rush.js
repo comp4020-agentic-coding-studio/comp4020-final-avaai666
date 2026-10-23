@@ -82,8 +82,8 @@ export function mount({ world, sound, ui, send, view, post }) {
 
   // ---- the market overlay: three cards, a reroll, secret until it closes ----
   function cardHtml(id) {
-    const kind = cur?.market ? Object.keys({}).length : 0; void kind;
-    return `<button class="card" type="button" data-pick="${id}"><b>${esc(t(`r_card_${id}`))}</b><small>${t(`r_kind_${cardKindOf(id)}`)}</small><p>${esc(t(`r_text_${id}`))}</p></button>`;
+    const kind = cardKindOf(id);
+    return `<button class="card ${kind}" type="button" data-pick="${id}"><span class="kind">${esc(t(`r_kind_${kind}`))}</span><b>${esc(t(`r_card_${id}`))}</b><p>${esc(t(`r_text_${id}`))}</p></button>`;
   }
   const CARD_KIND = { bigHold: "plain", fastHull: "plain", wideNet: "plain", quickHands: "plain", ironBow: "plain", goldHook: "plain", fineMesh: "greedy", trawl: "greedy", ladder: "keeper", release: "keeper", reeds: "keeper" };
   const cardKindOf = (id) => CARD_KIND[id] ?? "plain";
@@ -94,7 +94,12 @@ export function mount({ world, sound, ui, send, view, post }) {
     ui.overlay.innerHTML = `<div class="sheet"><h2>${t("r_market")}</h2><p class="lede">${t("r_market_s", { season: t(`r_season_${(cur.season + 1) % 4}`) })}</p>
       <div class="offer">${m.offer.map(cardHtml).join("")}</div>
       <div class="row"><button class="btn ghost" type="button" id="r-reroll">${t("r_reroll", { n: 2 })}</button><button class="btn ghost" type="button" id="r-skip">${t("r_skip")}</button></div></div>`;
-    ui.overlay.querySelectorAll("[data-pick]").forEach((b) => b.addEventListener("click", () => { if (marketPicked) return; marketPicked = true; send({ k: "pick", id: b.dataset.pick }); }));
+    ui.overlay.querySelectorAll("[data-pick]").forEach((b) => b.addEventListener("click", () => {
+      if (marketPicked) return; marketPicked = true; send({ k: "pick", id: b.dataset.pick });
+      // show the choice at once: the card stays lit, the others and the buttons go quiet
+      ui.overlay.querySelectorAll("[data-pick]").forEach((o) => { if (o === b) o.classList.add("chosen"); else o.disabled = true; });
+      ui.overlay.querySelectorAll("#r-reroll,#r-skip").forEach((o) => { o.disabled = true; });
+    }));
     $("r-reroll")?.addEventListener("click", () => send({ k: "reroll" }));
     $("r-skip")?.addEventListener("click", () => { if (marketPicked) return; marketPicked = true; send({ k: "pick", id: null }); });
   }
@@ -108,7 +113,7 @@ export function mount({ world, sound, ui, send, view, post }) {
 
   function hudFrom(f) {
     const mine = me() !== null ? f.b.find((b) => b[0] === me()) : null;
-    ui.setClock(f.left, f.phase !== "play" ? t(`r_season_${f.season}`) : "");
+    ui.setClock(f.left, t(`r_season_${f.season}`));
     ui.goalEl.textContent = t("rush_hud");
     if (mine) {
       $("r-hold").textContent = `${mine[4]} / ${mine[5]}`; $("r-bank").textContent = mine[7];
@@ -123,7 +128,7 @@ export function mount({ world, sound, ui, send, view, post }) {
     if (!cur || me() === null) return;
     const b = cur.b.find((x) => x[0] === me()); if (!b) return;
     ui.coach([
-      ["sail", t("r_coach_sail")],
+      ["sail", t(matchMedia("(pointer: coarse)").matches ? "r_coach_sail" : "r_coach_sail_keys")],
       ["cast", t("r_coach_cast")],
       ["home", t("r_coach_home"), () => b[4] >= b[5] * 0.6],
       ["pick", t("r_coach_pick"), () => cur.phase === "market"],
@@ -140,21 +145,23 @@ export function mount({ world, sound, ui, send, view, post }) {
     const k = boot.world?.k ?? 340;
     const tierOf = (n) => { for (const [min, id, mult] of tiers) if (n >= min * k) return { id, mult }; return { id: "none", mult: 0.5 }; };
     const realTier = tierOf(results.lakeAfter);
-    const ledger = (extra.ledger ?? []).map((l) => { const s = results.seats.find((x) => x.seat === l.seat); return { seat: l.seat, name: s?.name ?? "", character: s?.character ?? "mei", isMe: l.seat === me(), home: l.home, young: l.young, spared: l.spared }; });
-    const podium = results.seats.map((s) => ({ seat: s.seat, name: s.name, character: s.character, isMe: s.seat === me(), base: s.score, score: Math.round(s.score * realTier.mult), sub: undefined }));
+    const ledger = (extra.ledger ?? []).map((l) => { const s = results.seats.find((x) => x.seat === l.seat); return { seat: l.seat, name: l.seat === me() ? (s?.name ?? "") : nameOf(l.seat), character: s?.character ?? "mei", isMe: l.seat === me(), home: l.home, young: l.young, spared: l.spared }; });
+    const podium = results.seats.map((s) => ({ seat: s.seat, name: s.seat === me() ? s.name : nameOf(s.seat), character: s.character, isMe: s.seat === me(), base: s.score, score: Math.round(s.score * realTier.mult), sub: undefined }));
     return {
-      a: results.lakeAfter, y: 0, next: results.lakeAfter, tier: realTier,
+      a: extra.left?.a ?? results.lakeAfter, y: extra.left?.y ?? 0, next: results.lakeAfter, tier: realTier,
       counterfactual: extra.counterfactual, ledger, fairShare: extra.fairShare, unit: t("g_unit_rush"),
-      titles: (extra.titles ?? []).map((ti) => ({ key: ti.key, vars: { ...ti.vars, name: results.seats.find((s) => s.seat === ti.seat)?.name } })),
+      titles: (extra.titles ?? []).map((ti) => ({ key: ti.key, vars: { ...ti.vars, name: nameOf(ti.seat) } })),
       podium,
     };
   }
   function renderResults(v, overlayEl) {
     const data = ceremonyData(v.results);
-    const deps = { t, esc, portrait: ui.portrait, zh: (key) => { const z = i18nZh(key); return z ?? key; } };
+    // the stamp is always the Chinese characters (DESIGN "The ceremony"): on a
+    // Chinese page that is the page's own word; on an English page it is in
+    // the boot JSON's `other` (the opposite language's words)
     const boot = JSON.parse(document.getElementById("boot").textContent);
-    const zhWords = boot.other ?? {};
-    deps.zh = (key) => zhWords[key] ?? key;
+    const zh = (key) => (boot.lang === "zh" ? t(key) : (boot.other ?? {})[key] ?? key);
+    const deps = { t, esc, portrait: ui.portrait, zh };
     const html = ceremonySteps(data, deps);
     let step = 0;
     const render = () => {
@@ -166,7 +173,6 @@ export function mount({ world, sound, ui, send, view, post }) {
     };
     render();
   }
-  function i18nZh() { return undefined; } // placeholder, replaced by the boot-sourced lookup above
 
   // ---- the 30 s practice (client-only; never sent, stored or scored) ----
   function startPractice() {

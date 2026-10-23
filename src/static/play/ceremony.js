@@ -18,7 +18,7 @@ const dotsHtml = (n, on) => `<div class="cer-dots">${Array.from({ length: n }, (
 export function ceremonySteps(data, { t, esc, portrait, zh }) {
   const steps = data.ledger ? 3 : 2;
   const col = { rich: "var(--jade)", fair: "var(--mist)", lean: "var(--gold)", none: "var(--lacquer)" }[data.tier.id];
-  const nav = (step) => `<div class="row spread">${dotsHtml(steps, step)}<div class="row">${step >= steps - 1 ? "" : `<button class="btn ghost" type="button" data-cer-skip>${esc(t("skipall"))}</button><button class="btn primary" type="button" data-cer-next>${esc(t("next"))} →</button>`}</div></div>`;
+  const nav = (step) => `<div class="row spread">${dotsHtml(steps, step)}<div class="row">${step >= steps - 1 ? "" : `<button class="btn ghost" type="button" data-cer-skip>${esc(t("cer_skip"))}</button><button class="btn primary" type="button" data-cer-next>${esc(t("cer_next"))} →</button>`}</div></div>`;
 
   function step1() {
     const stampZh = zh(`cer_v_${data.tier.id}`);

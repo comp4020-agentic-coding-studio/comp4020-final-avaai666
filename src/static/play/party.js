@@ -97,7 +97,7 @@ export function mount({ world, sound, ui, send, view }) {
       if (e.k === "lastWarning") ui.banner(t("y_before_last"), t("y_before_last_s", { start: e.started, left: e.lake, n: e.school }), 5000);
       if (e.k === "pick") ui.banner(e.picker === me() ? t("y_you_last") : t("y_choosing", { name: nameOf(e.picker) }), t("y_how_played", { name: roundName(e.nextGame) }), 2400);
       if (e.k === "shop") ui.banner(t("y_shop_b"), t("y_shop_b_s", { name: roundName(e.nextGame), variant: variantName(e.nextGame, e.vi) }));
-      if (e.k === "bought" && e.seat === me()) { ui.banner(t("r_bought", { up: item(e.item) }), itemS(e.item)); sound.coin(); }
+      if (e.k === "bought" && e.seat === me()) { ui.banner(t("y_bought", { up: item(e.item) }), itemS(e.item)); sound.coin(); }
       if (e.k === "coins" && e.seat === me()) ui.did("scored");
       if (e.k === "end") sound.horn();
     }

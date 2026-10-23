@@ -169,6 +169,7 @@ const en = {
   hl_hold_close_t: "Closest call", hl_hold_close: "{name} led by {n}", hl_hold_close_tie: "{name} led by {n} (tie broken by harvest)", hl_hold_close_none: "a match of one",
 
   // ---- the ceremony (DESIGN.md "The ceremony (every mode)") ----
+  cer_skip: "Skip to the end", cer_next: "Next", y_bought: "Bought: {up}",
   cer_v_rich: "Bountiful", cer_v_fair: "Fair", cer_v_lean: "Lean", cer_v_none: "No fish",
   cer_step1_title: "The year is over", cer_step1_sub: "Winter comes. In spring, the lake has only the fish you all left.",
   cer_left: "Left in the lake", cer_nextyear: "Next spring", cer_fish: "fish", cer_young: "young",
@@ -204,7 +205,7 @@ const en = {
   r_scooped: "scooped +{n}", r_koi: "The golden carp!", r_koi_s: "worth {n} once it is home",
   r_reeds: "The reeds: thick with fish, but you sail at half speed.",
   r_aboard: "({n} aboard)", r_combo: "Chain x{n}!",
-  r_coach_sail: "Tap the water to sail", r_coach_cast: "Fish ahead: tap CAST (or Space)", r_coach_charge: "Hold CAST longer for a wider net",
+  r_coach_sail: "Tap the water to sail", r_coach_sail_keys: "Click the water, or sail with WASD / the arrows", r_coach_cast: "Fish ahead: tap CAST (or Space)", r_coach_charge: "Hold CAST longer for a wider net",
   r_coach_home: "Hold filling up: sail home to your dock", r_coach_pick: "Pick a card before the market closes",
   // seasons and their twists
   r_season_0: "Spring", r_season_1: "Summer", r_season_2: "Autumn", r_season_3: "Winter",
@@ -497,6 +498,7 @@ const zh: Record<Key, string> = {
   hl_hold_loss_t: "损失最大", hl_hold_loss: "{name}：被鸬鹚偷了 {n} 条", hl_hold_loss_none: "鸬鹚没有出手",
   hl_hold_close_t: "最险的一刻", hl_hold_close: "{name} 领先 {n}", hl_hold_close_tie: "{name} 领先 {n}（平分时按收获定胜负）", hl_hold_close_none: "只有一个人的比赛",
 
+  cer_skip: "直接看结果", cer_next: "下一步", y_bought: "买了：{up}",
   cer_v_rich: "丰收年", cer_v_fair: "平年", cer_v_lean: "歉收年", cer_v_none: "无鱼年",
   cer_step1_title: "一年结束了", cer_step1_sub: "冬天来了。到了春天，湖里只有你们留下的鱼。",
   cer_left: "湖里还剩", cer_nextyear: "明年春天", cer_fish: "鱼", cer_young: "小鱼",
@@ -530,7 +532,7 @@ const zh: Record<Key, string> = {
   r_scooped: "捞起 +{n}", r_koi: "金色锦鲤！", r_koi_s: "运回家值 {n} 条",
   r_reeds: "芦苇浅滩：鱼很多，但船速减半。",
   r_aboard: "（船上 {n}）", r_combo: "连网 ×{n}！",
-  r_coach_sail: "点水面开船", r_coach_cast: "前方有鱼：点「撒网」（或空格）", r_coach_charge: "按住「撒网」久一点，网更大",
+  r_coach_sail: "点水面开船", r_coach_sail_keys: "点水面，或用 WASD / 方向键开船", r_coach_cast: "前方有鱼：点「撒网」（或空格）", r_coach_charge: "按住「撒网」久一点，网更大",
   r_coach_home: "船舱快满了：开回自家码头", r_coach_pick: "市场关闭前选一张卡",
   r_season_0: "春", r_season_1: "夏", r_season_2: "秋", r_season_3: "冬",
   r_twist_0: "鱼从河口游进来，小鱼都在芦苇荡", r_twist_1: "鱼聚在荷花塘和深潭，有两条金色锦鲤", r_twist_2: "鱼肥了，每条算两条", r_twist_3: "湖边结冰，鱼都躲在深水里",

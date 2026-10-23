@@ -384,6 +384,38 @@ function playOut(seed: string, n = 4): RushSim {
   return s;
 }
 
+describe("young fish a net lets go (Let Them Go)", () => {
+  // DESIGN's card text: "Young fish in your net go free; each one you spare
+  // scores ½ a fish if next year is Fair or better." A young fish is spared
+  // once per boat, however many casts land on it (the prototype's f.sp bit):
+  // counting it on every cast gave one bot "261 young fish spared".
+  const youngAt = (s: RushSim, x: number, y: number, n: number) => { addFish(s, x, y, n, 0.5); for (const f of s.fish.slice(-n)) f.adult = false; };
+  it("the same young fish caught in two casts counts as spared once", () => {
+    const s = make("spare", 2); clearFish(s); put(s, 0, 0, 20); s.boats[0].h = 0;
+    youngAt(s, 4, 20, 3);
+    const home = s.fish.map((f) => [f.x, f.y]);
+    for (let k = 0; k < 2; k++) {
+      // the same three young fish sit right in front of the bow for each cast
+      s.fish.forEach((f, i) => { f.x = home[i][0]; f.y = home[i][1]; f.scare = 0; });
+      put(s, 0, 0, 20); s.boats[0].h = 0; s.boats[0].castCd = 0;
+      step(s, [{ seat: 0, i: { k: "cast", charge: 0 } }]);
+      while (s.nets.length) { s.fish.forEach((f, i) => { f.x = home[i][0]; f.y = home[i][1]; }); step(s); }
+    }
+    expect(s.boats[0].stats.youngSpared).toBe(3);
+  });
+  it("with Let Them Go, half a fish per spared young is added to the score in a Fair or better year, not otherwise", () => {
+    for (const lean of [false, true]) {
+      const s = make("release", 2, 280);
+      s.boats[0].cards.push("release"); s.boats[0].stats.youngSpared = 9; s.boats[0].banked = 10;
+      if (lean) s.fish = s.fish.slice(0, 20); // a dead year
+      for (let season = 0; season < RUSH.SEASONS - 1; season++) skipMarket(s);
+      while (s.phase === "play") step(s);
+      const r = rush.results(s), seat0 = r.seats.find((x) => x.seat === 0)!;
+      expect(seat0.score).toBe(lean ? 10 : 10 + Math.floor(9 * RUSH.RELEASE_SHARE));
+    }
+  }, 60000);
+});
+
 describe("the ending: next spring, the counterfactual and titles", () => {
   it("breeds: true — results().lakeLeft is next spring directly, capped at K, not a raw fish count", () => {
     const s = make("ending", 2, 280);
@@ -394,6 +426,19 @@ describe("the ending: next spring, the counterfactual and titles", () => {
     const r = rush.results(s);
     expect(r.lakeLeft).toBeLessThanOrEqual(K);
     expect(r.lakeLeft).toBeGreaterThan(0);
+  }, 30000);
+
+  it("the ceremony's first step gets what was left at the last gong, not next spring twice", () => {
+    // DESIGN "The ceremony", step 1: "what is left in the lake -> next spring".
+    // The page showed next spring on both sides (280 -> 280) because the
+    // results carried only next spring.
+    const s = make("left", 2, 280);
+    for (let season = 0; season < RUSH.SEASONS - 1; season++) skipMarket(s);
+    while (s.phase === "play") step(s);
+    const r = rush.results(s) as unknown as { left: { a: number; y: number }; lakeLeft: number };
+    let a = 0, y = 0; for (const f of s.fish) f.adult ? a++ : y++;
+    expect(r.left).toEqual({ a, y });
+    expect(r.lakeLeft).toBe(Math.min(K, forecast(a, y)));
   }, 30000);
 
   it("the counterfactual (catches x0.8) is at least as generous as the real result", () => {

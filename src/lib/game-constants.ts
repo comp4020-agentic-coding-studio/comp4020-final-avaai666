@@ -190,6 +190,9 @@ export const RUSH = {
   SEATS: { min: 2, max: 4, botFill: 4 },
 } as const;
 export const RUSH_MODEL = "rush 2.0";
+// the v5 lake's fish (src/lib/modes/lake-life.ts), shared by every mode on it:
+// the same numbers rush 2.0 was tuned and measured with
+export const LIFE = { DT: RUSH.DT, SEP: RUSH.SEP, V_ADULT: RUSH.V_ADULT, V_FRY: RUSH.V_FRY, SHALLOW: RUSH.SHALLOW, BIG_SHARE: RUSH.BIG_SHARE } as const;
 
 // ---- Who's Poaching, "poach 1.0" (DESIGN.md "Who's Poaching") ----
 // Distances are in sim units (the lake is 1000 x 700; the 3D lake is a

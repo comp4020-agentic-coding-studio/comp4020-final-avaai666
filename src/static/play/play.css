@@ -27,7 +27,9 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--gold);
 #gl, #gl5 { display: block; width: 100%; height: 100%; touch-action: none; }
 #gl[hidden], #gl5[hidden] { display: none; }
 /* the minimap, world5.js's overview of the whole lake (DESIGN.md "The camera") */
-#mini { position: absolute; z-index: 5; top: max(10px, env(safe-area-inset-top, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); width: min(150px, 28vw); height: min(112px, 21vw); border-radius: 10px; border: 1px solid var(--line); background: rgba(18,14,24,.6); pointer-events: none; }
+/* the minimap sits top-left under the top bar: top-right is the top bar's
+   buttons and the HUD, and it covered both */
+#mini { position: absolute; z-index: 5; top: calc(max(10px, env(safe-area-inset-top, 0px)) + 54px); left: max(10px, env(safe-area-inset-left, 0px)); width: min(150px, 28vw); height: min(112px, 21vw); border-radius: 10px; border: 1px solid var(--line); background: rgba(18,14,24,.6); pointer-events: none; }
 #mini[hidden] { display: none; }
 /* a thumb stick for sailing (P7): appears where the thumb went down */
 .joy { position: fixed; z-index: 6; width: 108px; height: 108px; margin: -54px; border-radius: 50%; border: 2px solid var(--line); background: rgba(18,14,24,.35); pointer-events: none; }
@@ -392,3 +394,25 @@ body.play.in-room { overflow: hidden; }
 /* the seal in the game's top bar is a link back to the room: a 38 px version of the brand seal, not a box in a box */
 .mini-seal { flex: none; width: 38px; height: 38px; display: block; }
 .mini-seal .seal { width: 38px; height: 38px; font-size: 14px; padding: 3px; }
+
+/* the Boat Rush market: three cards side by side (stacked on a phone), each
+   marked by its kind */
+.offer { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.offer .card { text-align: left; color: inherit; font: inherit; cursor: pointer; display: grid; gap: 6px; align-content: start; border-width: 2px; }
+.offer .card b { font-family: var(--display); font-size: 18px; line-height: 1.15; }
+.offer .card .kind { justify-self: start; font-size: 11.5px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; border-radius: 999px; padding: 1px 9px; background: rgba(245,234,214,.1); color: var(--mist); }
+.offer .card p { margin: 0; font-size: 14px; line-height: 1.4; color: var(--paper); }
+.offer .card.greedy { border-color: rgba(207,59,46,.7); } .offer .card.greedy .kind { background: rgba(207,59,46,.25); color: #ff9a86; }
+.offer .card.keeper { border-color: rgba(69,164,140,.7); } .offer .card.keeper .kind { background: rgba(69,164,140,.25); color: #8fe0c8; }
+.offer .card.plain { border-color: rgba(232,184,77,.55); } .offer .card.plain .kind { background: rgba(232,184,77,.2); color: var(--gold); }
+.offer .card:hover, .offer .card:focus-visible { transform: translateY(-2px); }
+.offer .card.chosen { outline: 3px solid var(--gold); }
+.offer .card[disabled] { opacity: .45; cursor: default; }
+.picks { display: grid; gap: 8px; }
+.picks .pick { display: block; padding: 8px 12px; border-radius: 10px; background: rgba(245,234,214,.06); border-left: 4px solid var(--line); }
+.picks .pick.greedy { border-left-color: var(--lacquer); } .picks .pick.keeper { border-left-color: var(--jade); } .picks .pick.plain { border-left-color: var(--gold); }
+@media (max-width: 640px) { .offer { grid-template-columns: 1fr; } .offer .card { gap: 3px; padding: 9px 12px; } .offer .card b { font-size: 16px; } .offer .card p { font-size: 13px; } }
+
+/* on a phone the top bar's second row (sound, details) sits where the
+   minimap would; the minimap goes below it */
+@media (max-width: 640px) { #mini { top: calc(max(10px, env(safe-area-inset-top, 0px)) + 98px); } }
