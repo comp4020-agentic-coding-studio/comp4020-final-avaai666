@@ -6,7 +6,7 @@ The app is one site with four multiplayer games on one shared lake. In Boat
 Rush you sail, net, ram and race home. Fishing Party is five different
 mini-games in a row. Who's Poaching is a hidden-role game about a secret
 poacher. Lake Holdings is a board where you build on the water. A room keeps
-its own lake between games. Every page is in English and Chinese. Design: `DESIGN.md` v4.0; rules: `CLAUDE.md`; checks: `spec/`.
+its own lake between games. Every page is in English and Chinese. Design: `DESIGN.md` v5.4; rules: `CLAUDE.md`; checks: `spec/`.
 The earlier versions still run and are linked from /making-of:
 - the shared pond (crit 8);
 - the five-year lake (crit 9);
@@ -51,6 +51,8 @@ everyone one picture.
 The six portraits are SVG and the 3D world is Three.js code, written by
 Claude in chat for prototype v7 and moved into `src/static/play/` in
 session 13. No image model was used and nothing is generated at run time.
+In session 18 the code, including the party's intro pictures (SVG), was
+written by Claude in claude.ai, working in its own clone of this repo.
 
 ## Moments
 
@@ -128,6 +130,32 @@ The marker's route became a test. It reads /readme/, puts two separate
 profiles in one room within a second, restarts the server and finds the
 room's history, in two languages
 ([`e015058`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/e015058)).
+
+### Green tests, broken game
+
+In session 18 the school agent's budget ran out, so I moved the work to
+Claude in claude.ai. It cloned the same repo, followed the same `CLAUDE.md`,
+and hands the commits back to me as a git bundle; I push them myself.
+
+Every unit test was green. Then it played each mode in a real browser, from
+the home page to the end screen, on a laptop and a phone. That turned up
+bugs no test had caught:
+- the end screen said "280 → 280", and buttons showed key names ("skipall");
+- on a laptop, WASD could not sail up or down, because the code read `dir.y`
+  where the world gives `dir.z`;
+- Fishing Party's intro card vanished when the room cleared its countdown;
+- every page logged a 404 for `/favicon.ico`.
+
+Each fix began with a test that failed first
+([`bbd645a`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/bbd645a),
+[`cf60534`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/cf60534),
+[`f01359b`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/f01359b)).
+This is why `CLAUDE.md` says a change to a /play script is not done until a
+real browser has started a match. The 2.0 rebuilds of the other three modes
+landed the same way
+([`301e1a6`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/301e1a6),
+[`9da6314`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/9da6314),
+[`f2d125a`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/f2d125a)).
 
 ## Corrections that landed in the harness
 
