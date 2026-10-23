@@ -23,6 +23,7 @@ const en = {
   hero_play: "Play with friends", hero_join: "Join with a code",
   hero_proof: "No sign-up. Open a room, send the link, play in your browser.",
   join_label: "Room code (4 letters)", join_go: "Go", join_bad: "A room code is four letters.",
+  join_err_letters: "A room code is 4 letters without vowels (no A, E, I, O, U or Y), like MZHB.", join_err_none: "No room {code} here. Check the code with whoever sent it.",
   s1_t: "Open a room", s1_p: "You get a link. Send it to the people next to you.",
   s2_t: "Pick one of four games", s2_p: "Race, party, find the cheat, or build. Same lake, different game.",
   s3_t: "The lake remembers", s3_p: "The next game starts with the fish the last one left.",
@@ -76,6 +77,10 @@ const en = {
   // ---- about (/readme/) ----
   about_title: "About", about_h: "About", about_p: "The About page is the README, served at /readme/. It says what 'good' means for this game and which of those claims have evidence behind them.",
   readme_en_note: "The README is in English only.",
+  about_zh_h: "About this game", about_zh_more: "The full text (English)",
+  about_zh_p1: "Next Year, No Fish is a multiplayer web game about one shared lake. Open a room, send the link, and pick one of four games: Boat Rush, Fishing Party, Who's Poaching and Lake Holdings. The room's lake remembers what the last game left.",
+  about_zh_p2: "Each game asks one question that only matters because others fish the same water: one more cast or home now; grab now or leave fish for the double round; who do you believe; net it now or breed it for later.",
+  about_zh_p3: "The server decides every catch, coin and vote and sends each player only what they may see. A match is its seed plus the inputs, so it replays exactly. Phones and laptops, English and Chinese.",
 
   // ---- not found ----
   nf_title: "Not found", nf_p: "There is nothing at this address.",
@@ -97,7 +102,7 @@ const en = {
   p2_role_h: "Your role · only you see this", p2_role_f: "Fisher", p2_role_p: "Poacher",
   p2_role_f_s: "There is a poacher among you. Do your tasks, watch the water, and find them before the lake dies.",
   p2_role_p_s: "Net the young fish with your fine net when no one can see you. Lie at the meeting. Survive three days, or sink the lake below 40%.",
-  p2_partner: "Your partner: {name}", p2_team: "The village", p2_starts: "Day 1 starts in {n} s",
+  p2_partner: "Your partner: {name}", p2_team: "The village", p2_starts: "Day 1 starts when everyone is ready, or in {n} s", p2_ok: "I understand: start", p2_waiting: "Waiting for the others…",
   p2_day_b: "Day {n}", p2_day_s: "Do your tasks · watch the water", p2_dusk: "Dusk", p2_dusk_s: "The village meets",
   p2_clock_day: "Day {n} of {of}", p2_clock_meet: "Meeting", p2_clock_role: "Roles",
   p2_tasks_h: "Your tasks today", p2_fake_h: "Your cover (these count for nothing)", p2_health: "Lake health", p2_line: "The 40% line",
@@ -179,7 +184,7 @@ const en = {
   // ---- the room's shared HUD, start card and results ----
   g_connecting: "connecting…", g_live: "live", g_reconnecting: "reconnecting…",
   g_stop: "Stop match", g_stop_confirm: "Stop this match for everyone? Nothing will be scored.", g_stop_fail: "Could not stop",
-  g_sound_on: "sound on", g_sound_off: "sound off", g_details: "Details ▾", g_close: "Close ▴",
+  g_sound_on: "Sound: on", g_sound_off: "Sound: off", g_sound: "Sound (music and effects)", g_details: "Details ▾", g_close: "Close ▴",
   g_slow: "Slow down", g_slow_s: "too many inputs a second",
   g_lobby: "Home", g_lake_3d: "The lake, drawn in 3D", g_back_room: "Back to the room", g_host_menu: "Host menu", g_cancel: "Keep playing", g_to_game: "Go to the game",
   g_nobody: "Nobody yet", g_lake_remembers: "This room's lake remembers:", g_lake_died: "This lake died. The next match starts a new lake.",
@@ -284,7 +289,7 @@ const en = {
   r_p2: "Fish ahead of your bow: press NET", r_p2k: "Fish ahead of your bow: press Space", r_p2s: "The net lands just in front of the boat",
   r_p3: "Take the fish home to your dock", r_p3s: "Follow the arrow. Unloading is automatic.",
   r_p_done: "You're ready", r_p_done_s: "Four seasons, three bots. Most fish home wins, times next year's lake.", r_p_start: "Start the real game",
-  r_practice: "Practise first (30 s)", r_practising: "Practice · no clock",
+  r_practice: "Practise first: 3 steps, about 30 s", r_practising: "Practice · 3 steps, no clock",
 
   // ---- Who's Poaching HUD and meeting ----
   p_bay_north: "North Bay", p_bay_east: "East Bay", p_bay_south: "South Bay", p_bay_west: "West Bay",
@@ -435,6 +440,7 @@ const zh: Record<Key, string> = {
   hero_play: "和朋友一起玩", hero_join: "输入房间码加入",
   hero_proof: "不用注册。开一个房间，把链接发给朋友，在浏览器里就能玩。",
   join_label: "房间码（4 个字母）", join_go: "进入", join_bad: "房间码是四个字母。",
+  join_err_letters: "房间码是 4 个字母，不含元音（没有 A、E、I、O、U、Y），比如 MZHB。", join_err_none: "没有房间 {code}。请向发给你房间码的人再确认一下。",
   s1_t: "开一个房间", s1_p: "你会得到一个链接，发给身边的人。",
   s2_t: "四个游戏选一个", s2_p: "竞速、派对、抓内鬼、经营。同一片湖，不同的玩法。",
   s3_t: "湖会记住", s3_p: "下一局从上一局剩下的鱼开始。",
@@ -484,6 +490,10 @@ const zh: Record<Key, string> = {
 
   about_title: "关于", about_h: "关于", about_p: "关于页就是 README，网址是 /readme/。它说明这个游戏怎样才算「好」，以及哪些说法有依据。",
   readme_en_note: "README 只有英文版。",
+  about_zh_h: "关于这个游戏", about_zh_more: "英文全文",
+  about_zh_p1: "《明年无鱼》是一个多人网页游戏，大家共用同一个湖。开一个房间，把链接发给朋友，从四个游戏里选一个：开船抢鱼、钓鱼派对、谁在偷鱼、抢地盘经营。房间里的湖会记住上一局留下了多少鱼。",
+  about_zh_p2: "每个游戏都问一个问题，而且只有在别人也在同一片水里捞鱼时才重要：再撒一网还是现在回家；现在抢，还是把鱼留给双倍的最后一回合；你相信谁；现在捞，还是养着以后再捞。",
+  about_zh_p3: "每一次捕鱼、每一枚金币、每一张票都由服务器决定，每个玩家只收到自己能看到的东西。一局游戏就是它的种子加上所有输入，可以原样重放。手机和电脑都能玩，中英文都有。",
 
   nf_title: "找不到", nf_p: "这个网址什么也没有。",
   // ---- 抢地盘经营 2.0 ----
@@ -504,7 +514,7 @@ const zh: Record<Key, string> = {
   p2_role_h: "你的身份 · 只有你看得到", p2_role_f: "渔民", p2_role_p: "偷渔人",
   p2_role_f_s: "你们中间有一个偷渔人。做好村里的活，盯着湖面，在湖死掉之前把他找出来。",
   p2_role_p_s: "趁没人看见，用绝户网捞小鱼。开会时撒谎。撑过三天，或者让湖掉到 40% 以下。",
-  p2_partner: "你的同伙：{name}", p2_team: "村里的人", p2_starts: "{n} 秒后第 1 天开始",
+  p2_partner: "你的同伙：{name}", p2_team: "村里的人", p2_starts: "大家都准备好就开始第 1 天，最多再等 {n} 秒", p2_ok: "我明白了，开始", p2_waiting: "等其他人…",
   p2_day_b: "第 {n} 天", p2_day_s: "做村里的活 · 盯着湖面", p2_dusk: "天黑了", p2_dusk_s: "全村开会",
   p2_clock_day: "第 {n} 天（共 {of} 天）", p2_clock_meet: "村会", p2_clock_role: "身份",
   p2_tasks_h: "今天的活", p2_fake_h: "掩护（这些活不算数）", p2_health: "湖的健康", p2_line: "40% 线",
@@ -583,7 +593,7 @@ const zh: Record<Key, string> = {
 
   g_connecting: "连接中…", g_live: "在线", g_reconnecting: "重新连接中…",
   g_stop: "结束这局", g_stop_confirm: "为所有人结束这一局？不会计分。", g_stop_fail: "没能结束",
-  g_sound_on: "声音开", g_sound_off: "声音关", g_details: "详情 ▾", g_close: "收起 ▴",
+  g_sound_on: "声音：开", g_sound_off: "声音：关", g_sound: "声音（音乐和音效）", g_details: "详情 ▾", g_close: "收起 ▴",
   g_slow: "慢一点", g_slow_s: "每秒操作太多了",
   g_lobby: "首页", g_lake_3d: "用 3D 画的湖", g_back_room: "回到房间", g_host_menu: "房主菜单", g_cancel: "继续玩", g_to_game: "进入游戏",
   g_nobody: "还没有人", g_lake_remembers: "这个房间的湖会记住：", g_lake_died: "这片湖死了。下一局会换一片新湖。",
@@ -681,7 +691,7 @@ const zh: Record<Key, string> = {
   r_p2: "鱼在船头前面：按「撒网」", r_p2k: "鱼在船头前面：按空格撒网", r_p2s: "网落在船头正前方",
   r_p3: "把鱼运回自家码头", r_p3s: "跟着箭头走。靠岸就会自动卸鱼。",
   r_p_done: "可以开始了", r_p_done_s: "四个季节，三个机器人。运回家的鱼最多的人赢，再乘上明年湖的年景。", r_p_start: "开始正式比赛",
-  r_practice: "先练习（30 秒）", r_practising: "练习 · 不计时",
+  r_practice: "先练习：3 步，约 30 秒", r_practising: "练习 · 3 步，不计时",
 
   p_bay_north: "北湾", p_bay_east: "东湾", p_bay_south: "南湾", p_bay_west: "西湾",
   p_fisher: "渔民", p_fisher_s: "为村子的配额捕鱼。在湖的健康掉到 40% 以下之前找出偷渔人。",

@@ -33,12 +33,13 @@ describe("the room page before a match", () => {
     expect(html).not.toMatch(/class="[^"]*game-stage/);
   });
 
-  it("Boat Rush's rules card offers \"Practise first (30 s)\" next to Start, as a link to the game page alone; other games and visitors who have not joined do not see it", () => {
+  it("Boat Rush's rules card offers \"Practise first\" next to Start, as a link to the game page alone; other games and visitors who have not joined do not see it", () => {
     // DESIGN.md Boat Rush 2.0, flow step 1: the rules card, with "Start" and "Practise first (30 s)"
     const link = d.querySelector<HTMLAnchorElement>("#practisebtn")!;
     expect(link.hidden).toBe(false);
     expect(link.getAttribute("href")).toBe("/play/MZHB/game?practice=1");
-    expect(link.textContent).toBe("Practise first (30 s)");
+    // Codex review (24 Oct): "(30 s)" read as a timer, but the practice is three steps with no clock
+    expect(link.textContent).toBe("Practise first: 3 steps, about 30 s");
     expect(doc(roomSitePage("en", { ...view, mode: "party" }, [], "https://example.test")).querySelector<HTMLAnchorElement>("#practisebtn")!.hidden).toBe(true);
     expect(doc(roomSitePage("en", { ...view, me: null }, [], "https://example.test")).querySelector<HTMLAnchorElement>("#practisebtn")!.hidden).toBe(true);
   });
@@ -217,5 +218,38 @@ describe("the host menu", () => {
     const base = play.match(/\n\.hostmenu \.menu-list \{([^}]*)\}/)![1];
     expect(base).toMatch(/(^|;)\s*right:\s*0/);
     expect(base).not.toMatch(/(^|;)\s*left:\s*0/);
+  });
+});
+
+describe("the game page speaks the visitor's language", () => {
+  // Codex review (24 Oct): a Chinese game page still had an English tab title, <html lang="en">, and an English join form
+  it("its tab title, html lang and join form are in Chinese on a Chinese page, and in English on an English one", () => {
+    const zh = new JSDOM(roomPage({ ...view, me: null }, undefined, "zh")).window.document;
+    expect(zh.title).toBe("房间 MZHB · 开船抢鱼");
+    expect(zh.documentElement.getAttribute("lang")).toBe("zh");
+    const form = zh.querySelector(".joinform")!;
+    expect(form.textContent).toContain("你的名字");
+    expect(form.textContent).not.toMatch(/Your name|Join room|\bJoin\b/);
+    expect(form.hasAttribute("novalidate")).toBe(true);
+    const en = new JSDOM(roomPage({ ...view, me: null }, undefined, "en")).window.document;
+    expect(en.title).toBe("Room MZHB · Boat Rush");
+    expect(en.documentElement.getAttribute("lang")).toBe("en");
+  });
+});
+
+describe("Back to the room, during a match", () => {
+  // Codex review (24 Oct): the game's "Back to the room" seal led to the room page, which saw the match
+  // running and sent you straight back to the game: the button could never work.
+  it("the room page stays when you came back from a running match on purpose, and still takes you to the next match", async () => {
+    const { shouldGoToGame } = await import("../../src/static/play/room-nav.js");
+    const playing = { ...view, state: "play" as const, startedAt: 1000 };
+    expect(shouldGoToGame(playing, { stay: false, startedAtOnArrival: 1000 })).toBe(true); // waiting in the room: go
+    expect(shouldGoToGame(playing, { stay: true, startedAtOnArrival: 1000 })).toBe(false); // came back on purpose: stay
+    expect(shouldGoToGame({ ...playing, startedAt: 5000 }, { stay: true, startedAtOnArrival: 1000 })).toBe(true); // a new match: go
+    expect(shouldGoToGame(view, { stay: false, startedAtOnArrival: null })).toBe(false); // no match
+  });
+  it("the game page's seal asks the room page to stay", () => {
+    const d = new JSDOM(roomPage({ ...view, state: "play", startedAt: 1000 }, undefined, "en")).window.document;
+    expect(d.querySelector(".mini-seal")!.getAttribute("href")).toBe("/play/MZHB?stay=1");
   });
 });

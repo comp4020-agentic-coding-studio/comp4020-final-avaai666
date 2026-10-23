@@ -193,10 +193,12 @@ export function mount({ world, sound, ui, send, view, post }) {
     for (const [seat, bt] of world.boats ?? []) if (!shown.has(seat)) bt.mesh.visible = false;
     world.setFish((cur.f ?? []).map((f, i) => { const p = prev?.f?.[i]; return p ? [lerp(p[0] / 10, f[0] / 10), lerp(p[1] / 10, f[1] / 10), f[2] / 100, f[3] ? 1 : 0.6] : [f[0] / 10, f[1] / 10, f[2] / 100, f[3] ? 1 : 0.6]; }), tt);
     for (const [id, x, y, state, by] of cur.spots ?? []) {
-      const ring = world.prop(`sp${id}`, () => new world.THREE.Mesh(new world.THREE.RingGeometry(5.4, 6, 40).rotateX(-Math.PI / 2), new world.THREE.MeshBasicMaterial({ color: "#e8b84d", transparent: true, depthWrite: false })));
+      // deep gold on a dark halo (pale gold vanished on sunlit water); a warning ring is dimmer, an open one pulses
+      const ring = world.prop(`sp${id}`, () => world.makeRing(4.3, 6.4));
       const [wx, wz] = world.toWorld(x / 10, y / 10); ring.position.set(wx, 0.15, wz);
-      const pulse = 0.5 + Math.sin(tt * 14) * 0.5;
-      ring.material.color.set(state === 2 ? colorOf(by) : "#e8b84d"); ring.material.opacity = state === 0 ? 0.35 : state === 1 ? 0.7 + pulse * 0.3 : 0.9; ring.scale.setScalar(state === 1 ? 1 + pulse * 0.08 : 1);
+      const pulse = 0.5 + Math.sin(tt * 14) * 0.5, gold = ring.userData.gold, halo = ring.userData.halo;
+      gold.material.color.set(state === 2 ? colorOf(by) : state === 1 ? "#ffa800" : "#b86a00"); gold.material.opacity = state === 0 ? 0.9 : 1;
+      halo.material.opacity = state === 0 ? 0.45 : 0.7; ring.scale.setScalar(state === 1 ? 1 + pulse * 0.1 : 1);
     }
     if (cur.path) {
       const next = cur.me ? cur.me.gate % cur.path.length : -1;

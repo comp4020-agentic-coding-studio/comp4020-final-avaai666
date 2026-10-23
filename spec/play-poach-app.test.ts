@@ -25,7 +25,8 @@ it("poach 1. four people play Who's Poaching 2.0 from the room to the results an
   expect(JSON.parse(gos[0].data).frame.phase).toBe("role");
   const p = roles.indexOf("poacher"), f = (p + 1) % 4;
 
-  // day 1: the role card, then the day
+  // day 1: the role card waits until everyone says they understand (rule change 9), then the day
+  for (const jar of jars) expect((await post(baseUrl, code, "in", jar, { k: "ready" })).status).toBe(200);
   await streams[0].next((e) => e.event === "frame" && JSON.parse(e.data).f.phase === "day", 30_000);
   expect((await post(baseUrl, code, "in", jars[f], { k: "net" })).status).toBe(200);
   expect((await post(baseUrl, code, "in", jars[p], { k: "fine" })).status).toBe(200);

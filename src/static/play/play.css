@@ -340,17 +340,22 @@ body.play.in-room { overflow: hidden; }
 .hudtoggle { display: none; }
 @media (max-width: 860px) {
   .room .hudtoggle { display: block; position: absolute; z-index: 6; top: calc(max(10px, env(safe-area-inset-top, 0px)) + 52px); right: 10px; border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 4px 12px; font-size: 13px; }
-  .room .hud { top: calc(max(10px, env(safe-area-inset-top, 0px)) + 88px); width: min(250px, calc(100% - 20px)); max-height: 44px; overflow: hidden; }
+  /* folded: the first card becomes one line of its key numbers (it used to be clipped at 44 px mid-card) */
+  .room .hud { top: calc(max(10px, env(safe-area-inset-top, 0px)) + 88px); width: min(250px, calc(100% - 20px)); }
   .room .hud > .card:not(:first-child) { display: none; }
-  .room .hud > .card:first-child { padding: 5px 9px; }
+  .room .hud > .card:first-child { padding: 6px 12px; display: flex; align-items: center; gap: 6px 14px; flex-wrap: wrap; }
+  .room .hud > .card:first-child > .row { display: flex; flex: 1 1 auto; align-items: center; justify-content: space-between; gap: 12px; }
   .room .hud > .card:first-child h4 { display: none; }
-  .room .hud > .card:first-child .small, .room .hud > .card:first-child .bar { display: none; }
+  .room .hud > .card:first-child .small, .room .hud > .card:first-child .bar, .room .hud > .card:first-child .h2-bar, .room .hud > .card:first-child .po-health small { display: none; }
+  .room .hud > .card:first-child .po-health { margin: 0; }
   .room .hud > .card:first-child .big { font-size: 16px; }
   .room .hud > .card:first-child .frame { display: none; }
   .room .hud > .card.role { grid-template-columns: 1fr; }
   body.hud-open .room .hud { max-height: 70vh; overflow-y: auto; }
   body.hud-open .room .hud > .card:not(:first-child) { display: block; }
-  body.hud-open .room .hud > .card:first-child h4, body.hud-open .room .hud > .card:first-child .small, body.hud-open .room .hud > .card:first-child .bar { display: block; }
+  body.hud-open .room .hud > .card:first-child { display: block; }
+  body.hud-open .room .hud > .card:first-child h4, body.hud-open .room .hud > .card:first-child .small, body.hud-open .room .hud > .card:first-child .bar, body.hud-open .room .hud > .card:first-child .h2-bar { display: block; }
+  body.hud-open .room .hud > .card:first-child .po-health small { display: inline; }
   .room .hud > .pads.dock { display: flex; }
   .room .hud .cards { grid-template-columns: repeat(3, 1fr); }
   .room #p-pads.pads.dock { flex-wrap: wrap; }
@@ -369,7 +374,10 @@ body.play.in-room { overflow: hidden; }
 }
 @media (max-width: 860px) {
   .topbar { flex-wrap: wrap; row-gap: 6px; }
-  .topbar .goalclock { flex: 1 1 calc(100% - 48px); order: 1; }
+  .topbar .goalclock { flex: 1 1 calc(100% - 48px); order: 1; align-items: center; }
+  /* the goal may take two short lines on a phone rather than end in "…" */
+  .topbar .goalclock b { white-space: normal; font-size: 13.5px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .topbar .goalclock span { font-size: 17px; white-space: nowrap; }
   .topbar .hostmenu, .topbar #sound { order: 2; }
   .topbar .hostmenu { margin-left: 48px; }
   .topbar .hostmenu .menu-list { right: auto; left: 0; } /* on a phone the menu sits at the left of the second row */
@@ -450,6 +458,8 @@ body.play.in-room { overflow: hidden; }
 .po-who { font-family: var(--brush), var(--display); font-size: 56px; line-height: 1.05; }
 .po-role.f .po-who { color: #8fe0c8; } .po-role.p .po-who { color: #ff8a7a; }
 .po-crew { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.po-readyrow > .po-face { opacity: .4; transition: opacity .2s; } .po-readyrow > .po-face.on { opacity: 1; outline: 3px solid #7ccf8e; outline-offset: 1px; }
+.po-role #po-ok { justify-self: center; min-width: 60%; }
 .po-partner { color: #ff9a86; font-weight: 700; margin: 0; }
 .po-meet { width: min(1100px, 100%); }
 .po-mhead { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
@@ -527,6 +537,8 @@ body.play.in-room { overflow: hidden; }
 .y2-meter { position: relative; height: 34px; border-radius: 12px; background: rgba(18,14,24,.88); border: 2px solid var(--line); overflow: hidden; }
 .y2-meter .zone { position: absolute; top: 0; bottom: 0; background: #7ccf8e; opacity: .85; }
 .y2-meter .needle { position: absolute; top: -4px; bottom: -4px; width: 6px; margin-left: -3px; background: var(--paper); border-radius: 3px; box-shadow: 0 0 8px rgba(0,0,0,.6); }
+/* frames come 10 times a second: glide between them so the needle is easy to follow */
+.y2-meter .needle, .y2-meter .zone { transition: left .1s linear; }
 .y2-lanes { display: grid; gap: 5px; background: rgba(18,14,24,.75); border-radius: 12px; padding: 8px 10px; font-size: 13px; }
 .y2-lane { display: grid; grid-template-columns: 12px 1fr 6em; gap: 8px; align-items: center; }
 .y2-lane .sw { width: 12px; height: 12px; border-radius: 50%; }

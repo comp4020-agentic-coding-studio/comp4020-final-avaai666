@@ -37,7 +37,7 @@ function skipMarket(s: RushSim): void {
 describe("inputs are validated by the server", () => {
   it("only steer, cast, dash, pick and reroll are accepted, steers are clamped and rounded, and a charge is between 0 and 1", () => {
     const s = make();
-    expect(rush.input(s, 0, { k: "steer", x: 5000.4, y: -3000 })).toEqual({ k: "steer", x: 92, y: -64 });
+    expect(rush.input(s, 0, { k: "steer", x: 5000.4, y: -3000 })).toEqual({ k: "steer", x: 64.4, y: -44.8 }); // the lake's edge (rule change 8: 92 x 64 at 0.7)
     expect(rush.input(s, 0, { k: "cast", charge: 7 })).toEqual({ k: "cast", charge: 1 });
     expect(rush.input(s, 0, { k: "cast" })).toEqual({ k: "cast", charge: 0 });
     expect(rush.input(s, 0, { k: "dash" })).toEqual({ k: "dash" });

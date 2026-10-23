@@ -115,6 +115,14 @@ describe("/readme/ and /making-of", () => {
     expect(textOf(readmeSitePage("en", "<h2>x</h2>"))).not.toContain(t("zh", "readme_en_note"));
   });
 
+  it("/readme/ in Chinese leads with a Chinese summary, and keeps the English README one tap away (Codex review, 24 Oct)", () => {
+    const d = doc(readmeSitePage("zh", "<h2>What good means here</h2>"));
+    expect(d.querySelector(".about-zh h1")!.textContent).toBe(t("zh", "about_zh_h"));
+    expect(d.querySelectorAll(".about-zh p").length).toBeGreaterThanOrEqual(3);
+    expect(d.querySelector("details.readme-en article.readme h2")!.textContent).toBe("What good means here");
+    expect(doc(readmeSitePage("en", "<h2>x</h2>")).querySelector(".about-zh, details.readme-en")).toBeNull(); // English: the README itself
+  });
+
   it("/making-of lists the four versions, each earlier one with a link that still runs", () => {
     const d = doc(makingOfPage("en"));
     expect(d.querySelectorAll("ol.timeline > li").length).toBe(4);

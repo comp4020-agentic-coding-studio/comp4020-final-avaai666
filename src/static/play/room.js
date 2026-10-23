@@ -3,7 +3,8 @@
 // drawn by the mode's own script (rush.js, poach.js, party.js, hold.js),
 // which gets each frame the server built for this seat. Nothing here decides
 // an outcome.
-import { createSound, createWorld } from "./world.js";
+import { createWorld } from "./world.js";
+import { createSound } from "./sound.js";
 import { createWorld5 } from "./world5.js";
 import { CREW, portrait } from "./art.js";
 import { worldModuleFor } from "./world-select.js";
@@ -34,7 +35,7 @@ function worldFor(moduleName) {
   if (moduleName === "world5.js") return (world5 ??= createWorld5($("gl5"), stage, boot.world, { minimap: $("mini") }));
   return (worldOld ??= createWorld($("gl"), stage));
 }
-const sound = createSound($("sound"), { on: t("g_sound_on"), off: t("g_sound_off") });
+const sound = createSound($("sound"), { on: t("g_sound_on"), off: t("g_sound_off"), label: t("g_sound") });
 const send = (body) => fetch(`/play/${code}/in`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), keepalive: true })
   .then((r) => { if (r.status === 429) banner(t("g_slow"), t("g_slow_s")); return r.json(); }).catch(() => ({ ok: false, reason: "offline" }));
 const post = (path, body) => fetch(`/play/${code}/${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json()).catch(() => ({ ok: false, reason: "offline" }));
@@ -169,12 +170,13 @@ function showRoom() {
   if (view.me === null && document.querySelector(".joinform")) { overlay.innerHTML = ""; return; }
   if (view.state === "lobby") {
     // "Practise first" (DESIGN.md Boat Rush, step 1): the game page alone, before anyone starts a match
-    if (practising && modeApi?.practice) { if (!practiceOn) { practiceOn = true; modeApi.practice.start(practiceDone); } return; }
+    if (practising && modeApi?.practice) { if (!practiceOn) { practiceOn = true; modeApi.practice.start(practiceDone); sound.music("calm"); } return; }
     location.replace(`/play/${code}`); return;
   }
   if (view.state === "end" && view.results) {
     // a mode may draw its own results screen (the ceremony, DESIGN.md "The ceremony"); the generic
     // podium (resultsHtml) is the fallback for modes not yet rebuilt to it
+    sound.music("calm");
     if (modeApi?.results) modeApi.results(view, overlay);
     else { overlay.innerHTML = resultsHtml(); bindOverlay(); }
   }
@@ -204,6 +206,7 @@ function connect() {
     showRoom();
   });
   es.addEventListener("go", async (e) => {
+    sound.music("play");
     const g = JSON.parse(e.data);
     // a real match: the practice is over, and this page is the plain game page from now on
     if (practising) { practising = false; practiceOn = false; history.replaceState(null, "", location.pathname); }

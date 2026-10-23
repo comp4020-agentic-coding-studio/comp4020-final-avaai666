@@ -36,7 +36,7 @@ function fakeWorld5() {
   const scene = new THREE.Scene();
   return {
     THREE, scene, camera: new THREE.PerspectiveCamera(), toon: (c: string) => new THREE.MeshBasicMaterial({ color: c }),
-    makeLantern: () => new THREE.Group(), toWorld: (x: number, y: number) => [x, y], toSim: (x: number, y: number) => [x, y],
+    makeLantern: () => new THREE.Group(), makeRing: () => { const g = new THREE.Group(), mat = () => new THREE.MeshBasicMaterial(); g.userData = { gold: new THREE.Mesh(undefined, mat()), halo: new THREE.Mesh(undefined, mat()) }; return g; }, toWorld: (x: number, y: number) => [x, y], toSim: (x: number, y: number) => [x, y],
     zones: {}, island: { x: 10, y: -15, r: 7.5 }, docks: [{ x: 0, z: 10, wx: 0, wz: 10 }],
     setSeason: noop, setNight: noop, setLanterns: noop, setDocks: noop,
     boat: () => ({ tag: { classList: { toggle: noop } }, mesh: { visible: true, userData: { pile: { children: [] } } } }), drawBoat: noop,
@@ -219,5 +219,28 @@ describe("Boat Rush's keys", () => {
     const steer = sent.find((s) => s.k === "steer")!;
     expect(steer).toEqual({ k: "steer", x: 0, y: -2 });
     mode.end();
+  });
+});
+
+describe("the sound button", () => {
+  beforeEach(() => { dom(); });
+
+  it("shows the current state (Sound: on / off) with aria-pressed, flips on a click, and every effect and the music are safe with no audio device", async () => {
+    // Codex review: "sound on" read as an action, not a state; the button now says which it is
+    const { createSound } = await importJs("../../src/static/play/sound.js");
+    for (const lang of ["en", "zh"] as const) {
+      dom();
+      const btn = document.createElement("button");
+      const sound = createSound(btn, { on: t(lang, "g_sound_on"), off: t(lang, "g_sound_off"), label: t(lang, "g_sound") });
+      expect(btn.textContent).toBe(DICT[lang].g_sound_on);
+      expect(btn.getAttribute("aria-pressed")).toBe("true");
+      btn.click();
+      expect(btn.textContent).toBe(DICT[lang].g_sound_off);
+      expect(btn.getAttribute("aria-pressed")).toBe("false");
+      btn.click();
+      // jsdom has no AudioContext: nothing may throw
+      for (const k of ["catch", "coin", "bank", "hit", "miss", "horn", "big", "tick", "splash", "chime"]) expect(() => sound[k](2)).not.toThrow();
+      expect(() => { sound.music("play"); sound.music("rush"); sound.music("calm"); sound.music(null); }).not.toThrow();
+    }
   });
 });

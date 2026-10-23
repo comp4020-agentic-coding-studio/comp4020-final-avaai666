@@ -55,18 +55,16 @@ Enforced, by checks that fail if the claim breaks:
   page of the current site renders in both languages
   (`spec/unit/site-pages.test.ts`).
 
-Measured, not enforced, in 300 bot matches per table (the 2.0 modes;
-the v4 numbers stay in `docs/checks/balance-2026-10-15.md`). These are claims
-about the modes' own bots and seeds, not about people:
-- Boat Rush (`docs/checks/balance-rush2-2026-10-23.md`): no bot kind won over
-  41% of random-mix tables (greedy 28.2%); all-keeper tables ended Fair or
-  better in 76.0%, all-greedy in 50.7%.
-- Fishing Party (`docs/checks/balance-party2-2026-10-24.md`): no shop habit
-  won over 40% (Fast Boat always 35.7%).
-- Who's Poaching (`docs/checks/balance-poach2-2026-10-23.md`): fishers won
-  74.3%, and 45.0% if they always skip the vote.
-- Lake Holdings (`docs/checks/balance-hold2-2026-10-24.md`): the greedy bot
-  won 44.3% of random-mix tables, over the 41% target; not yet tuned.
+Measured, not enforced, in 300 bot matches per table, on the lake at 0.7
+(`docs/checks/balance-lake07-2026-10-24.md`; the 2.0 reports before it are
+kept beside it, and v4's in `docs/checks/balance-2026-10-15.md`). These are
+claims about the modes' own bots and seeds, not about people:
+- Boat Rush: no bot kind won over 41% of random-mix tables (greedy 28.2%);
+  all-keeper tables ended Fair or better in 96.0%, all-greedy in 50.3%.
+- Fishing Party: no shop habit won over 40% (Fast Boat always 34.7%).
+- Who's Poaching: fishers won 77.7%, and 53.3% if they always skip the vote.
+- Lake Holdings: the greedy bot won 44.3% of random-mix tables, over the 41%
+  target; not yet tuned.
 
 Judged, by watching people: whether they name the choice untold, change plans
 for others, and want a rematch.

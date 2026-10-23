@@ -51,9 +51,9 @@ export const MODE_CARDS: ModeCard[] = [
 ];
 export const cardOf = (id: string): ModeCard => MODE_CARDS.find((m) => m.id === id)!;
 
-function page(title: string, body: string, bodyClass: string, scripts: string): string {
+function page(title: string, body: string, bodyClass: string, scripts: string, lang: Lang = "en"): string {
   return `<!doctype html>
-<html lang="en">
+<html lang="${lang}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -80,11 +80,11 @@ export function roomPage(view: RoomView, error?: string, lang: Lang = "en"): str
   const taken = new Set(view.players.map((p) => p.character));
   const firstFree = crew.find((c) => !taken.has(c.id as RoomView["players"][number]["character"]))?.id ?? "mei";
   const card = cardOf(view.mode);
-  const join = view.me === null ? `<form class="joinform card" method="post" action="/play/${esc(view.code)}/join">
-      <h3>Join room ${esc(view.code)}</h3>
-      <label for="name">Your name</label><input id="name" name="name" maxlength="24" required autocomplete="nickname" />
-      <div class="roster small">${crew.map((c) => `<label class="face-btn" title="${esc(c.name)}"><input type="radio" name="character" value="${c.id}" ${c.id === firstFree ? "checked" : ""} />${portrait(c.id, c.name)}</label>`).join("")}</div>
-      <button class="btn primary" type="submit">Join</button>
+  const join = view.me === null ? `<form class="joinform card" method="post" action="/play/${esc(view.code)}/join" novalidate>
+      <h3>${esc(t(lang, "join_h", { code: view.code }))}</h3>
+      <label for="name">${esc(t(lang, "join_name"))}</label><input id="name" name="name" maxlength="24" required autocomplete="nickname" />
+      <div class="roster small">${crew.map((c) => `<label class="face-btn" title="${esc(t(lang, `c_${c.id}`))}"><input type="radio" name="character" value="${c.id}" ${c.id === firstFree ? "checked" : ""} />${portrait(c.id, t(lang, `c_${c.id}`))}</label>`).join("")}</div>
+      <button class="btn primary" type="submit">${esc(t(lang, "join_btn"))}</button>
       ${error ? `<p class="toast" role="alert" id="join-error">${esc(error)}</p>` : ""}
     </form>` : "";
   const w = (k: string) => esc(t(lang, k));
@@ -95,7 +95,7 @@ export function roomPage(view: RoomView, error?: string, lang: Lang = "en"): str
     <div class="tags" id="tags"></div><div class="floats" id="floats"></div>
     <div class="tags" id="tags5"></div><div class="floats" id="floats5"></div>
     <canvas id="mini" aria-hidden="true"${WORLD5_MODES.includes(view.mode) ? "" : " hidden"}></canvas>
-    <div class="topbar" id="topbar"><a class="mini-seal" href="/play/${esc(view.code)}" aria-label="${w("g_back_room")}">${seal}</a><div class="goalclock"><b id="goal">${w(`${view.mode}_hud`)}</b><span id="clock"></span></div><span class="conn" id="conn">${w("g_connecting")}</span><button class="tiny" id="sound" type="button">${w("g_sound_off")}</button>
+    <div class="topbar" id="topbar"><a class="mini-seal" href="/play/${esc(view.code)}?stay=1" aria-label="${w("g_back_room")}">${seal}</a><div class="goalclock"><b id="goal">${w(`${view.mode}_hud`)}</b><span id="clock"></span></div><span class="conn" id="conn">${w("g_connecting")}</span><button class="tiny" id="sound" type="button">${w("g_sound_off")}</button>
       <div class="hostmenu" id="hostmenu" hidden><button class="tiny" id="hostbtn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="${w("g_host_menu")}">⋯</button><div class="menu-list" id="hostlist" hidden><button type="button" class="danger" data-stop>${w("g_stop")}</button></div></div></div>
     <button class="hudtoggle" id="hudtoggle" type="button" aria-expanded="false" aria-controls="hud">${w("g_details")}</button>
     <div class="hud" id="hud"></div>
@@ -113,5 +113,5 @@ export function roomPage(view: RoomView, error?: string, lang: Lang = "en"): str
     // and nets with the match's own numbers, sent here so the page keeps no copy
     rushPractice: { speed: RUSH.SPEED, loadSlow: RUSH.LOAD_SLOW, hold: RUSH.HOLD, netR: RUSH.NET_R, netAhead: RUSH.NET_AHEAD, castCd: RUSH.CAST_CD, dockR: RUSH.DOCK_R },
   }).replace(/</g, "\\u003c")}</script>`;
-  return page(`Room ${view.code} · ${card.name}`, shell, "play in-room", `<script type="module" src="/static/play/room.js"></script>`);
+  return page(`${t(lang, "room_title", { code: view.code })} · ${t(lang, `${card.id}_name`)}`, shell, "play in-room", `<script type="module" src="/static/play/room.js"></script>`, lang);
 }

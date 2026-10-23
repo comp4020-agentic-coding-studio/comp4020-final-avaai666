@@ -30,6 +30,8 @@ const FILES: Record<string, string> = {
   "play/poach.js": "text/javascript; charset=utf-8",
   "play/party.js": "text/javascript; charset=utf-8",
   "play/hold.js": "text/javascript; charset=utf-8",
+  "play/sound.js": "text/javascript; charset=utf-8",
+  "play/room-nav.js": "text/javascript; charset=utf-8",
   "play/play.css": "text/css; charset=utf-8",
   "vendor/three.module.js": "text/javascript; charset=utf-8",
 };
@@ -69,8 +71,12 @@ export function createPlayRoutes(hub: GameHub, store: GameStore, staticDir: stri
     if (path === "/play" && method === "GET") { redirect(res, "/"); return true; }
     // "Join with a code" on the home page: a plain GET form
     if (path === "/play/join" && method === "GET") {
-      const raw = (new URL(req.url ?? "/", "http://x").searchParams.get("code") ?? "").trim().toUpperCase();
-      redirect(res, /^[BCDFGHJKLMNPQRSTVWXZ]{4}$/.test(raw) ? `/play/${raw}` : "/");
+      // a bad code, or one with no room, is answered on the home page's own form, code kept (Codex review, 24 Oct)
+      const raw = (new URL(req.url ?? "/", "http://x").searchParams.get("code") ?? "").trim().toUpperCase().slice(0, 8);
+      const lang = langFrom(req.headers.cookie);
+      if (!/^[BCDFGHJKLMNPQRSTVWXZ]{4}$/.test(raw)) { sendHtml(res, 400, homePage(lang, undefined, { code: raw, error: t(lang, "join_err_letters") })); return true; }
+      if (!hub.view(raw, null)) { sendHtml(res, 404, homePage(lang, undefined, { code: raw, error: t(lang, "join_err_none", { code: raw }) })); return true; }
+      redirect(res, `/play/${raw}`);
       return true;
     }
     if (path === "/play" && method === "POST") {

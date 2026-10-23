@@ -116,6 +116,8 @@ export function mount({ world, sound, ui, send, view, post }) {
     const mine = me() !== null ? f.b.find((b) => b[0] === me()) : null;
     ui.setClock(f.left, t(`r_season_${f.season}`));
     ui.goalEl.textContent = t("rush_hud");
+    // the last 10 s of a season is the Rush (DESIGN.md): faster music
+    if (!practice) sound.music?.(f.phase === "play" && f.left <= 10 ? "rush" : "play");
     if (mine) {
       $("r-hold").textContent = `${mine[4]} / ${mine[5]}`; $("r-bank").textContent = mine[7];
       $("r-holdbar").style.width = `${(mine[4] / mine[5]) * 100}%`; $("r-holdbar").style.background = mine[4] >= mine[5] ? "#ff7a5a" : "";
@@ -291,7 +293,7 @@ export function mount({ world, sound, ui, send, view, post }) {
     for (const l of cur.l) { const m = world.prop(`l${l[0]}`, () => { const g = new world.THREE.Mesh(new world.THREE.SphereGeometry(0.04, 6, 5).scale(1.6, 0.7, 1), world.toon(l[3] > 1 ? "#ffd34d" : "#f08a3c")); return g; }); m.position.set(l[1] / 10, 0.015 + Math.sin(t * 4 + l[0]) * 0.008, l[2] / 10); m.rotation.y += dt * 2; }
     // the practice's gold ring (step 1)
     if (practice && practice.step === 1) {
-      const ring = world.prop("practice-ring", () => new world.THREE.Mesh(new world.THREE.RingGeometry(5.2, 6, 48).rotateX(-Math.PI / 2), new world.THREE.MeshBasicMaterial({ color: "#e8b84d", transparent: true, opacity: 0.85, depthWrite: false })));
+      const ring = world.prop("practice-ring", () => world.makeRing(4.3, 6.4));
       ring.position.set(practice.ring[0], 0.15, practice.ring[1]); ring.scale.setScalar(1 + Math.sin(t * 4) * 0.06);
     }
     world.sweepProps();

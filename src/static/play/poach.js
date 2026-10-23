@@ -153,14 +153,25 @@ export function mount({ world, sound, ui, send, view, post }) {
 
   // ---- the full screens: role, meeting, tally, exile ----
   const face = (seat, cls = "") => `<span class="po-face ${cls}">${ui.portrait(charOf(seat), nameOf(seat))}</span>`;
+  // the role card waits for "I understand" (rule change 9); it is built once, then only who is ready and the
+  // clock change, so the button never moves under a finger
+  let roleSent = false;
   function roleScreen(f) {
     const poacher = f.role === "poacher";
+    const mine = me() !== null && (roleSent || f.ready?.[me()]);
+    if (ui.overlay.querySelector(".po-role")) {
+      ui.overlay.querySelectorAll(".po-crew > .po-face").forEach((el, i) => el.classList.toggle("on", !!f.ready?.[i]));
+      const st = $("po-starts"); if (st) st.textContent = t("p2_starts", { n: f.left });
+      return;
+    }
     ui.overlay.innerHTML = `<div class="sheet narrow po-role ${poacher ? "p" : "f"}"><p class="note">${esc(t("p2_role_h"))}</p>
       <div class="po-bigface">${face(me())}</div><div class="po-who">${esc(t(poacher ? "p2_role_p" : "p2_role_f"))}</div>
       <p class="lede">${esc(t(poacher ? "p2_role_p_s" : "p2_role_f_s"))}</p>
       ${f.partners?.length ? `<p class="po-partner">${esc(t("p2_partner", { name: list(f.partners.map(nameOf)) }))}</p>` : ""}
-      <div><p class="note">${esc(t("p2_team"))}</p><div class="po-crew">${(seats ?? []).map((_, i) => face(i, "small")).join("")}</div></div>
+      <div><p class="note">${esc(t("p2_team"))}</p><div class="po-crew po-readyrow">${(seats ?? []).map((_, i) => face(i, `small${f.ready?.[i] ? " on" : ""}`)).join("")}</div></div>
+      ${me() !== null ? `<button class="btn primary" type="button" id="po-ok" ${mine ? "disabled" : ""}>${esc(t(mine ? "p2_waiting" : "p2_ok"))}</button>` : ""}
       <p class="note" id="po-starts">${esc(t("p2_starts", { n: f.left }))}</p></div>`;
+    $("po-ok")?.addEventListener("click", (e) => { if (roleSent) return; roleSent = true; send({ k: "ready" }); e.currentTarget.disabled = true; e.currentTarget.textContent = t("p2_waiting"); });
   }
   function lineText(l) {
     if (!l) return "";

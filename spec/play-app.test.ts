@@ -53,3 +53,23 @@ it("play 4. the vendored three.js keeps its MIT header, and only listed files ar
   expect((await fetch(at("/static/play/../../server.ts"))).status).toBe(404);
   expect((await fetch(at("/static/vendor/nope.js"))).status).not.toBe(200);
 });
+
+// Codex review (24 Oct): "Join with a code" let AAAA through in the browser, the server sent it back
+// to "/" with no word, and the form folded away. Room codes use no vowels (A E I O U Y).
+it("play 5. a bad room code (AAAA) or one with no room (ZZZZ) answers on the home page, in the visitor's language, with the code kept and the form open", async () => {
+  for (const lang of ["en", "zh"] as const) {
+    const bad = await fetch(at("/play/join?code=aaaa"), { headers: { cookie: `lang=${lang}` }, redirect: "manual" });
+    expect(bad.status).toBe(400);
+    const badHtml = await bad.text();
+    expect(badHtml).toContain(lang === "en" ? "without vowels" : "不含元音");
+    expect(badHtml).toMatch(/<details class="join" open>/);
+    expect(badHtml).toMatch(/<input id="code"[^>]*value="AAAA"/);
+    const none = await fetch(at("/play/join?code=zzzz"), { headers: { cookie: `lang=${lang}` }, redirect: "manual" });
+    expect(none.status).toBe(404);
+    const noneHtml = await none.text();
+    expect(noneHtml).toContain(lang === "en" ? "No room ZZZZ" : "没有房间 ZZZZ");
+    expect(noneHtml).toMatch(/<input id="code"[^>]*value="ZZZZ"/);
+    // the browser's own (English) bubble never stands in for these words
+    expect(noneHtml).toMatch(/<form class="joincode"[^>]*novalidate/);
+  }
+});

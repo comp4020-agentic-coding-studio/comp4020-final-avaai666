@@ -170,6 +170,15 @@ export function createWorld5(canvas, stage, world, opts = {}) {
   // ---- docks and the village (south shore) ----
   const glowTex = (() => { const c = document.createElement("canvas"); c.width = c.height = 64; const x = c.getContext("2d"); const g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, "rgba(255,220,150,1)"); g.addColorStop(0.35, "rgba(255,170,80,.45)"); g.addColorStop(1, "rgba(255,150,60,0)"); x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })();
   const glowSprite = (s = 6, color = "#ffffff") => { const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })); m.scale.set(s, s, 1); return m; };
+  // a ring on the water a player must find (a splash to tap, a place to sail to): deep gold over a dark
+  // halo, so it reads on bright, sunlit water; .userData.gold is the ring a mode recolours
+  function makeRing(inner, outer) {
+    const g = new THREE.Group();
+    const halo = new THREE.Mesh(new THREE.RingGeometry(inner - 0.7, outer + 0.7, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: "#140c02", transparent: true, opacity: 0.55, depthWrite: false }));
+    const gold = new THREE.Mesh(new THREE.RingGeometry(inner, outer, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: "#d48a0a", transparent: true, opacity: 1, depthWrite: false }));
+    gold.position.y = 0.02; g.add(halo, gold); g.userData.gold = gold; g.userData.halo = halo;
+    return g;
+  }
   function makeLantern(size = 1) {
     const g = new THREE.Group();
     const body = new THREE.Mesh(new THREE.SphereGeometry(0.55 * size, 12, 10).scale(1, 1.15, 1), new THREE.MeshBasicMaterial({ color: "#ff5a3c" }));
@@ -419,16 +428,22 @@ export function createWorld5(canvas, stage, world, opts = {}) {
   }
 
   // ---- camera: follow the boat, or show the whole lake ----
-  const cam = { mode: "overview", x: 0, z: 10, span: 120, dist: 120, target: null, orbit: 0 };
+  // span: null means "use viewSpan() for this screen" (a fixed 120 here once made viewSpan() dead code, so every screen showed the whole lake)
+  const cam = { mode: "overview", x: 0, z: 10, span: null, dist: 120, target: null, orbit: 0 };
   const camPos = new THREE.Vector3();
-  const PITCH = 0.98;
-  function viewSpan() { const w = stage.clientWidth, h = stage.clientHeight; return w < 700 ? (h > w ? 64 : 90) : 118; }
+  // the camera's tilt: lower while following a boat, so the lake reads as a place in 3D, not a map; a
+  // little higher for the whole-lake view, which has to show every shore
+  const PITCH = 0.9, PITCH_FOLLOW = 0.72;
+  // on a tall phone the whole-lake view looks more steeply down, so the lake fills the screen's height
+  const ovPitch = () => (stage.clientHeight > stage.clientWidth * 1.25 ? 1.22 : PITCH);
+  // how much water the follow camera shows across the screen (rule change 8 made the lake 0.7 the size)
+  function viewSpan() { const w = stage.clientWidth, h = stage.clientHeight; return w < 700 ? (h > w ? 40 : 64) : 84; }
   function distForSpan(span) { const aspect = stage.clientWidth / stage.clientHeight, hf = 2 * Math.atan(Math.tan((camera.fov * Math.PI) / 360) * aspect); return span / 2 / Math.tan(hf / 2); }
   let overviewDist = 160;
   function fitOverview() {
     camera.aspect = stage.clientWidth / stage.clientHeight; camera.updateProjectionMatrix();
     const pts = outlineBankW.map(([x, z]) => new THREE.Vector3(x, 0, z));
-    let lo = 40, hi = 900; for (let k = 0; k < 22; k++) { const mid = (lo + hi) / 2; placeCam(0, 4, mid); camera.updateMatrixWorld(); const ok = pts.every((p) => { const q = p.clone().project(camera); return Math.abs(q.x) < 0.97 && q.y < 0.8 && q.y > -0.78; }); if (ok) hi = mid; else lo = mid; }
+    let lo = 40, hi = 900; for (let k = 0; k < 22; k++) { const mid = (lo + hi) / 2; placeCam(0, 4, mid, ovPitch()); camera.updateMatrixWorld(); const ok = pts.every((p) => { const q = p.clone().project(camera); return Math.abs(q.x) < 0.97 && q.y < 0.8 && q.y > -0.78; }); if (ok) hi = mid; else lo = mid; }
     overviewDist = hi;
   }
   function placeCam(x, z, dist, pitch = PITCH) { camera.position.set(x, Math.sin(pitch) * dist, z + Math.cos(pitch) * dist); camera.up.set(0, 1, 0); camera.lookAt(x, 0, z); }
@@ -441,12 +456,13 @@ export function createWorld5(canvas, stage, world, opts = {}) {
       const gx = clamp(b.x + Math.cos(b.h) * lead, -LX * 0.72, LX * 0.72), gz = clamp(b.z + Math.sin(b.h) * lead - 4, -LY * 0.75, LY * 0.58);
       cam.x += (gx - cam.x) * Math.min(1, dt * 2.6); cam.z += (gz - cam.z) * Math.min(1, dt * 2.6);
       const want = distForSpan(cam.span ?? viewSpan()); cam.dist += (want - cam.dist) * Math.min(1, dt * 2);
-      placeCam(cam.x + sx, cam.z + sz, cam.dist);
+      // a tall phone screen shows far more depth than width, so it looks more steeply down
+      placeCam(cam.x + sx, cam.z + sz, cam.dist, stage.clientHeight > stage.clientWidth * 1.25 ? 1.0 : PITCH_FOLLOW);
     } else if (cam.mode === "orbit") {
       cam.orbit += dt * 0.08; const d = overviewDist * 0.78; camera.position.set(Math.cos(cam.orbit) * d * 0.62, d * 0.6, Math.sin(cam.orbit) * d * 0.62 + 10); camera.up.set(0, 1, 0); camera.lookAt(0, 0, 4);
     } else {
       cam.dist += (overviewDist - cam.dist) * Math.min(1, dt * 2); cam.x += (0 - cam.x) * Math.min(1, dt * 2); cam.z += (4 - cam.z) * Math.min(1, dt * 2);
-      placeCam(cam.x + sx + Math.sin(tt * 0.1) * 1.2, cam.z + sz, cam.dist);
+      placeCam(cam.x + sx + Math.sin(tt * 0.1) * 1.2, cam.z + sz, cam.dist, ovPitch());
     }
   }
   function setCameraMode(mode, target = null) { cam.mode = mode; cam.target = target; }
@@ -564,7 +580,8 @@ export function createWorld5(canvas, stage, world, opts = {}) {
       if (!b.mesh.visible) { b.tag.style.display = "none"; continue; }
       pv.set(b.x, 5.6, b.z).project(camera); const vis = pv.z < 1 && Math.abs(pv.x) < 1.1 && Math.abs(pv.y) < 1.1;
       b.tag.style.display = vis ? "block" : "none";
-      if (vis) b.tag.style.transform = `translate(${(pv.x * 0.5 + 0.5) * W}px, ${(-pv.y * 0.5 + 0.5) * H}px) translate(-50%, -100%)`;
+      // a name tag stays on screen even when its boat is at the edge (a long name ran past a phone's side)
+      if (vis) { const half = (b.tag.offsetWidth || 0) / 2 + 4, x = Math.max(half, Math.min(W - half, (pv.x * 0.5 + 0.5) * W)); b.tag.style.transform = `translate(${x}px, ${(-pv.y * 0.5 + 0.5) * H}px) translate(-50%, -100%)`; }
     }
     for (const el of labels.values()) { const [wx, wz] = toWorld(+el.dataset.x, +el.dataset.y); pv.set(wx, 0.6, wz).project(camera); el.style.transform = `translate(${(pv.x * 0.5 + 0.5) * W}px, ${(-pv.y * 0.5 + 0.5) * H}px) translate(-50%, -50%)`; }
     drawMinimap();
@@ -575,7 +592,7 @@ export function createWorld5(canvas, stage, world, opts = {}) {
 
   // k and tiers are here so a mode never reaches into the page's own boot JSON for them
   return {
-    THREE, scene, camera, toon, makeLantern, glowSprite, toWorld, toSim, zones, island, docks: DOCKS,
+    THREE, scene, camera, toon, makeLantern, makeRing, glowSprite, toWorld, toSim, zones, island, docks: DOCKS,
     k: world.k, tiers: world.tiers,
     setSeason, setNight: (v) => { nightTarget = v; }, setLanterns: (l) => { lanterns = l; },
     setDocks, boat, drawBoat, clearBoats, boats, setFish, setKoi, prop, sweepProps, clearProps,
@@ -593,4 +610,4 @@ export function createWorld5(canvas, stage, world, opts = {}) {
 }
 
 // Sound is one page-level thing, not per-world: room.js keeps using
-// world.js's createSound for both worlds (one button, one AudioContext).
+// sound.js's createSound for both worlds (one button, one AudioContext).

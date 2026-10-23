@@ -37,15 +37,38 @@ describe("roles", () => {
 });
 
 describe("the day's flow", () => {
+  // rule change 9 (Codex review, Ava 24 Oct): the role card used to close after 8 s, before a new player on a
+  // phone had read it; it now waits for everyone's "I understand" (at least ROLE_MIN_S, at most ROLE_MAX_S)
+  it("the role card stays until every person says they understand (bots at once), at least 3 s and at most 45 s", () => {
+    const s = make("role-wait", 4);
+    until(s, () => s.t >= 20);
+    expect(s.phase).toBe("role"); // nobody has said so yet
+    for (let i = 0; i < 3; i++) step(s, [{ seat: i, i: poach.input(s, i, { k: "ready" })! }]);
+    expect(poach.input(s, 0, { k: "ready" })).toBeNull(); // once
+    expect((poach.frameFor(s, 3) as { ready: boolean[] }).ready).toEqual([true, true, true, false]);
+    step(s); expect(s.phase).toBe("role");
+    step(s, [{ seat: 3, i: poach.input(s, 3, { k: "ready" })! }]);
+    expect(s.phase).toBe("day");
+    const quick = make("role-quick", 4);
+    step(quick, [0, 1, 2, 3].map((seat) => ({ seat, i: { k: "ready" } as PoachInput })));
+    toDay(quick); expect(quick.t).toBeCloseTo(Q.ROLE_MIN_S, 1);
+    const slow = make("role-slow", 4);
+    toDay(slow); expect(slow.t).toBeCloseTo(Q.ROLE_MAX_S, 1);
+    const bots = poach.make("role-bots", botsOf(4), LAKE);
+    until(bots, () => bots.phase === "day"); expect(bots.t).toBeCloseTo(Q.ROLE_MIN_S, 1);
+    expect(poach.input(bots, 0, { k: "ready" })).toBeNull(); // not in the day
+  });
+
   it("a role card, three days of 70 s each ending in a meeting at dusk, a tally and an exile", () => {
     const s = make("flow", 4);
     expect(s.phase).toBe("role");
+    step(s, [0, 1, 2, 3].map((seat) => ({ seat, i: { k: "ready" } as PoachInput })));
     toDay(s);
     expect(s.day).toBe(1);
-    expect(s.t).toBeCloseTo(Q.ROLE_S, 1);
+    expect(s.t).toBeCloseTo(Q.ROLE_MIN_S, 1);
     const ev = until(s, () => s.phase === "meeting");
     expect(ev.some((e) => e.k === "meeting" && e.reason === "dusk")).toBe(true);
-    expect(s.t).toBeCloseTo(Q.ROLE_S + Q.DAY_S, 1);
+    expect(s.t).toBeCloseTo(Q.ROLE_MIN_S + Q.DAY_S, 1);
     // everyone votes for the same fisher: tally at once, then the exile
     const target = fisherOf(s);
     for (let i = 0; i < 4; i++) if (i !== target) step(s, [{ seat: i, i: poach.input(s, i, { k: "vote", target })! }]);

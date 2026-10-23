@@ -18,7 +18,7 @@
 // never reads a bot's mind, so a replay that does not run the bots is exact.
 import { POACH as Q, POACH_MODEL } from "../game-constants.ts";
 import { type GameEvent, type Highlight, type Mode, type Results, type Seat, streamOf } from "../game-platform.ts";
-import { BAYS, dockPos, ISLAND, nextSpring, nr, type PlaceId, placeOf, tierOf, ZONES } from "../lake-world.ts";
+import { BAYS, dockPos, ISLAND, LAKE_X, LAKE_Y, nextSpring, nr, type PlaceId, placeOf, tierOf, ZONES } from "../lake-world.ts";
 import { counts, type Fish, moveFish, newFish, NURSERY_FIRST, type School, seedFish, updateSchools } from "./lake-life.ts";
 
 export type Role = "fisher" | "poacher";
@@ -39,7 +39,8 @@ export type PoachInput =
   | { k: "steer"; x: number; y: number }
   | { k: "net" } | { k: "inspect" } | { k: "buoy" } | { k: "report" } | { k: "fine" } | { k: "dump" }
   | { k: "say"; line: Line }
-  | { k: "vote"; target: number | null };
+  | { k: "vote"; target: number | null }
+  | { k: "ready" };
 
 // the task spots (the prototype's TASKS): a verb and a named place
 export const TASKS: { id: string; verb: string; place: PlaceId; x: number; y: number }[] = [
@@ -48,7 +49,7 @@ export const TASKS: { id: string; verb: string; place: PlaceId; x: number; y: nu
   { id: "t3", verb: "lotus", place: "lotus", x: ZONES.lotus.x * 0.9, y: ZONES.lotus.y * 0.9 },
   { id: "t4", verb: "trap", place: "east", x: 60, y: -2 },
   { id: "t5", verb: "sluice", place: "river", x: ZONES.river.x * 0.9, y: ZONES.river.y * 0.9 },
-  { id: "t6", verb: "incense", place: "island", x: ISLAND.x - 2, y: ISLAND.y + 12 },
+  { id: "t6", verb: "incense", place: "island", x: ISLAND.x - 2, y: ISLAND.y + ISLAND.r + 4.5 },
   { id: "t7", verb: "mend", place: "south", x: 2, y: 30 },
   { id: "t8", verb: "trap", place: "west", x: -62, y: 8 },
   { id: "t9", verb: "net", place: "east", x: 40, y: -30 },
@@ -70,7 +71,7 @@ interface Buoy { owner: number; x: number; y: number; place: PlaceId; day: numbe
 interface Said { seat: number; line: Line; at: number }
 export interface PoachSim {
   tick: number; t: number; phase: Phase; phaseT: number; day: number; season: number;
-  n: number; rng: () => number; roles: Role[]; out: boolean[]; bots: boolean[];
+  n: number; rng: () => number; roles: Role[]; out: boolean[]; bots: boolean[]; ready: boolean[];
   boats: Boat[]; fish: Fish[]; schools: School[]; nextId: number;
   start: number; roomFish: number; patches: Patch[]; buoys: Buoy[];
   meeting: { n: number; reason: "dusk" | "report"; by: number | null; patch: number | null; says: Said[]; votes: (number | null | undefined)[]; final: boolean } | null;
@@ -97,7 +98,7 @@ function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number
   for (let k = 0; k < (n >= Q.POACHERS_AT ? 2 : 1); k++) roles[order[k]] = "poacher";
   const s: PoachSim = {
     tick: 0, t: 0, phase: "role", phaseT: 0, day: 0, season: 0,
-    n, rng: streamOf(seed, "lake"), roles, out: seats.map(() => false), bots: seats.map((x) => x.bot !== null),
+    n, rng: streamOf(seed, "lake"), roles, out: seats.map(() => false), bots: seats.map((x) => x.bot !== null), ready: seats.map((x) => x.bot !== null),
     boats: [], fish: [], schools: [], nextId: 1, start: 0, roomFish: lake.fish, patches: [], buoys: [],
     meeting: null, tally: null, exiled: [], nightLoss: [], poacherPath: [], poacherNets: [], winner: null, endReason: null,
   };
@@ -140,10 +141,11 @@ function input(s: PoachSim, seat: number, raw: unknown): PoachInput | null {
   if (!o || typeof o !== "object" || !isIn(s, seat)) return null;
   const day = s.phase === "day", meet = s.phase === "meeting", poacher = s.roles[seat] === "poacher";
   switch (o.k) {
+    case "ready": return s.phase === "role" && !s.ready[seat] ? { k: "ready" } : null; // "I understand" on the role card
     case "steer": {
       const x = Number(o.x), y = Number(o.y);
       if (!day || !Number.isFinite(x) || !Number.isFinite(y)) return null;
-      return { k: "steer", x: Math.round(Math.max(-92, Math.min(92, x)) * 10) / 10, y: Math.round(Math.max(-64, Math.min(64, y)) * 10) / 10 };
+      return { k: "steer", x: Math.round(Math.max(-LAKE_X, Math.min(LAKE_X, x)) * 10) / 10, y: Math.round(Math.max(-LAKE_Y, Math.min(LAKE_Y, y)) * 10) / 10 };
     }
     case "net": case "inspect": case "buoy": case "report": return day ? { k: o.k } : null;
     case "fine": case "dump": return day && poacher ? { k: o.k } : null;
@@ -177,6 +179,7 @@ function unreportedNear(s: PoachSim, b: Boat): Patch | null {
 function apply(s: PoachSim, seat: number, i: PoachInput, ev: GameEvent[]): void {
   const b = s.boats[seat];
   if (!b || s.out[seat]) return;
+  if (i.k === "ready") { if (s.phase === "role") { s.ready[seat] = true; ev.push({ k: "ready", seat }); } return; }
   if (s.phase === "meeting") { applyMeeting(s, seat, i, ev); return; }
   if (s.phase !== "day") return;
   if (i.k === "steer") { b.tx = i.x; b.ty = i.y; return; }
@@ -458,7 +461,8 @@ function step(s: PoachSim, inputs: { seat: number; i: PoachInput }[]): GameEvent
   s.tick++;
   s.t = Math.round(s.tick * Q.DT * 1000) / 1000;
   s.phaseT = Math.round((s.phaseT + Q.DT) * 1000) / 1000;
-  if (s.phase === "role" && s.phaseT >= Q.ROLE_S - 1e-9) startDay(s, ev);
+  // the role card: until everyone has said they understand (at least ROLE_MIN_S), or ROLE_MAX_S at most
+  if (s.phase === "role" && ((s.ready.every(Boolean) && s.phaseT >= Q.ROLE_MIN_S - 1e-9) || s.phaseT >= Q.ROLE_MAX_S - 1e-9)) startDay(s, ev);
   else if (s.phase === "meeting" && s.phaseT >= Q.MEET_S - 1e-9) tally(s, ev);
   else if (s.phase === "tally" && s.phaseT >= Q.TALLY_S - 1e-9) exile(s, ev);
   else if (s.phase === "exile" && s.phaseT >= Q.EXILE_S - 1e-9) afterExile(s, ev);
@@ -483,7 +487,7 @@ function frameFor(s: PoachSim, seat: number) {
   const boatsSeen = s.boats.filter((b) => !s.out[b.seat] && (b.seat === seat || showAll || !day || canSee(s, seat, b.x, b.y)));
   const f: Record<string, unknown> = {
     phase: s.phase, day: s.day, days: Q.DAYS, left: Math.max(0, Math.ceil(phaseLength(s) - s.phaseT)),
-    health: health(s), line: Q.LINE, role, partners, out: s.out.map((o, i) => (o ? i : -1)).filter((i) => i >= 0),
+    health: health(s), line: Q.LINE, role, partners, ready: s.ready, out: s.out.map((o, i) => (o ? i : -1)).filter((i) => i >= 0),
     // boats: [seat, x*10, y*10, h*100, inspecting]
     b: boatsSeen.map((b) => [b.seat, p10(b.x), p10(b.y), Math.round(b.h * 100), b.insp ? 1 : 0]),
   };
@@ -509,7 +513,7 @@ function frameFor(s: PoachSim, seat: number) {
   return f;
 }
 function phaseLength(s: PoachSim): number {
-  return { role: Q.ROLE_S, day: Q.DAY_S, meeting: Q.MEET_S, tally: Q.TALLY_S, exile: Q.EXILE_S, end: 0 }[s.phase];
+  return { role: Q.ROLE_MAX_S, day: Q.DAY_S, meeting: Q.MEET_S, tally: Q.TALLY_S, exile: Q.EXILE_S, end: 0 }[s.phase];
 }
 function thin<T>(arr: T[], max: number): T[] { if (arr.length <= max) return arr; const k = arr.length / max; return Array.from({ length: max }, (_, i) => arr[Math.floor(i * k)]); }
 // the meeting, as this seat knows it: the map (its own path, its sightings,
@@ -611,7 +615,7 @@ function bot(s: PoachSim, seat: number, r: () => number): PoachInput[] {
 }
 // a point on open water from the bot's own stream (never the lake's)
 function waterPoint(r: () => number, maxK: number): [number, number] {
-  for (let k = 0; k < 40; k++) { const x = (r() * 2 - 1) * 88, y = (r() * 2 - 1) * 60; if (nr(x, y) < maxK && Math.hypot(x - ISLAND.x, y - ISLAND.y) > 11) return [x, y]; }
+  for (let k = 0; k < 40; k++) { const x = (r() * 2 - 1) * LAKE_X * 0.96, y = (r() * 2 - 1) * LAKE_Y * 0.94; if (nr(x, y) < maxK && Math.hypot(x - ISLAND.x, y - ISLAND.y) > ISLAND.r + 3.5) return [x, y]; }
   return [0, 20];
 }
 // how much a bot suspects another boat (the prototype's susOf)

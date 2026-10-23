@@ -67,15 +67,18 @@ const meta = (lang: Lang, g: (typeof GAMES)[number]) =>
 const playForm = (lang: Lang, id: string, label: string, cls: string) =>
   `<form method="post" action="/play" class="inline"><input type="hidden" name="mode" value="${id}" /><button class="btn ${cls}" type="submit">${esc(label)}</button></form>`;
 
-function joinForm(lang: Lang): string {
-  return `<form class="joincode" method="get" action="/play/join">
+// novalidate: the server answers a bad or unknown code on this form in the page's language (the
+// browser's own bubble is English-only); the pattern is the server's: four letters, no vowels
+function joinForm(lang: Lang, code = "", error = ""): string {
+  return `<form class="joincode" method="get" action="/play/join" novalidate>
       <label for="code">${esc(t(lang, "join_label"))}</label>
-      <input id="code" name="code" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" pattern="[A-Za-z]{4}" required placeholder="MZHB" />
+      <input id="code" name="code" value="${esc(code)}" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" pattern="[BCDFGHJKLMNPQRSTVWXZbcdfghjklmnpqrstvwxz]{4}" placeholder="MZHB"${error ? ` aria-invalid="true" aria-describedby="codeerr" autofocus` : ""} />
       <button class="btn ghost small" type="submit">${esc(t(lang, "join_go"))}</button>
+      ${error ? `<p class="field-err" id="codeerr" role="alert">${esc(error)}</p>` : ""}
     </form>`;
 }
 
-export function homePage(lang: Lang, error?: string): string {
+export function homePage(lang: Lang, error?: string, join?: { code: string; error: string }): string {
   const body = `<section class="hero">
       <div>
         <p class="eyebrow">${esc(t(lang, "hero_eyebrow"))}</p>
@@ -84,7 +87,7 @@ export function homePage(lang: Lang, error?: string): string {
         <p class="lede">${esc(t(lang, "hero_line"))}</p>
         <div class="row cta">
           <form method="post" action="/play" class="inline"><input type="hidden" name="mode" value="rush" /><button class="btn primary" type="submit">${esc(t(lang, "hero_play"))} →</button></form>
-          <details class="join"><summary class="btn ghost">${esc(t(lang, "hero_join"))}</summary>${joinForm(lang)}</details>
+          <details class="join"${join ? " open" : ""}><summary class="btn ghost">${esc(t(lang, "hero_join"))}</summary>${joinForm(lang, join?.code, join?.error)}</details>
         </div>
         <p class="proof">${esc(t(lang, "hero_proof"))}</p>
         ${error ? `<p class="toast" role="alert">${esc(error)}</p>` : ""}
@@ -159,7 +162,8 @@ export function logLine(lang: Lang, m: MatchLine): string {
 export function roomSitePage(lang: Lang, view: RoomView, lines: MatchLine[], origin: string, error?: string): string {
   const url = `${origin}/play/${view.code}`;
   const people = view.players.map((p) => `<div class="person on"><div class="f">${portrait(p.character, p.name)}</div><span class="dot"></span>${esc(p.name)}</div>`).join("");
-  const join = view.me === null ? `<form class="joinform panel" method="post" action="/play/${esc(view.code)}/join">
+  // novalidate: an empty or bad name is answered by the server in the page's language, not the browser's English bubble
+  const join = view.me === null ? `<form class="joinform panel" method="post" action="/play/${esc(view.code)}/join" novalidate>
       <h3>${esc(t(lang, "join_h", { code: view.code }))}</h3>
       <label for="name">${esc(t(lang, "join_name"))}</label><input id="name" name="name" maxlength="24" required autocomplete="nickname" />
       <div class="roster">${CREW.map((c, i) => `<label class="face-btn" title="${esc(t(lang, `c_${c.id}`))}"><input type="radio" name="character" value="${c.id}" ${(view.players.some((p) => p.character === c.id) ? false : !CREW.slice(0, i).some((d) => !view.players.some((p) => p.character === d.id))) ? "checked" : ""} />${portrait(c.id, t(lang, `c_${c.id}`))}</label>`).join("")}</div>
@@ -198,8 +202,14 @@ export function noRoomSitePage(lang: Lang, code: string): string {
 }
 
 export function readmeSitePage(lang: Lang, readmeHtml: string): string {
-  const note = lang === "zh" ? `<p class="note-en" lang="zh">${esc(t(lang, "readme_en_note"))}</p>` : "";
-  return sitePage(lang, { title: t(lang, "about_title"), nav: "about", here: "/readme/", body: `${note}<article class="readme" lang="en">${readmeHtml}</article>`, head: '<base href="/" />' });
+  // the README stays English (the course reads it here); a Chinese page leads with a Chinese summary
+  // and keeps the English text one tap away (Codex review, 24 Oct: the page was almost all English)
+  const article = `<article class="readme" lang="en">${readmeHtml}</article>`;
+  const body = lang === "zh"
+    ? `<section class="about-zh" lang="zh"><h1>${esc(t(lang, "about_zh_h"))}</h1>${[1, 2, 3].map((n) => `<p>${esc(t(lang, `about_zh_p${n}`))}</p>`).join("")}<p class="note-en">${esc(t(lang, "readme_en_note"))}</p></section>
+      <details class="readme-en"><summary class="btn ghost">${esc(t(lang, "about_zh_more"))}</summary>${article}</details>`
+    : article;
+  return sitePage(lang, { title: t(lang, "about_title"), nav: "about", here: "/readme/", body, head: '<base href="/" />' });
 }
 
 const ERAS = [

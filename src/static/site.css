@@ -69,6 +69,7 @@ html[lang="zh"] .btn { font-family: var(--zh); font-weight: 700; }
 .row.spread { justify-content: space-between; }
 form.inline { display: inline; margin: 0; }
 .toast { color: var(--gold); margin: 10px 0 0; }
+.field-err { width: 100%; margin: 4px 0 0; color: #ffb4a8; font-size: 14px; }
 
 /* home */
 .hero { display: grid; grid-template-columns: 1.05fr .95fr; gap: 32px; align-items: center; }
@@ -182,6 +183,8 @@ form.inline { display: inline; margin: 0; }
 /* /readme/ */
 .note-en { background: var(--chip); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; color: var(--gold); margin: 0 0 18px; }
 .readme { max-width: 72ch; }
+.about-zh { max-width: 60ch; } .about-zh p { font-size: 17px; line-height: 1.75; }
+.readme-en { margin-top: 8px; } .readme-en > summary { list-style: none; cursor: pointer; margin-bottom: 14px; } .readme-en > summary::-webkit-details-marker { display: none; }
 .readme h1 { font-size: clamp(30px, 5vw, 42px); margin-bottom: 12px; }
 .readme h2 { font-size: 24px; margin: 28px 0 8px; }
 .readme a { color: var(--gold); }

@@ -334,28 +334,4 @@ export function createWorld(canvas, stage, opts = {}) {
   };
 }
 
-// ---- sounds: a few tones, made here; off until the player turns them on ----
-export function createSound(button, words = { on: "sound on", off: "sound off" }) {
-  let ac = null, on = false;
-  try { on = localStorage.getItem("play-sound") === "on"; } catch {}
-  const label = () => { if (button) button.textContent = on ? words.on : words.off; };
-  label();
-  button?.addEventListener("click", () => { on = !on; try { localStorage.setItem("play-sound", on ? "on" : "off"); } catch {} if (on && !ac) ac = new AudioContext(); label(); });
-  const ok = () => { if (!on) return false; if (!ac) { try { ac = new AudioContext(); } catch { return false; } } return true; };
-  function tone(freq, d = .12, type = "sine", g = .15, when = 0) {
-    if (!ok()) return;
-    const o = ac.createOscillator(), v = ac.createGain(); o.type = type; o.frequency.value = freq;
-    v.gain.setValueAtTime(g, ac.currentTime + when); v.gain.exponentialRampToValueAtTime(.001, ac.currentTime + when + d);
-    o.connect(v).connect(ac.destination); o.start(ac.currentTime + when); o.stop(ac.currentTime + when + d + .02);
-  }
-  return {
-    catch: (n = 1) => { for (let i = 0; i < Math.min(n, 5); i++) tone(660 + i * 110, .1, "triangle", .12, i * .05); },
-    coin: () => { tone(988, .08, "square", .08); tone(1318, .12, "square", .08, .07); },
-    bank: () => { tone(523, .1, "triangle"); tone(784, .16, "triangle", .15, .08); },
-    hit: () => { tone(110, .25, "sawtooth", .2); tone(80, .3, "square", .12, .03); },
-    miss: () => tone(220, .18, "sine", .1),
-    horn: () => { tone(196, .9, "sawtooth", .16); tone(147, .9, "sawtooth", .12); },
-    big: () => { [523, 659, 784, 1046].forEach((f, i) => tone(f, .18, "triangle", .14, i * .09)); },
-    tick: () => tone(1200, .04, "square", .05),
-  };
-}
+// sound lives in sound.js (one page-level thing for both worlds)

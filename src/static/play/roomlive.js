@@ -4,6 +4,7 @@
 // game page. This page has no game on it: no canvas, no pads, no HUD. It
 // decides nothing; every word comes from the dictionary the page embeds.
 import { portrait } from "./art.js";
+import { shouldGoToGame } from "./room-nav.js";
 
 const boot = JSON.parse(document.getElementById("boot").textContent);
 let view = boot.view;
@@ -44,8 +45,9 @@ function draw() {
 }
 // a match is running: everyone in the room goes to the full-screen game
 let leaving = false;
+const stay = new URLSearchParams(location.search).has("stay"), startedAtOnArrival = view.startedAt ?? null;
 function maybeGo() {
-  if (leaving || view.state !== "play") return;
+  if (leaving || !shouldGoToGame(view, { stay, startedAtOnArrival })) return;
   leaving = true;
   location.href = `/play/${code}/game`;
 }
