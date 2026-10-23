@@ -33,6 +33,8 @@ function draw() {
   if (c1) { const id = view.mode, k = (s) => esc(t(`${id}_${s}`)); c1.innerHTML = `<p class="goalline"><b>${esc(t("goal"))}</b> ${k("goal")}</p>
     <div class="icons3">${[1, 2, 3].map((n, i) => `<div><span aria-hidden="true">${A_ICON[id][i]}</span><b>${k(`a${n}`)}</b><small>${k(`a${n}s`)}</small></div>`).join("")}</div>
     <p class="choice"><b>${esc(t("the_choice"))}</b> ${k("choice")}</p>${id === "rush" ? `<p class="small muted">${esc(t("rush_extra"))}</p>` : ""}`; }
+  // Boat Rush's rules card offers "Practise first (30 s)" next to Start: the game page, alone, no clock
+  const pp = $("practisebtn"); if (pp) { pp.hidden = view.mode !== "rush" || view.me === null; pp.setAttribute("href", `/play/${code}/game?practice=1`); }
   const pn = $("pickname"); if (pn) pn.textContent = t(`${view.mode}_name`);
   const pr = $("pickrules"); if (pr) pr.setAttribute("href", `/how/${view.mode}`);
   const note = $("roomnote"); if (note) note.textContent = view.note ? t(`g_note_${view.note}`) : "";

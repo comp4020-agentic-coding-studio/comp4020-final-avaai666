@@ -1,4 +1,4 @@
-# Next Year, No Fish (明年无鱼): design v5.3
+# Next Year, No Fish (明年无鱼): design v5.4
 
 ## What it is
 
@@ -239,6 +239,15 @@ only: a player learns the controls without a room, a server tick or a bot.
 Everything in a match, including the same actions, is decided by the server.
 The practice uses Math.random() for its fish, as the client already does for
 particles; the server never does.
+
+How it is reached and run (session 18): the room page's rules card shows
+"Practise first (30 s)" beside Start when Boat Rush is picked and you have
+joined; it opens the game page alone, before any match. It sails and nets
+with the match's own numbers (sent in the page's boot data). The school
+surfaces just ahead of your bow once you reach the ring, so NET is the next
+thing to press. At the end, "Start the real game" sends the same start as
+the room's button. If a match starts while you practise, the practice ends
+and the match is shown.
 
 ### Boat Rush 开船抢鱼 (2.0)
 
@@ -700,6 +709,8 @@ leave Who's Poaching; the variant pick and Muddy Water leave Fishing Party;
 Lake Holdings becomes turn-based; Boat Rush has four seasons of 45 s.
 
 ## Changelog
+
+- v5.4 (24 Oct, session 18): Boat Rush's practice is built and reachable from the room's rules card (see "Practice runs in the browser only"). The home page and room show each 2.0 game's own length.
 
 - v5.3 (24 Oct, session 18): Fishing Party 2.0 is built (party 2.0 on the v5 lake): five rounds in a fixed order, each with its intro card, try it first, 3-2-1, standings, the shop after rounds 1-3, the Last Net picked in secret and revealed one by one, the ceremony. Its open points are settled under "How party 2.0 settles…". All four modes now run on the v5 lake.
 

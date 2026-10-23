@@ -33,6 +33,16 @@ describe("the room page before a match", () => {
     expect(html).not.toMatch(/class="[^"]*game-stage/);
   });
 
+  it("Boat Rush's rules card offers \"Practise first (30 s)\" next to Start, as a link to the game page alone; other games and visitors who have not joined do not see it", () => {
+    // DESIGN.md Boat Rush 2.0, flow step 1: the rules card, with "Start" and "Practise first (30 s)"
+    const link = d.querySelector<HTMLAnchorElement>("#practisebtn")!;
+    expect(link.hidden).toBe(false);
+    expect(link.getAttribute("href")).toBe("/play/MZHB/game?practice=1");
+    expect(link.textContent).toBe("Practise first (30 s)");
+    expect(doc(roomSitePage("en", { ...view, mode: "party" }, [], "https://example.test")).querySelector<HTMLAnchorElement>("#practisebtn")!.hidden).toBe(true);
+    expect(doc(roomSitePage("en", { ...view, me: null }, [], "https://example.test")).querySelector<HTMLAnchorElement>("#practisebtn")!.hidden).toBe(true);
+  });
+
   it("links to the game page once a match runs; it never embeds it", () => {
     const running = doc(roomSitePage("en", { ...view, state: "play" }, [], "https://example.test"));
     expect(running.querySelector('a[href="/play/MZHB/game"]')).not.toBeNull();

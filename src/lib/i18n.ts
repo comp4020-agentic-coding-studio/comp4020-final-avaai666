@@ -284,7 +284,7 @@ const en = {
   r_p2: "Fish ahead of your bow: press NET", r_p2k: "Fish ahead of your bow: press Space", r_p2s: "The net lands just in front of the boat",
   r_p3: "Take the fish home to your dock", r_p3s: "Follow the arrow. Unloading is automatic.",
   r_p_done: "You're ready", r_p_done_s: "Four seasons, three bots. Most fish home wins, times next year's lake.", r_p_start: "Start the real game",
-  r_practice: "Practise first (30 s)",
+  r_practice: "Practise first (30 s)", r_practising: "Practice · no clock",
 
   // ---- Who's Poaching HUD and meeting ----
   p_bay_north: "North Bay", p_bay_east: "East Bay", p_bay_south: "South Bay", p_bay_west: "West Bay",
@@ -681,7 +681,7 @@ const zh: Record<Key, string> = {
   r_p2: "鱼在船头前面：按「撒网」", r_p2k: "鱼在船头前面：按空格撒网", r_p2s: "网落在船头正前方",
   r_p3: "把鱼运回自家码头", r_p3s: "跟着箭头走。靠岸就会自动卸鱼。",
   r_p_done: "可以开始了", r_p_done_s: "四个季节，三个机器人。运回家的鱼最多的人赢，再乘上明年湖的年景。", r_p_start: "开始正式比赛",
-  r_practice: "先练习（30 秒）",
+  r_practice: "先练习（30 秒）", r_practising: "练习 · 不计时",
 
   p_bay_north: "北湾", p_bay_east: "东湾", p_bay_south: "南湾", p_bay_west: "西湾",
   p_fisher: "渔民", p_fisher_s: "为村子的配额捕鱼。在湖的健康掉到 40% 以下之前找出偷渔人。",

@@ -11,7 +11,8 @@ const COLORS = { mei: "#d6473a", wang: "#4a7d9c", jin: "#e0a93a", lu: "#2f9a8f",
 export function mount({ world, sound, ui, send, view, post }) {
   const t = ui.t, esc = ui.esc;
   let prev = null, cur = null, curAt = 0, seats = null, practice = null;
-  const me = () => view().mySeat;
+  // in the practice (before any match, so no seat) you are seat 0, alone
+  const me = () => (practice ? practice.seat : view().mySeat);
   const colorOf = (seat) => COLORS[seats?.[seat]?.character] ?? "#f5ead6";
   const nameOf = (seat) => (seat === me() ? t("g_you") : ui.seatName(seats?.[seat]) ?? t("g_boat_n", { n: seat + 1 }));
   const $ = (id) => document.getElementById(id);
@@ -26,12 +27,12 @@ export function mount({ world, sound, ui, send, view, post }) {
     <div class="pads dock"><button class="pad" type="button" id="r-cast">${t("r_cast")}<br><small>${t("r_cast_s")}</small></button><button class="pad red" type="button" id="r-dash">${t("r_dash")}</button></div>`;
 
   // ---- input: tap/drag the water to steer (keys and the thumb stick come from world5.js's wantDir()) ----
-  world.setTap((x, y) => { if (me() === null) return; send({ k: "steer", x, y }); ui.did("sail"); });
+  world.setTap((x, y) => { if (practice) { practice.tx = x; practice.ty = y; return; } if (me() === null) return; send({ k: "steer", x, y }); ui.did("sail"); });
   let wasdId = setInterval(() => {
     if (me() === null || practice) return;
     const dir = world.wantDir(); if (!dir) return;
     const b = cur?.b.find((x) => x[0] === me()); if (!b) return;
-    send({ k: "steer", x: Math.round(b[1] / 10 + dir.x * 12), y: Math.round(b[2] / 10 + dir.y * 12) }); ui.did("sail");
+    send({ k: "steer", x: Math.round(b[1] / 10 + dir.x * 12), y: Math.round(b[2] / 10 + dir.z * 12) }); ui.did("sail");
   }, 150);
   let chargeFrom = 0;
   const castDown = () => { chargeFrom = performance.now(); $("r-cast").classList.add("held"); };
@@ -175,22 +176,94 @@ export function mount({ world, sound, ui, send, view, post }) {
   }
 
   // ---- the 30 s practice (client-only; never sent, stored or scored) ----
-  function startPractice() {
-    world.resetHouses?.();
-    practice = { step: 1, hold: 0, fish: [{ x: 10, y: 6 }, { x: 10.5, y: 6 }, { x: 9.5, y: 6.3 }], ring: [12, 8], dockX: 0, dockY: 0, banked: 0 };
-    world.pointAt(practice.ring[0], practice.ring[1]);
-    const b = world.boat(me() ?? 0, colorOf(me() ?? 0), t("g_you"));
-    world.drawBoat(b, 0, 0, 0, 0, { hold: 0 });
-    ui.coach(null);
-    ui.banner(t("r_p1t"), t("r_p1p"));
+  // DESIGN.md "Practice runs in the browser only": alone, no clock, three steps with an arrow (sail to the
+  // gold ring, net the school ahead of your bow, take the fish home). It builds frames in the match's own
+  // shape so draw() and the HUD show it like a match; nothing here reaches the server.
+  const touch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+  function startPractice(onDone) {
+    const bootEl = document.getElementById("boot");
+    const P = (bootEl ? JSON.parse(bootEl.textContent).rushPractice : null) ?? { speed: 15, loadSlow: 0.35, hold: 12, netR: 4.5, netAhead: 4, castCd: 0.7, dockR: 6.5 };
+    const seat = 0, d = world.docks[seat % world.docks.length], ix = Math.cos(d.inward), iy = Math.sin(d.inward);
+    const ring = [d.x + ix * 24, d.z + iy * 24];
+    practice = { P, seat, step: 1, hold: 0, banked: 0, castCd: 0, x: d.x + ix * 6, y: d.z + iy * 6, h: d.inward, v: 0, tx: d.x + ix * 6, ty: d.z + iy * 6,
+      dock: [d.x + ix * 3, d.z + iy * 3], ring, fish: [], ringT: 0, onDone, t: 0 };
+    const mine = view().players?.[view().me];
+    seats = [{ name: mine?.name ?? "", character: mine?.character ?? "mei", bot: null }];
+    world.clearBoats?.(); world.setDocks([{ x: d.x, y: d.z, color: colorOf(seat) }]);
+    world.setCameraMode("follow");
+    world.pointAt(ring[0], ring[1]);
+    ui.overlay.innerHTML = "";
+    ui.setClock(null, t("r_practising"));
+    pBanner(1);
+    prev = cur = practiceFrame(); curAt = performance.now();
+    world.onFrame(draw);
+    practice.timer = setInterval(practiceTick, 50);
   }
-  function practiceCast(charge) { if (!practice) return; void charge; if (Math.hypot(practice.fish[0].x - practice.ring[0], practice.fish[0].y - practice.ring[1]) < 6) practice.hold = Math.min(12, practice.hold + 3); }
-  function practiceDash() { /* no ram target in practice */ }
-  function endPractice() { practice = null; world.pointAt(null); }
+  const pBanner = (n) => ui.banner(t(n < 3 && !touch ? `r_p${n}k` : `r_p${n}`), t(`r_p${n}s`), 4000);
+  function practiceFrame() {
+    const p = practice;
+    return { phase: "sail", season: 0, left: 0, market: null, n: [], l: [], k: null,
+      b: [[p.seat, Math.round(p.x * 10), Math.round(p.y * 10), Math.round(p.h * 100), p.hold, p.P.hold, 0, p.banked, Math.ceil(p.castCd * 10), 0, [], Math.round(p.tx * 10), Math.round(p.ty * 10)]],
+      f: p.fish.map((f) => [Math.round(f.x * 10), Math.round(f.y * 10), Math.round(f.h * 100), 1]) };
+  }
+  function practiceTick() {
+    const p = practice; if (!p) return;
+    // steps of at most 0.05 s over the real time since the last tick, so a slow page still sails at full speed
+    const now = performance.now(), elapsed = Math.min(0.5, (now - (p.last ?? now - 50)) / 1000); p.last = now;
+    for (let left = elapsed; left > 1e-6 && practice === p && p.step < 4; left -= 0.05) practiceStep(p, Math.min(0.05, left));
+    if (practice !== p) return;
+    prev = cur; cur = practiceFrame(); curAt = performance.now();
+    hudFrom(cur); ui.setClock(null, t("r_practising"));
+  }
+  function practiceStep(p, dt) {
+    p.t += dt; p.castCd = Math.max(0, p.castCd - dt);
+    const dir = world.wantDir(); if (dir) { p.tx = p.x + dir.x * 12; p.ty = p.y + dir.z * 12; }
+    // sail toward the target: turn, then speed up; a fuller hold is slower (the match's own numbers)
+    const dx = p.tx - p.x, dy = p.ty - p.y, dist = Math.hypot(dx, dy);
+    if (dist > 0.8) { let da = Math.atan2(dy, dx) - p.h; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI; p.h += Math.max(-4 * dt, Math.min(4 * dt, da)); }
+    const want = dist > 0.8 ? p.P.speed * (1 - p.P.loadSlow * (p.hold / p.P.hold)) : 0;
+    p.v += (want - p.v) * Math.min(1, dt * 6);
+    p.x += Math.cos(p.h) * p.v * dt; p.y += Math.sin(p.h) * p.v * dt;
+    // stay on the water: not past the shore, not onto the island
+    const share = world.shoreShare?.(p.x, p.y) ?? 0;
+    if (share > 0.95) { p.x *= 0.95 / share; p.y *= 0.95 / share; }
+    const isl = world.island, di = isl ? Math.hypot(p.x - isl.x, p.y - isl.z) : Infinity;
+    if (isl && di < isl.r + 1.5) { p.x = isl.x + ((p.x - isl.x) / (di || 1)) * (isl.r + 1.5); p.y = isl.z + ((p.y - isl.z) / (di || 1)) * (isl.r + 1.5); }
+    // the school circles just ahead of your bow (it keeps there while you sail), so NET is the next thing to press
+    if (p.step === 2) { const bx = p.x + Math.cos(p.h) * (p.P.netAhead + 0.5), by = p.y + Math.sin(p.h) * (p.P.netAhead + 0.5), k = Math.min(1, dt * 3); p.ring[0] += (bx - p.ring[0]) * k; p.ring[1] += (by - p.ring[1]) * k; }
+    for (const f of p.fish) { f.a += dt * 0.9; const nx = p.ring[0] + Math.cos(f.a) * f.r, ny = p.ring[1] + Math.sin(f.a) * f.r * 0.7; f.h = Math.atan2(ny - f.y, nx - f.x); f.x = nx; f.y = ny; }
+    if (p.step === 1 && Math.hypot(p.x - p.ring[0], p.y - p.ring[1]) < 6) {
+      // the school surfaces just ahead of your bow and the boat drifts to a stop: one NET takes it
+      p.step = 2; p.tx = p.x; p.ty = p.y;
+      p.ring = [p.x + Math.cos(p.h) * (p.P.netAhead + 1), p.y + Math.sin(p.h) * (p.P.netAhead + 1)];
+      p.fish = Array.from({ length: 5 }, (_, i) => ({ a: (i / 5) * Math.PI * 2, r: 1.2 + (i % 2) * 0.8, x: p.ring[0], y: p.ring[1], h: 0 }));
+      world.pointAt(null); pBanner(2); ui.did("sail");
+    }
+    if (p.step === 3 && Math.hypot(p.x - p.dock[0], p.y - p.dock[1]) < p.P.dockR) {
+      p.banked += p.hold; world.floatText(p.x, p.y, t("r_home", { n: p.hold }), "#ffd34d"); sound.bank?.(); p.hold = 0; p.step = 4;
+      clearInterval(p.timer); world.pointAt(null);
+      ui.overlay.innerHTML = `<div class="sheet narrow"><h2>${esc(t("r_p_done"))}</h2><p class="lede">${esc(t("r_p_done_s"))}</p><div class="row"><button class="btn primary" type="button" id="r-p-start">${esc(t("r_p_start"))}</button><a class="btn ghost" href="/play/${esc(view().code)}">${esc(t("g_back_room"))}</a></div></div>`;
+      ui.overlay.querySelector("#r-p-start")?.addEventListener("click", () => p.onDone?.("start"));
+    }
+  }
+  function practiceCast() {
+    const p = practice; if (!p || p.castCd > 0 || p.step >= 4) return;
+    p.castCd = p.P.castCd;
+    const nx = p.x + Math.cos(p.h) * p.P.netAhead, ny = p.y + Math.sin(p.h) * p.P.netAhead;
+    world.netDrop(nx, ny, p.P.netR, colorOf(p.seat));
+    const caught = p.fish.filter((f) => Math.hypot(f.x - nx, f.y - ny) < p.P.netR);
+    p.fish = p.fish.filter((f) => !caught.includes(f));
+    if (caught.length) { p.hold += caught.length; world.floatText(nx, ny, `+${caught.length}`, colorOf(p.seat)); sound.catch?.(caught.length); ui.did("cast"); }
+    else { world.floatText(nx, ny, t("r_empty"), "#b9b0c6"); sound.miss?.(); }
+    if (p.step === 2 && (p.hold >= 3 || !p.fish.length)) { p.step = 3; world.pointAt(p.dock[0], p.dock[1]); pBanner(3); }
+  }
+  function practiceDash() { /* no boat to ram in practice */ }
+  function endPractice() { if (!practice) return; clearInterval(practice.timer); practice = null; world.pointAt(null); prev = cur = null; ui.overlay.innerHTML = ""; }
 
   return {
     room(v) { seats = v.seats; },
     start(frame, v) {
+      endPractice();
       seats = v.seats; prev = cur = frame; curAt = performance.now();
       world.setDocks(seats.map((s, i) => ({ x: world.docks[i]?.x ?? 0, y: world.docks[i]?.z ?? 0, color: COLORS[s.character] })));
       for (const b of frame.b) world.boat(b[0], colorOf(b[0]), nameOf(b[0]));
@@ -199,7 +272,7 @@ export function mount({ world, sound, ui, send, view, post }) {
     frame(f, ev) { seats = view().seats ?? seats; prev = cur ?? f; cur = f; curAt = performance.now(); events(ev); hudFrom(f); coach(); },
     results(v, overlayEl) { renderResults(v, overlayEl); },
     practice: { start: startPractice, end: endPractice },
-    end() { clearInterval(wasdId); removeEventListener("keydown", onKey); removeEventListener("keyup", onKey); },
+    end() { endPractice(); clearInterval(wasdId); removeEventListener("keydown", onKey); removeEventListener("keyup", onKey); },
   };
 
   function draw(dt, t) {
@@ -216,6 +289,11 @@ export function mount({ world, sound, ui, send, view, post }) {
     world.setFish(fish, t);
     world.setKoi(cur.k ? [cur.k[0] / 10, cur.k[1] / 10, cur.k[2] / 100] : null, t);
     for (const l of cur.l) { const m = world.prop(`l${l[0]}`, () => { const g = new world.THREE.Mesh(new world.THREE.SphereGeometry(0.04, 6, 5).scale(1.6, 0.7, 1), world.toon(l[3] > 1 ? "#ffd34d" : "#f08a3c")); return g; }); m.position.set(l[1] / 10, 0.015 + Math.sin(t * 4 + l[0]) * 0.008, l[2] / 10); m.rotation.y += dt * 2; }
+    // the practice's gold ring (step 1)
+    if (practice && practice.step === 1) {
+      const ring = world.prop("practice-ring", () => new world.THREE.Mesh(new world.THREE.RingGeometry(5.2, 6, 48).rotateX(-Math.PI / 2), new world.THREE.MeshBasicMaterial({ color: "#e8b84d", transparent: true, opacity: 0.85, depthWrite: false })));
+      ring.position.set(practice.ring[0], 0.15, practice.ring[1]); ring.scale.setScalar(1 + Math.sin(t * 4) * 0.06);
+    }
     world.sweepProps();
     if (me() !== null) { const b = cur.b.find((x) => x[0] === me()); if (b) world.setCameraMode("follow", { x: b[1] / 10, z: b[2] / 10, h: b[3] / 100, speed: 5 }); }
     world.setLanterns([]);

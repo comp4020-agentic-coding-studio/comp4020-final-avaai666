@@ -42,6 +42,8 @@ const post = (path, body) => fetch(`/play/${code}/${path}`, { method: "POST", he
 // ---- shared HUD pieces (C3, C4) ----
 const clockEl = $("clock"), goalEl = $("goal");
 export function setClock(seconds, label) {
+  // no seconds: a label alone (Boat Rush's practice has no clock)
+  if (seconds === null) { clockEl.textContent = label ?? ""; clockEl.classList.remove("hot"); return; }
   const s = Math.max(0, Math.ceil(seconds));
   clockEl.textContent = `${label ? label + " · " : ""}${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
   clockEl.classList.toggle("hot", s <= 10);
@@ -153,12 +155,23 @@ function bindOverlay() {
 
 // ---- the stream ----
 let countdownT = 0;
+let practising = new URLSearchParams(location.search).has("practice");
+let practiceOn = false;
+// the practice's "Start the real game": the same start the room page's button sends
+async function practiceDone() {
+  const r = await post("start", { bots: view.players.length < 2 });
+  if (!r.ok) banner({ need_players: t("g_need_players"), coming_soon: t("g_coming_soon"), busy: t("g_busy"), playing: t("g_playing"), not_in_room: t("join_to_play") }[r.reason] ?? r.reason, "", 4000);
+}
 function showRoom() {
   goalEl.textContent = t(`${view.mode}_hud`);
   hostMenu.hidden = !(view.state === "play" && isFirst());
   if (hostMenu.hidden) openHost(false);
   if (view.me === null && document.querySelector(".joinform")) { overlay.innerHTML = ""; return; }
-  if (view.state === "lobby") { location.replace(`/play/${code}`); return; }
+  if (view.state === "lobby") {
+    // "Practise first" (DESIGN.md Boat Rush, step 1): the game page alone, before anyone starts a match
+    if (practising && modeApi?.practice) { if (!practiceOn) { practiceOn = true; modeApi.practice.start(practiceDone); } return; }
+    location.replace(`/play/${code}`); return;
+  }
   if (view.state === "end" && view.results) {
     // a mode may draw its own results screen (the ceremony, DESIGN.md "The ceremony"); the generic
     // podium (resultsHtml) is the fallback for modes not yet rebuilt to it
@@ -192,6 +205,8 @@ function connect() {
   });
   es.addEventListener("go", async (e) => {
     const g = JSON.parse(e.data);
+    // a real match: the practice is over, and this page is the plain game page from now on
+    if (practising) { practising = false; practiceOn = false; history.replaceState(null, "", location.pathname); }
     await loadMode(view.mode);
     modeApi.start?.(g.frame, view);
     countdown(g.startedAt, g.serverNow);

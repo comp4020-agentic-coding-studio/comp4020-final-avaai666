@@ -45,6 +45,7 @@ export function createWorld5(canvas, stage, world, opts = {}) {
     const [x0, z0] = outlineW[i0], [x1, z1] = outlineW[i1];
     return [x0 + (x1 - x0) * f, z0 + (z1 - z0) * f];
   }
+  // how far out toward the shore a point is (1 = on the shore); returned as shoreShare for the practice
   const nr = (x, z) => {
     const a = (Math.atan2(z, x) * 180) / Math.PI, n = outlineW.length, t = ((((a % 360) + 360) % 360) / 360) * n;
     const i0 = Math.floor(t) % n, i1 = (i0 + 1) % n, f = t - Math.floor(t);
@@ -580,7 +581,7 @@ export function createWorld5(canvas, stage, world, opts = {}) {
     setDocks, boat, drawBoat, clearBoats, boats, setFish, setKoi, prop, sweepProps, clearProps,
     ripple, netDrop, floatText, setLabels, screenToSim,
     setCameraMode, viewSpan, iceBlocks, growHouse, resetHouses, minimapEl: miniEl,
-    onFrame: (f) => { onFrame = f; }, pointAt, wantDir,
+    shoreShare: nr, onFrame: (f) => { onFrame = f; }, pointAt, wantDir,
     setTap: (f) => { onTap = f; }, setSteerMode: (v) => { steerMode = v; },
     shake(a = 0.3) { shakeA = Math.max(shakeA, a); },
     canvas,

@@ -6,6 +6,7 @@ import { esc } from "./pages.ts";
 import type { RoomView } from "./lib/game-hub.ts";
 import { DICT, t, type Lang } from "./lib/i18n.ts";
 import { worldForPage } from "./lib/lake-world.ts";
+import { RUSH } from "./lib/game-constants.ts";
 import { CREW, portrait } from "./static/play/art.js";
 import { WORLD5_MODES } from "./static/play/world-select.js";
 
@@ -108,6 +109,9 @@ export function roomPage(view: RoomView, error?: string, lang: Lang = "en"): str
     view, cards: MODE_CARDS, lang, words: DICT[lang],
     other: Object.fromEntries([...MODE_CARDS.map((m) => `${m.id}_name`), "cer_v_rich", "cer_v_fair", "cer_v_lean", "cer_v_none", ...["scramble", "koi", "tug", "night", "last"].map((g) => `y2_v_${g}`)].map((k) => [k, DICT[lang === "en" ? "zh" : "en"][k]])),
     world: worldForPage(),
+    // Boat Rush's practice runs in the browser alone (DESIGN.md "Practice runs in the browser only"); it sails
+    // and nets with the match's own numbers, sent here so the page keeps no copy
+    rushPractice: { speed: RUSH.SPEED, loadSlow: RUSH.LOAD_SLOW, hold: RUSH.HOLD, netR: RUSH.NET_R, netAhead: RUSH.NET_AHEAD, castCd: RUSH.CAST_CD, dockR: RUSH.DOCK_R },
   }).replace(/</g, "\\u003c")}</script>`;
   return page(`Room ${view.code} · ${card.name}`, shell, "play in-room", `<script type="module" src="/static/play/room.js"></script>`);
 }

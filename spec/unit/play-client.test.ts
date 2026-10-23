@@ -1,5 +1,5 @@
 import { JSDOM } from "jsdom";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DICT, t } from "../../src/lib/i18n.ts";
 
 // The /play game scripts (src/static/play/*.js) are plain browser modules that
@@ -163,4 +163,61 @@ describe("Fishing Party", () => {
       m.end();
     }
   }, 60000);
+});
+
+describe("Boat Rush's practice", () => {
+  beforeEach(() => { dom(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("sails to the ring, nets the school, takes it home and offers the real game, in either language, and sends nothing", async () => {
+    // DESIGN.md "Practice runs in the browser only": never sent, stored or scored
+    const rush = await importJs("../../src/static/play/rush.js");
+    for (const lang of ["en", "zh"] as const) {
+      dom(); vi.useFakeTimers();
+      const { api, banners } = ui(lang);
+      const sent: unknown[] = [];
+      let tap: (x: number, y: number) => void = () => {};
+      const pointed: unknown[] = [];
+      // one dock on the shore at (0, 28), facing up into the lake
+      const world = Object.assign(fakeWorld5(), { docks: [{ x: 0, z: 28, inward: -Math.PI / 2 }], boats: new Map(), setTap: (f: typeof tap) => { tap = f; }, pointAt: (x: number | null, y?: number) => { pointed.push(x === null ? null : [Math.round(x), Math.round(y!)]); } });
+      const mode = rush.mount({ world, sound: api.sound, ui: api, send: (x: unknown) => sent.push(x), post: () => {}, view: () => ({ mySeat: null, me: 0, players: [{ name: "Ava", character: "lu" }], seats: null, code: "ABCD" }) });
+      let done: unknown = null;
+      mode.practice.start((why: unknown) => { done = why; });
+      expect(pointed[0]).toEqual([0, 4]); // step 1: the arrow points at the gold ring
+      expect(banners[0][0]).toBe(DICT[lang].r_p1k);
+      tap(0, 4); vi.advanceTimersByTime(5000);
+      expect(banners[1][0]).toBe(DICT[lang].r_p2k); // step 2: net the school
+      const cast = document.getElementById("r-cast")!;
+      for (let k = 0; k < 4 && !banners.some((b) => b[0] === DICT[lang].r_p3); k++) { cast.dispatchEvent(new window.Event("pointerdown")); cast.dispatchEvent(new window.Event("pointerup")); vi.advanceTimersByTime(1000); }
+      expect(banners.some((b) => b[0] === DICT[lang].r_p3)).toBe(true); // step 3: home
+      expect(Number(document.getElementById("r-hold")!.textContent!.split(" ")[0])).toBeGreaterThanOrEqual(3);
+      tap(0, 25); vi.advanceTimersByTime(6000);
+      expect(api.overlay.textContent).toContain(DICT[lang].r_p_done);
+      (api.overlay.querySelector("#r-p-start") as HTMLButtonElement).click();
+      expect(done).toBe("start");
+      expect(sent).toEqual([]);
+      mode.end();
+    }
+  });
+});
+
+describe("Boat Rush's keys", () => {
+  beforeEach(() => { dom(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("W sails up the screen: the steer it sends moves y, not only x", async () => {
+    // world5.js's wantDir() answers {x, z}; rush.js once read dir.y (undefined), so every key
+    // steer went out with y: null and the boat only ever headed for the middle line
+    const rush = await importJs("../../src/static/play/rush.js");
+    vi.useFakeTimers();
+    const { api } = ui("en");
+    const sent: { k: string; x?: number; y?: number }[] = [];
+    const world = Object.assign(fakeWorld5(), { boats: new Map(), wantDir: () => ({ x: 0, z: -1, mag: 1 }) });
+    const mode = rush.mount({ world, sound: api.sound, ui: api, send: (x: { k: string }) => sent.push(x), post: () => {}, view: () => ({ mySeat: 0, seats: [{ name: "Ava", character: "mei" }] }) });
+    mode.start({ phase: "sail", season: 0, left: 45, market: null, n: [], l: [], k: null, f: [], b: [[0, 0, 100, 0, 0, 12, 0, 0, 0, 0, [], 0, 100]] }, { seats: [{ name: "Ava", character: "mei" }] });
+    vi.advanceTimersByTime(200);
+    const steer = sent.find((s) => s.k === "steer")!;
+    expect(steer).toEqual({ k: "steer", x: 0, y: -2 });
+    mode.end();
+  });
 });
