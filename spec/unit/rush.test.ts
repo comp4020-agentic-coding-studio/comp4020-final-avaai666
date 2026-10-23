@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { botStream, eventsFor, replay, type Seat } from "../../src/lib/game-platform.ts";
 import { botKindOf, DEFAULT_BOT_KINDS, makeWithOpts, nextSpring, rush, type RushInput, type RushSim, type SeasonHistory } from "../../src/lib/modes/rush.ts";
 import { RUSH } from "../../src/lib/game-constants.ts";
-import { dockPos, forecast, K, shape } from "../../src/lib/lake-world.ts";
+import { dockPos, forecast, iceBlocks, K, nr, shape, ZONES } from "../../src/lib/lake-world.ts";
 
 // Boat Rush, "rush 2.0" (DESIGN.md "Boat Rush 开船抢鱼 (2.0)"): four seasons,
 // each with a twist, ending in the gong, a breeding rest, and a market of
@@ -16,7 +16,16 @@ const until = (s: RushSim, t: number) => { while (s.t < t - 1e-9 && !rush.over(s
 const put = (s: RushSim, seat: number, x: number, y: number) => { const b = s.boats[seat]; b.x = b.tx = x; b.y = b.ty = y; b.vx = b.vy = 0; };
 const dock = (s: RushSim, seat: number) => { const d = dockPos(seat, s.players); put(s, seat, d.x, d.y); step(s); };
 const clearFish = (s: RushSim) => { s.fish = []; };
-const addFish = (s: RushSim, x: number, y: number, n: number, spread = 1) => { for (let i = 0; i < n; i++) s.fish.push({ id: s.nextId++, x: x + (((i * 7) % 5) - 2) * spread / 2, y: y + (((i * 3) % 5) - 2) * spread / 2, h: 0, adult: true, born: -99, cool: 99, scare: 0, sx: 0, sy: 0, big: false }); };
+// pins school 0 to (x, y) so a test-placed fish's ox/oy (relative to its
+// own school) keeps it exactly where the test put it, tick after tick,
+// instead of drifting toward wherever placeSchools() randomly put school 0
+const addFish = (s: RushSim, x: number, y: number, n: number, spread = 1) => {
+  s.schools[0].x = s.schools[0].tx = x; s.schools[0].y = s.schools[0].ty = y; s.schools[0].vx = s.schools[0].vy = 0; s.schools[0].t = 999;
+  for (let i = 0; i < n; i++) {
+    const fx = (((i * 7) % 5) - 2) * spread / 2, fy = (((i * 3) % 5) - 2) * spread / 2;
+    s.fish.push({ id: s.nextId++, x: x + fx, y: y + fy, h: 0, adult: true, born: -99, cool: 99, scare: 0, sx: 0, sy: 0, big: false, school: 0, ox: fx, oy: fy, ph: 0 });
+  }
+};
 // fast-forward past the rest and market of the current season, choosing no card, into the next season
 function skipMarket(s: RushSim): void {
   until(s, s.t + RUSH.SEASON_S + RUSH.REST_S + 0.1);
@@ -249,6 +258,88 @@ describe("the charge cast and the schools", () => {
     until(s, s.t + RUSH.SINK + 0.1);
     expect(s.boats[0].hold.length).toBeGreaterThan(first + 3); // the normal catch plus the chain bonus
   });
+});
+
+// a replacement for the misleadingly-named "a school scatters after a net
+// hits it" test above (it never checked a real school, only f.scare on
+// fish the test itself placed by hand — nothing in rush.test.ts covered
+// DESIGN.md's actual school pulls, or the prototype's 16-school clustering
+// this port was missing entirely, port bug (prompt-17, rule change 1)
+describe("fish swim in schools (DESIGN.md's season twists, the prototype's docs/prototypes/v10/fish.js)", () => {
+  it("16 schools: 12 adult, 4 nursery", () => {
+    const s = make("schools-count");
+    expect(s.schools.length).toBe(16);
+    expect(s.schools.filter((sc) => sc.nursery).length).toBe(4);
+    expect(s.schools.filter((sc) => !sc.nursery).length).toBe(12);
+  });
+
+  it("every fish belongs to a school it stays within a few units of", () => {
+    const s = make("schools-cluster", 2, 280);
+    until(s, 20); // let schools settle and fish catch up to their offset
+    for (const f of s.fish) {
+      const sc = s.schools[f.school];
+      expect(Math.hypot(f.x - sc.x, f.y - sc.y)).toBeLessThan(10); // ox/oy is at most ~5.7 (±4, ±4), plus drift
+    }
+  }, 15000);
+
+  it("nursery fish (young, by school) stay in the reed bed", () => {
+    const s = make("schools-nursery", 2, 280);
+    until(s, 20);
+    const nurseryIds = s.schools.map((sc, i) => (sc.nursery ? i : -1)).filter((i) => i >= 0);
+    for (const sc of s.schools) if (sc.nursery) expect(Math.hypot(sc.x - ZONES.reeds.x, sc.y - ZONES.reeds.y)).toBeLessThan(ZONES.reeds.r * 1.5);
+    for (const f of s.fish) if (nurseryIds.includes(f.school)) expect(Math.hypot(f.x - ZONES.reeds.x, f.y - ZONES.reeds.y)).toBeLessThan(ZONES.reeds.r * 2);
+  }, 15000);
+
+  it("each season, a school's targets land in that season's places, never deep winter ice", () => {
+    for (let season = 0; season < 4; season++) {
+      const s = make(`schools-season-${season}`, 2, 280);
+      s.season = season as 0 | 1 | 2 | 3;
+      for (let i = 0; i < 40; i++) until(s, s.t + 0.3); // force many retargets across the season
+      for (const sc of s.schools) {
+        expect(nr(sc.x, sc.y)).toBeLessThan(0.93); // never past the shore
+        if (season === 3) expect(iceBlocks(sc.x, sc.y, 3)).toBe(false); // never sitting in winter ice
+      }
+    }
+  }, 30000);
+
+  it("a bot that reaches a school nets 3 or more fish in most casts (hold had room)", () => {
+    const seeds = ["schools-bot-1", "schools-bot-2", "schools-bot-3", "schools-bot-4", "schools-bot-5"];
+    let casts = 0, big = 0;
+    for (const seed of seeds) {
+      const seats: Seat[] = [0, 1, 2, 3].map((i) => ({ seat: i, name: `B${i}`, bot: `bot${i}`, character: "mei" }));
+      const s = makeWithOpts(seed, seats, { fish: 280, adults: 224, young: 56 }, { botKinds: ["greedy", "greedy", "greedy", "greedy"] });
+      for (let tick = 0; !rush.over(s) && s.season === 0; tick++) {
+        const applied: { seat: number; i: RushInput }[] = [];
+        for (const st of seats) for (const raw of rush.bot(s, st.seat, botStream(seed, st.bot!, tick, st.seat))) { const ok = rush.input(s, st.seat, raw); if (ok) applied.push({ seat: st.seat, i: ok }); }
+        // a cast's room right before this tick: whether a small catch here could be a full hold, not a missed school
+        const roomBefore = s.boats.map((b) => RUSH.HOLD - b.hold.length);
+        const ev = rush.step(s, applied);
+        for (const e of ev) {
+          if (e.k !== "catch" || !((e.n as number) > 0 || (e.full as number) > 0)) continue;
+          if (roomBefore[e.seat as number] < 3) continue; // the hold itself could not have taken 3 fish; not a school-quality signal
+          casts++; if ((e.n as number) >= 3) big++;
+        }
+      }
+    }
+    expect(casts).toBeGreaterThan(5);
+    expect(big / casts).toBeGreaterThan(0.5);
+  }, 30000);
+
+  it("the replay is still exact with schools in play", () => {
+    const seats: Seat[] = [{ seat: 0, name: "P0", bot: null, character: "mei" }, { seat: 1, name: "Jin (bot)", bot: "bot0", character: "jin" }];
+    const lake = { fish: 280, adults: 224, young: 56 };
+    const seed = "schools-replay";
+    const s = rush.make(seed, seats, lake);
+    const log = new Map<number, { seat: number; i: unknown }[]>();
+    for (let tick = 0; !rush.over(s); tick++) {
+      const applied: { seat: number; i: RushInput }[] = tick % 40 === 0 ? [{ seat: 0, i: { k: "cast", charge: 0.5 } }] : [];
+      for (const i of rush.bot(s, 1, botStream(seed, "bot0", tick, 1))) applied.push({ seat: 1, i });
+      if (applied.length) log.set(tick, applied);
+      rush.step(s, applied);
+    }
+    const again = replay(rush, seed, seats, lake, log);
+    expect(rush.results(again)).toEqual(rush.results(s));
+  }, 60000);
 });
 
 describe("the four seasonal twists", () => {

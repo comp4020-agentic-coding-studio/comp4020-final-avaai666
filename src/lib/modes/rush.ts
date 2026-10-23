@@ -13,7 +13,7 @@
 // lakeAfterMatch), never running it through nextSpring() again.
 import { RUSH as Q, RUSH_MODEL } from "../game-constants.ts";
 import { type GameEvent, type Highlight, type Mode, type Results, type Seat, streamOf } from "../game-platform.ts";
-import { blockedAt, breed as breedLake, dockPos, forecast, K, nr, tierOf, ZONES } from "../lake-world.ts";
+import { blockedAt, breed as breedLake, DEEP, dockPos, forecast, iceBlocks, ISLAND, K, nr, tierOf, ZONES } from "../lake-world.ts";
 
 export type Season = 0 | 1 | 2 | 3; // spring, summer, autumn, winter
 export type CardKind = "plain" | "greedy" | "keeper";
@@ -28,7 +28,16 @@ export type RushInput =
   | { k: "pick"; id: CardId | null }
   | { k: "reroll" };
 
-interface Fish { id: number; x: number; y: number; h: number; adult: boolean; born: number; cool: number; scare: number; sx: number; sy: number; big: boolean }
+interface Fish { id: number; x: number; y: number; h: number; adult: boolean; born: number; cool: number; scare: number; sx: number; sy: number; big: boolean; school: number; ox: number; oy: number; ph: number }
+// 16 schools (DESIGN.md's season twists, practice step 2 "net the school
+// ahead of your bow", prompt-17 step 4's "spring and summer school pulls"):
+// 12 adult schools drift to that season's places (river, reeds, lotus, the
+// deep water, or open water), 4 nursery schools stay in the reed bed. Each
+// fish keeps a small offset (ox, oy) from its school's centre, so a cast
+// into a school's centre reliably nets several fish at once — the actual
+// mechanic DESIGN's wording and the prototype (docs/prototypes/v10/fish.js)
+// assume, which this port's from-scratch flocking model never had.
+interface School { x: number; y: number; tx: number; ty: number; vx: number; vy: number; t: number; nursery: boolean }
 interface Net { id: number; seat: number; x: number; y: number; r: number; closeAt: number }
 interface Loose { id: number; x: number; y: number; vx: number; vy: number; value: number; t: number }
 interface Koi { x: number; y: number; h: number; until: number }
@@ -38,7 +47,6 @@ interface Boat {
   hold: number[]; castCd: number; dashT: number; dashCd: number; stun: number; shield: number; unloadT: number;
   docked: boolean; tripValue: number; banked: number; cards: CardId[]; combo: number; lastCatch: number;
   stats: Stats; firstScoreAt: number | null;
-  mind: { spot: [number, number] | null; spotT: number; calm: number };
 }
 interface Market { offer: CardId[]; botPicks: (CardId | null)[]; picked: (CardId | null | undefined)[]; closesAt: number; closed: boolean; perSeatOffer?: Record<number, CardId[]> }
 // One entry per season, from the moment it starts (spring: make(); summer
@@ -60,6 +68,7 @@ export interface RushSim {
   tick: number; t: number; season: Season; phase: "play" | "rest" | "market" | "end"; phaseT: number;
   players: number; bots: boolean[]; botKinds: string[]; rng: () => number;
   boats: Boat[]; fish: Fish[]; nets: Net[]; loose: Loose[]; koi: Koi | null; koiSpawned: number;
+  schools: School[];
   nextId: number; cap: number; market: Market | null; history: SeasonHistory[];
 }
 
@@ -72,20 +81,70 @@ const takesYoung = (b: Boat): boolean => (has(b, "fineMesh") || has(b, "trawl"))
 const speedMult = (b: Boat): number => Q.SPEED * (has(b, "fastHull") ? Q.CARDS.fastHull.speed! : 1);
 const holdValue = (b: Boat): number => b.hold.reduce((n, v) => n + v, 0);
 
-function newFish(s: RushSim, x: number | null, y: number | null, adult: boolean): Fish {
-  let fx = x, fy = y;
-  if (fx === null || fy === null) {
-    do { fx = (s.rng() * 2 - 1) * 92; fy = (s.rng() * 2 - 1) * 64; } while (nr(fx, fy) > 0.88 || blockedAt(fx, fy, s.season));
+const NURSERY_FIRST = 12; // schools 0-11 are adult schools, 12-15 nursery
+// a target for school `i`: nursery schools stay in the reed bed; adult
+// schools drift to this season's places, the same weighted choice as the
+// prototype's schoolTarget() (docs/prototypes/v10/fish.js), all through
+// s.rng so a replay stays exact. Winter never targets the open-water bands
+// beyond nr 0.78 of the shore, which keeps schools off the ice band (nr >
+// ICE_K = 0.86) without a direct iceBlocks() check, same as the prototype.
+function nearZone(s: RushSim, zone: { x: number; y: number; r: number }, spread: number): [number, number] {
+  for (let k = 0; k < 40; k++) {
+    const a = s.rng() * Math.PI * 2, d = Math.sqrt(s.rng()) * zone.r * spread;
+    const x = zone.x + Math.cos(a) * d, y = zone.y + Math.sin(a) * d;
+    if (nr(x, y) < 0.93 && Math.hypot(x - ISLAND.x, y - ISLAND.y) > 10) return [x, y];
   }
-  return { id: s.nextId++, x: fx, y: fy, h: s.rng() * Math.PI * 2, adult, born: s.t, cool: adult ? 0 : Q.COOL, scare: 0, sx: 0, sy: 0, big: adult && s.rng() < Q.BIG_SHARE };
+  return randomWater(s, 0.82);
+}
+function randomWater(s: RushSim, maxK: number): [number, number] {
+  for (let k = 0; k < 60; k++) {
+    const x = (s.rng() * 2 - 1) * 92, y = (s.rng() * 2 - 1) * 64;
+    if (nr(x, y) < maxK && Math.hypot(x - ISLAND.x, y - ISLAND.y) > 11) return [x, y];
+  }
+  return [0, 20];
+}
+// season -> [[placeId|null, weight], ...], a weighted pick (null: open water)
+const SEASON_PULL: [("river" | "reeds" | "lotus" | "deep" | null), number][][] = [
+  [["river", 0.35], ["reeds", 0.15], [null, 0.5]],
+  [["lotus", 0.35], ["deep", 0.25], [null, 0.4]],
+  [[null, 0.75], ["deep", 0.25]],
+  [["deep", 0.7], [null, 0.3]],
+];
+function schoolTarget(s: RushSim, school: School): [number, number] {
+  if (school.nursery) return nearZone(s, ZONES.reeds, 0.8);
+  let r = s.rng();
+  for (const [id, w] of SEASON_PULL[s.season]) {
+    r -= w;
+    if (r > 0) continue;
+    if (id === null) return randomWater(s, s.season === 3 ? 0.78 : 0.84);
+    if (id === "deep") { const a = s.rng() * Math.PI * 2, d = 12 + s.rng() * 9; return [DEEP.x + Math.cos(a) * d, DEEP.y + Math.sin(a) * d]; }
+    return nearZone(s, ZONES[id], 0.9);
+  }
+  return randomWater(s, 0.84);
+}
+function placeSchools(s: RushSim): void {
+  s.schools = Array.from({ length: 16 }, (_, i): School => ({ x: 0, y: 0, tx: 0, ty: 0, vx: 0, vy: 0, t: 0, nursery: i >= NURSERY_FIRST }));
+  for (const school of s.schools) {
+    const [x, y] = schoolTarget(s, school);
+    school.x = x; school.y = y;
+    const [tx, ty] = schoolTarget(s, school);
+    school.tx = tx; school.ty = ty;
+    school.t = 3 + s.rng() * 6;
+  }
+}
+// a new fish joins a school (an adult one, or a nursery one if it's young),
+// with a small fixed offset from its centre so the school stays a cluster
+function newFish(s: RushSim, x: number | null, y: number | null, adult: boolean, school?: number): Fish {
+  const sc = school ?? (adult ? Math.floor(s.rng() * NURSERY_FIRST) : NURSERY_FIRST + Math.floor(s.rng() * (16 - NURSERY_FIRST)));
+  const ox = (s.rng() * 2 - 1) * 4, oy = (s.rng() * 2 - 1) * 4;
+  let fx = x, fy = y;
+  if (fx === null || fy === null) { fx = s.schools[sc].x + ox; fy = s.schools[sc].y + oy; }
+  return { id: s.nextId++, x: fx, y: fy, h: s.rng() * Math.PI * 2, adult, born: s.t, cool: adult ? 0 : Q.COOL, scare: 0, sx: 0, sy: 0, big: adult && s.rng() < Q.BIG_SHARE, school: sc, ox, oy, ph: s.rng() * Math.PI * 2 };
 }
 function seedFish(s: RushSim, adults: number, young: number): void {
-  const reedsN = Math.round(adults * 0.22);
-  for (let i = 0; i < adults; i++) {
-    if (i < reedsN) { const a = s.rng() * Math.PI * 2, d = Math.sqrt(s.rng()) * ZONES.reeds.r * 0.9; s.fish.push(newFish(s, ZONES.reeds.x + Math.cos(a) * d, ZONES.reeds.y + Math.sin(a) * d, true)); }
-    else s.fish.push(newFish(s, null, null, true));
-  }
-  for (let i = 0; i < young; i++) { const a = s.rng() * Math.PI * 2, d = Math.sqrt(s.rng()) * ZONES.reeds.r * 0.9; s.fish.push(newFish(s, ZONES.reeds.x + Math.cos(a) * d, ZONES.reeds.y + Math.sin(a) * d, false)); }
+  placeSchools(s);
+  for (let i = 0; i < adults; i++) s.fish.push(newFish(s, null, null, true));
+  for (let i = 0; i < young; i++) s.fish.push(newFish(s, null, null, false));
 }
 const counts = (s: RushSim): [number, number] => { let a = 0, y = 0; for (const f of s.fish) f.adult ? a++ : y++; return [a, y]; };
 
@@ -101,8 +160,8 @@ function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number
     tick: 0, t: 0, season: 0, phase: "play", phaseT: 0, players, bots: seats.map((x) => x.bot !== null),
     botKinds: seats.map((_, i) => opts?.botKinds?.[i] ?? DEFAULT_BOT_KINDS[i % 3]),
     rng: streamOf(seed, "lake"),
-    boats: [], fish: [], nets: [], loose: [], koi: null, koiSpawned: 0, nextId: 1,
-    cap: Math.round(K * 1.3), market: null, history: [],
+    boats: [], fish: [], nets: [], loose: [], koi: null, koiSpawned: 0, schools: [],
+    nextId: 1, cap: Math.round(K * 1.3), market: null, history: [],
   };
   const a0 = lake.adults ?? Math.round(lake.fish * 0.8), y0 = lake.young ?? Math.round(lake.fish * 0.2);
   seedFish(s, a0, y0);
@@ -113,7 +172,6 @@ function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number
       seat, x, y, h: d.inward + Math.PI, vx: 0, vy: 0, tx: x, ty: y, hold: [], castCd: 0, dashT: 0, dashCd: 0, stun: 0, shield: 0, unloadT: 0,
       docked: true, tripValue: 0, banked: 0, cards: [], combo: 0, lastCatch: -9, firstScoreAt: null,
       stats: { caught: 0, home: 0, trips: 0, bestTrip: 0, lost: 0, rams: 0, rammed: 0, scooped: 0, koi: 0, youngKilled: 0, youngSpared: 0 },
-      mind: { spot: null, spotT: 0, calm: 6 + seat * 2 },
     });
   });
   return s;
@@ -215,6 +273,7 @@ function step(s: RushSim, inputs: { seat: number; i: RushInput }[]): GameEvent[]
   if (s.phase === "play") {
     const hist = s.history[s.history.length - 1];
     moveBoats(s, ev);
+    updateSchools(s);
     hist.liveBorn += moveFish(s);
     closeNets(s, ev);
     rams(s, ev);
@@ -290,6 +349,7 @@ export function botKindOf(i: number): string { return DEFAULT_BOT_KINDS[i % 3]; 
 function startSeason(s: RushSim, ev: GameEvent[]): void {
   s.season = (s.season + 1) as Season; s.phase = "play"; s.phaseT = 0; s.market = null;
   for (const b of s.boats) { const d = dockPos(b.seat, s.players); b.x = d.x; b.y = d.y; b.h = d.inward + Math.PI; b.docked = true; b.combo = 0; }
+  placeSchools(s); // fresh targets for the new season's places (prototype's rNextSeason())
   const [a, y] = counts(s);
   s.history.push({ startA: a, startY: y, caught: 0, young: 0, liveBorn: 0, reclaimed: 0, gongA: 0, gongY: 0, bred: false, bonus: 0, reedsExtra: 0 });
   ev.push({ k: "season", season: s.season });
@@ -355,67 +415,81 @@ function trawlPickup(s: RushSim, b: Boat, ev: GameEvent[]): void {
   }
 }
 
+// a school drifts toward its target, retargeting when it arrives or its
+// patience runs out (the prototype's updateFish(), schools loop)
+function updateSchools(s: RushSim): void {
+  const dt = Q.DT;
+  for (const school of s.schools) {
+    if (Math.hypot(school.tx - school.x, school.ty - school.y) < 3 || school.t <= 0) {
+      const [tx, ty] = schoolTarget(s, school);
+      school.tx = tx; school.ty = ty; school.t = 6 + s.rng() * 8;
+    }
+    school.t -= dt;
+    const d = Math.hypot(school.tx - school.x, school.ty - school.y) || 1, sp = school.nursery ? 1.6 : 2.6;
+    school.vx += ((school.tx - school.x) / d * sp - school.vx) * dt;
+    school.vy += ((school.ty - school.y) / d * sp - school.vy) * dt;
+    school.x += school.vx * dt; school.y += school.vy * dt;
+    if (Math.hypot(school.x - ISLAND.x, school.y - ISLAND.y) < ISLAND.r + 3) {
+      const a = Math.atan2(school.y - ISLAND.y, school.x - ISLAND.x);
+      school.x = ISLAND.x + Math.cos(a) * (ISLAND.r + 3); school.y = ISLAND.y + Math.sin(a) * (ISLAND.r + 3);
+    }
+  }
+}
 // a grid cell key that never collides: lake coordinates are bounded (+/- 92,
 // +/- 64), so an offset well past that bound keeps every (gx, gy) pair
 // unique (rush 1.0's `gx*1000+gy` relied on coordinates always being
 // positive; this lake's are not, so that scheme silently collided two
 // distant cells into one bucket and made every fish check every other).
 const GRID_OFFSET = 1000;
+// each fish follows its school's centre plus a small rotating offset (the
+// prototype's updateFish() fish loop), so a school stays a tight, catchable
+// cluster; separation inside a school keeps individual fish from stacking
+// exactly on top of each other, and scare/reeds/ice still apply on top.
 function moveFish(s: RushSim): number {
-  const dt = Q.DT, cs = Q.SIGHT, grid = new Map<number, number[]>();
+  const dt = Q.DT, cs = Q.SEP * 3, grid = new Map<number, number[]>();
   const cellKey = (gx: number, gy: number): number => (gx + GRID_OFFSET) * 100000 + (gy + GRID_OFFSET);
   s.fish.forEach((f, i) => { const k = cellKey((f.x / cs) | 0, (f.y / cs) | 0); let c = grid.get(k); if (!c) grid.set(k, (c = [])); c.push(i); });
   const N = s.fish.length, room = Math.max(0, 1 - N / s.cap), born: Fish[] = [];
-  const pull = seasonPull(s.season);
   for (let i = 0; i < N; i++) {
     const f = s.fish[i];
-    let cx = 0, cy = 0, ax = 0, ay = 0, n = 0, sepx = 0, sepy = 0, mate = -1;
+    const school = s.schools[f.school];
+    const a = s.t * 0.35 + f.ph;
+    let tx = school.x + f.ox * Math.cos(a) - f.oy * Math.sin(a) * 0.6;
+    let ty = school.y + f.ox * Math.sin(a) * 0.6 + f.oy * Math.cos(a);
+    let sepx = 0, sepy = 0, mate = -1;
     const gx = (f.x / cs) | 0, gy = (f.y / cs) | 0;
-    for (let a = gx - 1; a <= gx + 1; a++) for (let c = gy - 1; c <= gy + 1; c++) {
-      const cell = grid.get(cellKey(a, c)); if (!cell) continue;
+    for (let a2 = gx - 1; a2 <= gx + 1; a2++) for (let c = gy - 1; c <= gy + 1; c++) {
+      const cell = grid.get(cellKey(a2, c)); if (!cell) continue;
       for (const j of cell) {
         if (j === i) continue;
         const o = s.fish[j], dx = o.x - f.x, dy = o.y - f.y, d2 = dx * dx + dy * dy;
-        if (d2 > cs * cs || o.adult !== f.adult) continue;
-        cx += o.x; cy += o.y; ax += Math.cos(o.h); ay += Math.sin(o.h); n++;
-        if (d2 < Q.SEP * Q.SEP) { sepx -= dx; sepy -= dy; }
+        if (d2 > Q.SEP * Q.SEP || o.adult !== f.adult) continue;
+        sepx -= dx; sepy -= dy;
         if (mate < 0 && f.adult && o.adult && d2 < Q.MATE * Q.MATE && o.cool <= 0) mate = j;
       }
     }
-    let tx = Math.cos(f.h), ty = Math.sin(f.h);
-    if (n) { tx += 0.12 * (cx / n - f.x) + 0.35 * (ax / n) + 0.5 * sepx; ty += 0.12 * (cy / n - f.y) + 0.35 * (ay / n) + 0.5 * sepy; }
-    if (pull && f.adult) { tx += (pull.x - f.x) * 0.004; ty += (pull.y - f.y) * 0.004; }
+    let dx = tx - f.x, dy = ty - f.y;
     if (!f.adult) {
-      if (nr(f.x, f.y) < Q.SHALLOW) { tx += (f.x / 92) * 0.6; ty += (f.y / 64) * 0.6; }
+      if (nr(f.x, f.y) < Q.SHALLOW) { dx += (f.x / 92) * 10; dy += (f.y / 64) * 10; }
       if (s.t - f.born >= Q.MATURE_S) f.adult = true;
     }
-    if (Math.hypot(f.x - ZONES.reeds.x, f.y - ZONES.reeds.y) < ZONES.reeds.r * 1.3 && Math.hypot(f.x - ZONES.reeds.x, f.y - ZONES.reeds.y) > ZONES.reeds.r * 0.6) {
-      const dxr = ZONES.reeds.x - f.x, dyr = ZONES.reeds.y - f.y, dr = Math.hypot(dxr, dyr) || 1; tx += (dxr / dr) * 0.5; ty += (dyr / dr) * 0.5;
-    }
-    if (nr(f.x, f.y) > 0.92) { tx += -f.x * 0.01; ty += -f.y * 0.01; }
-    if (f.scare > 0) { tx += f.sx * 3; ty += f.sy * 3; f.scare -= dt; }
-    const h = Math.atan2(ty, tx) + (s.rng() - 0.5) * 0.5;
-    f.h = h;
-    const v = (f.adult ? Q.V_ADULT : Q.V_FRY) * (f.scare > 0 ? 2.2 : 1) * (Math.hypot(f.x - ZONES.reeds.x, f.y - ZONES.reeds.y) < ZONES.reeds.r ? 0.6 : 1);
-    let nx = f.x + Math.cos(h) * v * dt, ny = f.y + Math.sin(h) * v * dt;
+    const inReeds = Math.hypot(f.x - ZONES.reeds.x, f.y - ZONES.reeds.y) < ZONES.reeds.r;
+    if (f.scare > 0) { dx += f.sx * 6; dy += f.sy * 6; f.scare -= dt; }
+    const followSpeed = Math.min(1, dt * 1.6);
+    let nx = f.x + (dx + sepx * 0.5) * followSpeed, ny = f.y + (dy + sepy * 0.5) * followSpeed;
+    if (f.scare > 0) { const v = (f.adult ? Q.V_ADULT : Q.V_FRY) * 2.2 * (inReeds ? 0.6 : 1); nx = f.x + f.sx * v * dt; ny = f.y + f.sy * v * dt; }
     if (blockedAt(nx, ny, s.season)) { nx = f.x; ny = f.y; }
+    if (Math.abs(nx - f.x) + Math.abs(ny - f.y) > 0.02) { const nh = Math.atan2(ny - f.y, nx - f.x); f.h += Math.atan2(Math.sin(nh - f.h), Math.cos(nh - f.h)) * Math.min(1, dt * 5); }
     f.x = nx; f.y = ny;
     if (f.cool > 0) f.cool -= dt;
     if (mate >= 0 && f.cool <= 0 && s.rng() < Q.BREED_CHANCE * dt * room) {
       const o = s.fish[mate];
       f.cool = o.cool = Q.COOL;
-      for (let k = 0; k < 2; k++) born.push(newFish(s, (f.x + o.x) / 2 + (s.rng() - 0.5) * 1, (f.y + o.y) / 2 + (s.rng() - 0.5) * 1, false));
+      for (let k = 0; k < 2; k++) born.push(newFish(s, (f.x + o.x) / 2 + (s.rng() - 0.5) * 1, (f.y + o.y) / 2 + (s.rng() - 0.5) * 1, false, f.school));
     }
   }
   for (const b of born) s.fish.push(b);
   return born.length;
-}
-// spring: river mouth + reeds; summer: lotus + deep water; autumn: open water; winter: deep water
-function seasonPull(season: Season): { x: number; y: number } | null {
-  if (season === 0) return ZONES.river;
-  if (season === 1) return ZONES.lotus;
-  if (season === 3) return { x: 10, y: -15 }; // the island's deep water
-  return null;
 }
 
 function closeNets(s: RushSim, ev: GameEvent[]): void {
@@ -521,7 +595,7 @@ function bot(s: RushSim, seat: number, r: () => number): RushInput[] {
     return r() < 0.4 ? [] : [{ k: "pick", id: botPick(s, offer, kind) }];
   }
   if (s.phase !== "play" || r() > 0.2) return [];
-  const b = s.boats[seat], m = b.mind;
+  const b = s.boats[seat];
   const out: RushInput[] = [];
   const d = dockPos(seat, s.players), left = Q.SEASON_S - s.phaseT, n = b.hold.length, max = holdMax(b);
   const homeAt = kind === "greedy" ? 0.95 : kind === "keeper" ? 0.6 : 0.75;
@@ -540,18 +614,24 @@ function bot(s: RushSim, seat: number, r: () => number): RushInput[] {
       return out;
     }
   }
-  if (!m.spot || s.t > m.spotT || Math.hypot(m.spot[0] - b.x, m.spot[1] - b.y) < 2.5) {
-    let best: { x: number; y: number; c: number } | null = null;
-    const adults = s.fish.filter((f) => f.adult || takesYoung(b));
-    for (let k = 0; k < 8 && adults.length; k++) {
-      const f = adults[Math.floor(r() * adults.length)];
-      let c = 0; for (const o of adults) if ((o.x - f.x) ** 2 + (o.y - f.y) ** 2 < 4 * 4) c++;
-      if (!best || c > best.c) best = { x: f.x, y: f.y, c };
-    }
-    m.spot = best ? [best.x, best.y] : [0, 0];
-    m.spotT = s.t + 3;
+  // the fullest, nearest school (prototype's rThink): count fish per
+  // school, weight by distance, skip a school sitting in winter ice
+  const cnt = new Array(s.schools.length).fill(0);
+  for (const f of s.fish) if (f.adult || takesYoung(b)) cnt[f.school]++;
+  let best: { x: number; y: number } | null = null, bestScore = -1;
+  s.schools.forEach((school, i) => {
+    if (iceBlocks(school.x, school.y, s.season)) return;
+    const score = cnt[i] / (8 + Math.hypot(school.x - b.x, school.y - b.y));
+    if (score > bestScore) { bestScore = score; best = { x: school.x, y: school.y }; }
+  });
+  if (best) {
+    const { x: sx, y: sy } = best as { x: number; y: number };
+    const dx = sx - b.x, dy = sy - b.y, dd = Math.hypot(dx, dy) || 1;
+    const off = dd > Q.NET_AHEAD + 1 ? Q.NET_AHEAD : 0;
+    let tx = sx - (dx / dd) * off, ty = sy - (dy / dd) * off;
+    if (dd < Q.NET_AHEAD + 1.5) { tx = sx + (dx / dd) * 4; ty = sy + (dy / dd) * 4; }
+    out.push({ k: "steer", x: Math.round(tx), y: Math.round(ty) });
   }
-  out.push({ k: "steer", x: Math.round(m.spot[0]), y: Math.round(m.spot[1]) });
   const ax = b.x + Math.cos(b.h) * Q.NET_AHEAD, ay = b.y + Math.sin(b.h) * Q.NET_AHEAD;
   if (b.castCd <= 0) {
     let c = 0; for (const f of s.fish) if ((f.adult || takesYoung(b)) && (f.x - ax) ** 2 + (f.y - ay) ** 2 < Q.NET_R * Q.NET_R) c++;
