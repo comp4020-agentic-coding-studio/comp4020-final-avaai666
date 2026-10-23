@@ -16,7 +16,7 @@ import { writeFileSync, readFileSync, existsSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
 import { botStream, type Seat } from "../src/lib/game-platform.ts";
-import { hold, type HoldInput, type HoldSim } from "../src/lib/modes/hold.ts";
+import { BOT_KINDS, hold, type HoldInput } from "../src/lib/modes/hold.ts";
 import { party, type PartyInput, type PartySim } from "../src/lib/modes/party.ts";
 import { health, poach, type PoachInput } from "../src/lib/modes/poach.ts";
 import { tierOf, type TierId } from "../src/lib/lake-world.ts";
@@ -60,34 +60,24 @@ const PARTY_STRATS: Strat[] = [
   { name: "never buy", shape: (_s, _seat, ins) => ins.filter((i: PartyInput) => i.k !== "buy") },
 ];
 
-// ---- Lake Holdings: what each card in hand is used for ----
-const holdPlay = (pref: (s: HoldSim, seat: number, card: string) => number | null) => (s: HoldSim, seat: number, ins: HoldInput[], r: () => number) => {
-  if (r() > 0.04 || !s.hands[seat].length) return [];
-  for (const card of s.hands[seat]) { const t = pref(s, seat, card); if (t !== null) return [{ k: "play", card, tile: t, ...(card === "fence" ? { dir: Math.floor(r() * 6) } : {}) } as HoldInput]; }
-  return ins;
-};
-const nbrs = (s: HoldSim, id: number): number[] => { const t = s.tiles[id]; return [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]].map(([a, b]) => s.at.get(`${t.q + a},${t.r + b}`)).filter((x): x is number => x !== undefined); };
-const freeOwn = (s: HoldSim, seat: number) => s.tiles.filter((t) => t.owner === seat && !t.building).sort((a, b) => b.pays - a.pays);
-const claimEdge = (s: HoldSim, seat: number) => s.tiles.filter((t) => t.owner === -1 && nbrs(s, t.id).some((n) => s.tiles[n].owner === seat)).sort((a, b) => b.pays - a.pays)[0]?.id ?? null;
-const leaderOf = (s: HoldSim, seat: number) => { let best = -1, bs = -1; for (let p = 0; p < s.n; p++) { if (p === seat) continue; const sc = s.harvest[p] + s.tiles.filter((t) => t.owner === p).length; if (sc > bs) { bs = sc; best = p; } } return best; };
-const HOLD_STRATS: Strat[] = [
-  { name: "all nets", shape: holdPlay((s, seat, c) => (c === "claim" ? claimEdge(s, seat) : c === "net" ? freeOwn(s, seat)[0]?.id ?? null : null)) },
-  { name: "nets + ponds", shape: holdPlay((s, seat, c) => (c === "claim" ? claimEdge(s, seat) : c === "net" ? freeOwn(s, seat)[0]?.id ?? null : c === "pond" ? freeOwn(s, seat).at(-1)?.id ?? null : null)) },
-  { name: "fences against the leader", shape: holdPlay((s, seat, c) => {
-    if (c === "claim") return claimEdge(s, seat);
-    if (c === "net") return freeOwn(s, seat)[0]?.id ?? null;
-    if (c !== "fence") return null;
-    const lead = leaderOf(s, seat); const theirNet = s.tiles.find((t) => t.owner === lead && t.building === "net");
-    if (!theirNet) return freeOwn(s, seat)[0]?.id ?? null;
-    return freeOwn(s, seat).sort((a, b) => Math.hypot(a.x - theirNet.x, a.y - theirNet.y) - Math.hypot(b.x - theirNet.x, b.y - theirNet.y))[0]?.id ?? null;
-  }) },
-  { name: "cormorant raider", shape: holdPlay((s, seat, c) => {
-    if (c === "claim") { const enemyNet = s.tiles.find((t) => t.building === "net" && t.by !== seat); if (enemyNet) { const near = s.tiles.filter((t) => t.owner === -1 && nbrs(s, t.id).some((n) => s.tiles[n].owner === seat)).sort((a, b) => Math.hypot(a.x - enemyNet.x, a.y - enemyNet.y) - Math.hypot(b.x - enemyNet.x, b.y - enemyNet.y))[0]; if (near) return near.id; } return claimEdge(s, seat); }
-    if (c === "cormorant" || c === "net") return freeOwn(s, seat)[0]?.id ?? null;
-    return null;
-  }) },
-  { name: "lantern puller", shape: holdPlay((s, seat, c) => (c === "claim" ? claimEdge(s, seat) : c === "lantern" || c === "net" ? freeOwn(s, seat)[0]?.id ?? null : null)) },
-];
+// ---- Lake Holdings 2.0: hold.ts's own bots (the prototype's botChoose), in
+// three kinds (steady, keeper, greedy). A real room draws seat % 3; here,
+// as for Boat Rush, whole tables of one kind and a seeded random mix. ----
+type HoldTable = "all-greedy" | "all-keeper" | "all-steady" | "random mix";
+const HOLD_TABLES: HoldTable[] = ["all-greedy", "all-keeper", "all-steady", "random mix"];
+function playHold(table: HoldTable, seed: number): { kinds: string[]; places: number[]; tier: TierId; next: number; dry: number } {
+  const n = 4, seats = seatsOf(n), secret = `balance-hold-${table}-${seed}`;
+  const s = hold.make(secret, seats, { fish: 280, adults: 224, young: 56 });
+  const pickKind = (i: number) => { if (table !== "random mix") return table.slice(4); let x = (seed * 2654435761 + i * 40503) >>> 0; x ^= x << 13; x >>>= 0; x ^= x >>> 17; x ^= x << 5; x >>>= 0; return BOT_KINDS[x % 3]; };
+  s.players.forEach((p, i) => { p.kind = pickKind(i); }); // script-only: a real room keeps seat % 3
+  for (let tick = 0; !hold.over(s) && tick < 40000; tick++) {
+    const applied: { seat: number; i: HoldInput }[] = [];
+    for (const st of seats) for (const raw of hold.bot(s, st.seat, botStream(secret, st.bot!, tick, st.seat))) { const ok = hold.input(s, st.seat, raw); if (ok) applied.push({ seat: st.seat, i: ok }); }
+    hold.step(s, applied);
+  }
+  const r = hold.results(s);
+  return { kinds: s.players.map((p) => p.kind), places: r.seats.map((x) => x.place), tier: tierOf(r.lakeLeft).id, next: r.lakeLeft, dry: r.dry as number };
+}
 
 // ---- Who's Poaching 2.0: six bots (poach.ts's own bot(): tasks, inspecting,
 // buoys, reports, the poacher's fine net, the meeting's lines and votes). Two
@@ -162,13 +152,13 @@ function playPoach(table: Table, seed: number): { fishers: boolean; health: numb
 }
 
 // ---- workers ----
-type Job = { mode: string; seed: number; table?: Table; rushTable?: RushTable };
+type Job = { mode: string; seed: number; table?: Table; rushTable?: RushTable; holdTable?: HoldTable };
 if (!isMainThread) {
   const out: unknown[] = [];
   for (const j of workerData as Job[]) {
     if (j.mode === "rush") out.push(playRush(j.rushTable!, j.seed, 4));
     if (j.mode === "party") out.push(playRotating(party, PARTY_STRATS, j.seed, 4));
-    if (j.mode === "hold") out.push(playRotating(hold, HOLD_STRATS, j.seed, 4));
+    if (j.mode === "hold") out.push({ table: j.holdTable, ...playHold(j.holdTable!, j.seed) });
     if (j.mode === "poach") out.push({ table: j.table, ...playPoach(j.table!, j.seed) });
   }
   parentPort!.postMessage(out);
@@ -179,6 +169,7 @@ if (!isMainThread) {
   for (const m of modes) for (let seed = 1; seed <= N; seed++) {
     if (m === "poach") for (const table of TABLES) jobs.push({ mode: m, seed, table });
     else if (m === "rush") for (const rushTable of RUSH_TABLES) jobs.push({ mode: m, seed, rushTable });
+    else if (m === "hold") for (const holdTable of HOLD_TABLES) jobs.push({ mode: m, seed, holdTable });
     else jobs.push({ mode: m, seed });
   }
   const W = Math.max(1, availableParallelism() - 1), chunks: Job[][] = Array.from({ length: W }, () => []);
@@ -239,7 +230,16 @@ if (!isMainThread) {
         `**Tier distribution, by table type:**\n\n| Table | rich | fair | lean | none |\n|---|---|---|---|---|\n${tierLines.join("\n")}\n`;
       continue;
     }
-    const strats = (m === "party" ? PARTY_STRATS : HOLD_STRATS).map((x) => x.name);
+    if (m === "hold") {
+      const TIERS_ORDER: TierId[] = ["rich", "fair", "lean", "none"];
+      const by = (t: HoldTable) => rows.filter((x) => x.job.holdTable === t);
+      const tierLines = HOLD_TABLES.map((t) => { const rs = by(t); return `| ${t} | ${TIERS_ORDER.map((id) => pct(rs.filter((x) => x.r.tier === id).length / rs.length)).join(" | ")} | ${(rs.reduce((n, x) => n + x.r.next, 0) / rs.length).toFixed(0)} | ${(rs.reduce((n, x) => n + x.r.dry, 0) / rs.length).toFixed(1)} |`; });
+      const mix = by("random mix");
+      const winLines = BOT_KINDS.map((k) => { let sat = 0, won = 0; for (const x of mix) x.r.kinds.forEach((kk: string, i: number) => { if (kk === k) { sat++; if (x.r.places[i] === 1) won++; } }); const [lo, hi] = wilson(won, sat); return `| ${k} | ${sat} | ${won} | ${pct(won / sat)} | ${pct(lo)}–${pct(hi)} |`; });
+      sections[m] = `## Lake Holdings 2.0 (4 bots per match; hold.ts's own bots)\n\n**Next spring, by table:**\n\n| Table | rich | fair | lean | none | Mean next spring | Mean tiles dry |\n|---|---|---|---|---|---|---|\n${tierLines.join("\n")}\n\n**Who wins a random-mix table (incl. shared first):**\n\n| Bot kind | Seats played | Won | Rate | 95% interval |\n|---|---|---|---|---|\n${winLines.join("\n")}\n`;
+      continue;
+    }
+    const strats = PARTY_STRATS.map((x) => x.name);
     const lines = strats.map((name) => {
       const played = rows.filter((x) => x.r.sat.includes(name));
       const won = played.filter((x) => x.r.winners.includes(name)).length, [lo, hi] = wilson(won, played.length);
@@ -258,11 +258,16 @@ if (!isMainThread) {
   const part = (m: string) => sections[m] ?? oldParts.find((x) => x.startsWith(TITLES[m])) ?? "";
   const notes = oldParts.filter((x) => x.startsWith("## Before") || x.startsWith("## Changes")).map((x) => x.trimEnd() + "\n");
   // poach 2.0 writes its own file below; the 2026-10-15 file keeps poach 1.0's table as history
-  writeFileSync(file, head + ["rush", "party", "hold", "poach"].map((m) => (m === "rush" || m === "poach" ? oldParts.find((x) => x.startsWith(TITLES[m])) ?? "" : part(m))).filter(Boolean).map((x) => x.trimEnd() + "\n").join("\n") + (notes.length ? "\n" + notes.join("\n") : ""));
+  writeFileSync(file, head + ["rush", "party", "hold", "poach"].map((m) => (m === "rush" || m === "poach" || m === "hold" ? oldParts.find((x) => x.startsWith(TITLES[m])) ?? "" : part(m))).filter(Boolean).map((x) => x.trimEnd() + "\n").join("\n") + (notes.length ? "\n" + notes.join("\n") : ""));
   if (sections.rush) {
     const rfile = "docs/checks/balance-rush2-2026-10-23.md";
     const rhead = `# Balance, Boat Rush 2.0, 2026-10-23 (bots only)\n\nWritten by \`node scripts/balance.ts rush\`. Every match here is bots against bots, 4 seats, src/lib/modes/rush.ts's own bot() in one of three kinds (steady, keeper, greedy). A real room always draws seat % 3; this harness also runs whole tables of one kind (all-greedy, all-keeper, all-steady) and a seeded random mix, on the seeds \`balance-rush-<table>-1\` to \`-${N}\`, through makeWithOpts's script-only override (src/lib/modes/rush.ts), to measure prompt-17 step 5's three targets, which seat % 3 alone cannot (there is never an all-greedy table that way). These are claims about these bots and seeds, not about how people play. 95% intervals are Wilson intervals.\n\n`;
     writeFileSync(rfile, rhead + sections.rush.trimEnd() + "\n");
+  }
+  if (sections.hold) {
+    const hfile = "docs/checks/balance-hold2-2026-10-24.md";
+    const hhead = `# Balance, Lake Holdings 2.0, 2026-10-24 (bots only)\n\nWritten by \`node scripts/balance.ts hold\`. Every match here is four bots (src/lib/modes/hold.ts's own bot(), in one of three kinds) on a fresh room's lake, on the seeds \`balance-hold-<table>-1\` to \`-${N}\`. A real room always draws seat % 3; whole tables of one kind are set by the script only. These are claims about these bots and seeds, not about how people play. 95% intervals are Wilson intervals.\n\n`;
+    writeFileSync(hfile, hhead + sections.hold.trimEnd() + "\n");
   }
   if (sections.poach) {
     const pfile = "docs/checks/balance-poach2-2026-10-23.md";

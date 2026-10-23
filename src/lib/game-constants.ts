@@ -247,16 +247,15 @@ export const PARTY = {
   SEATS: { min: 2, max: 4, botFill: 4 },
 } as const;
 
-// ---- Lake Holdings, "holdings 1.0" (DESIGN.md "Lake Holdings") ----
+// ---- Lake Holdings, "holdings 2.0" (DESIGN.md "Lake Holdings 抢地盘经营 (2.0)") ----
+// In lake-world.ts's units; the prototype's HO (docs/prototypes/v10/hold.js).
+export const HOLD_MODEL = "holdings 2.0";
 export const HOLD = {
-  W: 1000, H: 700, RX: 460, RY: 315, DT: 0.05,
-  HEX: 37, IN_LAKE: 0.84, // hex size in sim units (prototype v7's 3.7); tiles whose centre is inside this share of the lake
-  TIDE_S: 15, TIDES: 12, // a tide every 15 s, twelve in three minutes
-  HAND: 3, START_TILES: 3, SCHOOLS: 8,
-  NET_TAKE: 2, // a net takes 2 from each school on or next to it
-  DRY_FISH: 3, // a school smaller than this dies out, and its tile runs dry (grey) until a pond beside it brings it back
-  POND_BREED: 3, CORMORANT: 2, CORMORANT_RANGE: 2, LANTERN_RANGE: 3, LANTERN_TIDES: 2,
-  THIN_AFTER: 2, // a tile netted this many tides running is marked thinned: schools passing lose a fish
-  DECK: ["net", "net", "net", "pond", "pond", "fence", "fence", "cormorant", "lantern", "claim", "claim", "claim"] as const,
+  DT: 0.05,
+  SEASONS: 4, ACTIONS: 3, PICK_S: 20, // four seasons of three moves; 20 s to choose
+  REVEAL_GAP: 0.45, REVEAL_END: 0.8, HARVEST_STEP_S: 1.3, // the reveal, one placement at a time; the harvest, one step at a time
+  HS: 8.4, IN_LAKE: 0.8, // hex size; tiles whose centre is within this share of the way to the shore
+  WEIGHTS: { net: 3, pond: 2, fence: 1.2, corm: 1, lantern: 1.2 },
+  NET_TAKE: 7, BASE: 2, POND_SELF: 2, POND_NEAR: 1, CORM: 2, GROW: 0.2, GROW_REEDS: 0.4, TILE_PTS: 1,
   SEATS: { min: 2, max: 4, botFill: 4 },
 } as const;

@@ -1,4 +1,4 @@
-# Next Year, No Fish (明年无鱼): design v5.1
+# Next Year, No Fish (明年无鱼): design v5.2
 
 ## What it is
 
@@ -76,7 +76,7 @@ runs.
 |---|---|---|
 | Boat Rush | v5.0 (rush 2.0) | session 17, part A |
 | Who's Poaching | v5.0 (poach 2.0) | session 18 (23 Oct, in chat) |
-| Lake Holdings | v4.0 (holdings 1.0) | part C |
+| Lake Holdings | v5.0 (holdings 2.0) | session 18 (24 Oct, in chat) |
 | Fishing Party | v4.0 (party 1.0) | part C |
 
 ## One lake, four games (v5.0)
@@ -450,6 +450,22 @@ step, and dry water stays dry. Score = fish harvested + 1 per tile, × tier.
 (Bountiful). Greed is not punished enough yet. The balance pass must fix
 this.
 
+**How holdings 2.0 settles what the text above leaves open** (session 18):
+- a move's reveal shows one placement every 0.45 s, then a 0.8 s pause; each
+  harvest step is shown for 1.3 s;
+- a time-out plays the bot's choice, drawn from the match's own stream; a seat
+  with no legal tile for any card in its hand passes;
+- two flags with the same number of tiles: the match's own stream decides;
+- bots are steady, keeper and greedy by seat (the prototype's botChoose with
+  their weights); the room's lake keeps next spring as this mode computes it
+  (the mode breeds in its own year, like Boat Rush).
+
+**Measured in holdings 2.0** (bots only, 300 matches a table,
+docs/checks/balance-hold2-2026-10-24.md): all-greedy tables end Fair (88%),
+all-keeper tables Bountiful (100%), but in a random mix the greedy bot wins
+44.3% (39.3%-49.3%), over the 41% target, and the keeper 7.6%. Greed still
+pays the player who is greedy; this is for Ava's balance pass.
+
 **Removed from v4:**
 - the real-time 15 s tide;
 - the current's flow field;
@@ -662,6 +678,7 @@ Lake Holdings becomes turn-based; Boat Rush has four seasons of 45 s.
 
 ## Changelog
 
+- v5.2 (24 Oct, session 18): Lake Holdings 2.0 is built (holdings 2.0 on the v5 lake): turn-based, three cards, the preview, the reveal, the harvest step by step, next spring with dry water staying dry, the ceremony. Its open points are settled under "How holdings 2.0 settles…". The greedy bot still wins 44% of mixed tables (over the 41% target); left for the balance pass.
 - v5.1 (23 Oct, session 18): Who's Poaching 2.0 is built (poach 2.0 on the v5 lake): the role card, the lantern's circle, tasks, inspect, buoy, report, the fine net and its dead fish, the meeting's map and lines, the tally, the exile, the night, the ceremony. What the section left open is settled under "How poach 2.0 settles…". poach 1.0's numbers made the lake die on day 1 (a fine net every 1.5 s); its tests are replaced by 2.0's.
 - v5.0.1: net 4.5, cooldown 0.7 (rule change 7, balance report docs/checks/balance-rush2-2026-10-23.md).
 - v5.0 (19 Oct, session 17): the design for all four games, step by step (prototype v10, docs/prototypes/v10/). The world is shared: one lake shape (92 × 64, an island, named places), seasons, K = 340, one ending ceremony. Boat Rush 2.0 is built first: four 45 s seasons with a rest and a market between them. Who's Poaching 2.0, Lake Holdings 2.0 and Fishing Party 2.0 follow. v4.0's mode sections moved word for word to docs/design-history/four-games-v4.0.md. Rule changes approved in the session 17 prompt: the lake shape and start (230 adults, 50 young), Boat Rush's browser-only practice (above), the shared ceremony, shared client modules, crash fixes in frozen code, and the removals listed under each mode.

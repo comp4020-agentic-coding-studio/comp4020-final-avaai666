@@ -79,6 +79,20 @@ const en = {
 
   // ---- not found ----
   nf_title: "Not found", nf_p: "There is nothing at this address.",
+  // ---- Lake Holdings 2.0 ----
+  h2_c_claim: "Flag", h2_c_claim_s: "Claim an empty tile next to yours.", h2_c_net: "Net", h2_c_net_s: "Takes up to 7 fish from this tile every season.",
+  h2_c_pond: "Pond", h2_c_pond_s: "+2 here and +1 on every tile around, anyone's. Brings dry water back.",
+  h2_c_fence: "Fence", h2_c_fence_s: "Fish don't swim away from here; lanterns and cormorants can't touch it or your tiles next to it.",
+  h2_c_corm: "Cormorant", h2_c_corm_s: "Steals 2 a season from the richest neighbour's net within 2 tiles.", h2_c_lantern: "Lantern", h2_c_lantern_s: "Pulls 1 fish a season from every tile next to it.",
+  h2_pick_first: "Pick a card first", h2_pick_first_s: "Then the tiles you can use light up", h2_none: "Nowhere to put {card}", h2_wait: "Chosen. Waiting for the others…",
+  h2_step: "Season {s}/4 · move {a}/3", h2_clock: "{s}/4 · {a}/3", h2_lake: "Fish in the lake", h2_next: "Next spring: {n} fish ({tier})", h2_board: "Holdings", h2_score: "{f} fish + {t} tiles", h2_unit: "fish harvested",
+  h2_tip_claim: "Claim: {n} fish here. You can build on it later.", h2_tip_net: "Net: takes {k} of the {n} fish here each season.", h2_tip_net_dry: "It will run dry in about {s} seasons.",
+  h2_tip_pond: "Pond: +2 here, +1 to {m} tiles around ({o} of them someone else's).", h2_tip_fence: "Fence: keeps fish here; protects {m} of your tiles.", h2_tip_corm: "Cormorant: would steal from {name}'s net.", h2_tip_corm_none: "Cormorant: no neighbour's net in reach yet.", h2_tip_lantern: "Lantern: pulls up to {m} fish a season from the tiles around ({o} someone else's).",
+  h2_tip_again: "Tap again to place", h2_conflict_you: "Someone with fewer tiles flagged the same water: it went to them.", h2_robbed: "A cormorant took {n} from your net",
+  h2_hv_pond: "Ponds breed", h2_hv_lantern: "Lanterns pull fish", h2_hv_net: "Nets haul", h2_hv_corm: "Cormorants steal", h2_hv_grow: "The lake breeds", h2_hv_swim: "Fish swim away from the nets", h2_hv_dry: "{n} tiles ran dry", h2_dry: "dry",
+  h2_coach_pick: "Pick one of your three cards", h2_coach_place: "Hover a glowing tile to see what it does, click to place", h2_coach_place_touch: "Tap a glowing tile to see what it does, tap again to place",
+  h2_hl_best_t: "Best harvest", h2_hl_best: "{name}: {n} fish in one harvest", h2_hl_best_none: "no net caught anything", h2_hl_corm_t: "Cormorants", h2_hl_corm: "{name} lost {n} to cormorants", h2_hl_corm_none: "no cormorant struck", h2_hl_dry_t: "Dry water", h2_hl_dry: "{n} tiles ran dry",
+
   // ---- Who's Poaching 2.0 (DESIGN.md "Who's Poaching 谁在偷鱼 (2.0)") ----
   p2_role_h: "Your role · only you see this", p2_role_f: "Fisher", p2_role_p: "Poacher",
   p2_role_f_s: "There is a poacher among you. Do your tasks, watch the water, and find them before the lake dies.",
@@ -145,12 +159,12 @@ const en = {
   poach_lake: "The poacher's fine net takes baby fish, so the lake's future shrinks. Its health is always on screen.",
 
   hold_name: "Lake Holdings", hold_one: "Build on the water, steer the fish your way, and don't fish your lane dry.", hold_choice: "Net it now, or breed it for later?",
-  hold_goal: "Your score is the water you hold plus the fish you harvest. The lake pays out every 15 seconds, twelve times.",
-  hold_s1_t: "Play a card", hold_s1_p: "You hold 3 cards. Pick one, then tap your own water to build.",
-  hold_s2_t: "Net and breed", hold_s2_p: "Nets catch the fish that drift past. Ponds breed new fish, for your neighbours too.",
-  hold_s3_t: "Bend the lake", hold_s3_p: "Fences turn the current. Lanterns pull fish in. A cormorant steals from a rival's net nearby.",
-  hold_s4_t: "Grow", hold_s4_p: "Claim takes empty water next to yours.",
-  hold_s5_t: "Watch the lanes", hold_s5_p: "Too many nets on one lane and it runs dry (grey). Only a pond brings it back.",
+  hold_goal: "Turn by turn, everyone at once: four seasons of three moves, then the harvest. Your score is the fish you harvest plus 1 per tile you hold, times next spring's year.",
+  hold_s1_t: "Pick a card", hold_s1_p: "You hold three: always the Flag, plus two drawn. Pick one and the tiles you can use light up. Hover or tap a tile to see what it will do; click or tap again to place. 20 seconds a move.",
+  hold_s2_t: "Net and breed", hold_s2_p: "A net takes up to 7 a season. Every other tile you hold gives 2. A pond adds 2 on its tile and 1 on every tile around, anyone's.",
+  hold_s3_t: "Neighbours", hold_s3_p: "A lantern pulls 1 fish from every tile around. A cormorant steals 2 from a rival's net within 2 tiles. A fence keeps fish in and protects your tiles beside it.",
+  hold_s4_t: "The reveal", hold_s4_p: "Everyone's choice appears one by one. Two flags on one tile: the player with fewer tiles gets it.",
+  hold_s5_t: "Dry water", hold_s5_p: "Empty water runs dry (grey) and stays dry, unless a pond is next to it. Next spring is judged on what is still alive.",
   hold_phone1: "Tap a card, then tap a tile", hold_phone2: "Each tile shows what it paid last time", hold_laptop1: "Click a card, then a tile", hold_laptop2: "Each tile shows what it paid last time",
   hold_lake: "Every lane is shared. Ponds invest in the future; packed nets spend it.",
 
@@ -445,6 +459,20 @@ const zh: Record<Key, string> = {
   readme_en_note: "README 只有英文版。",
 
   nf_title: "找不到", nf_p: "这个网址什么也没有。",
+  // ---- 抢地盘经营 2.0 ----
+  h2_c_claim: "旗子", h2_c_claim_s: "占一块挨着你的空水面。", h2_c_net: "渔网", h2_c_net_s: "每季从这一格收最多 7 条鱼。",
+  h2_c_pond: "鱼塘", h2_c_pond_s: "这格 +2，周围每格 +1，不管是谁的。能让干掉的水面活过来。",
+  h2_c_fence: "篱笆", h2_c_fence_s: "鱼不会从这里游走；灯笼和鸬鹚动不了这一格和旁边你的格子。",
+  h2_c_corm: "鸬鹚", h2_c_corm_s: "每季从两格以内最肥的邻居的网里偷 2 条。", h2_c_lantern: "灯笼", h2_c_lantern_s: "每季从旁边每一格拉 1 条鱼过来。",
+  h2_pick_first: "先选一张卡", h2_pick_first_s: "能用的格子会亮起来", h2_none: "{card}没地方放", h2_wait: "选好了，等其他人……",
+  h2_step: "第 {s}/4 季 · 第 {a}/3 步", h2_clock: "{s}/4 季 · {a}/3 步", h2_lake: "湖里的鱼", h2_next: "明年春天：{n} 条鱼（{tier}）", h2_board: "产业", h2_score: "{f} 条鱼 + {t} 格地", h2_unit: "收的鱼",
+  h2_tip_claim: "占地：这里有 {n} 条鱼。以后可以在上面建。", h2_tip_net: "渔网：这里 {n} 条鱼，每季收 {k} 条。", h2_tip_net_dry: "大约 {s} 季后这格会干掉。",
+  h2_tip_pond: "鱼塘：这格 +2，周围 {m} 格各 +1（其中 {o} 格是别人的）。", h2_tip_fence: "篱笆：鱼留在这里；护住你旁边的 {m} 格。", h2_tip_corm: "鸬鹚：会去偷{name}的网。", h2_tip_corm_none: "鸬鹚：附近还没有邻居的网。", h2_tip_lantern: "灯笼：每季从周围拉最多 {m} 条鱼（其中 {o} 格是别人的）。",
+  h2_tip_again: "再点一次放下", h2_conflict_you: "地更少的人也插了同一格旗：归 Ta 了。", h2_robbed: "鸬鹚从你的网里偷了 {n} 条",
+  h2_hv_pond: "鱼塘生鱼", h2_hv_lantern: "灯笼引鱼", h2_hv_net: "渔网收鱼", h2_hv_corm: "鸬鹚偷鱼", h2_hv_grow: "湖里的鱼繁殖", h2_hv_swim: "鱼从网边游走", h2_hv_dry: "{n} 格水面干掉了", h2_dry: "干了",
+  h2_coach_pick: "从三张卡里选一张", h2_coach_place: "鼠标移到发光的格子上看效果，点一下放下", h2_coach_place_touch: "点发光的格子看效果，再点一次放下",
+  h2_hl_best_t: "最佳收成", h2_hl_best: "{name}：一季收了 {n} 条鱼", h2_hl_best_none: "没有渔网捞到鱼", h2_hl_corm_t: "鸬鹚", h2_hl_corm: "{name}被鸬鹚偷了 {n} 条", h2_hl_corm_none: "鸬鹚没有出手", h2_hl_dry_t: "干掉的水面", h2_hl_dry: "{n} 格水面干掉了",
+
   // ---- 谁在偷鱼 2.0 ----
   p2_role_h: "你的身份 · 只有你看得到", p2_role_f: "渔民", p2_role_p: "偷渔人",
   p2_role_f_s: "你们中间有一个偷渔人。做好村里的活，盯着湖面，在湖死掉之前把他找出来。",
@@ -510,12 +538,12 @@ const zh: Record<Key, string> = {
   poach_lake: "偷渔人的细网会捞走小鱼，湖的未来就越来越少。湖的健康一直显示在屏幕上。",
 
   hold_name: "抢地盘经营", hold_one: "在湖上建设，把鱼引到你这边，别把自己的水道捞干。", hold_choice: "现在下网捞，还是养着以后再捞？",
-  hold_goal: "分数 = 你占的水域 + 你收获的鱼。每 15 秒结算一次，一共 12 次。",
-  hold_s1_t: "出卡", hold_s1_p: "手里有 3 张卡。选一张，再点自己的水域建造。",
-  hold_s2_t: "捞和养", hold_s2_p: "渔网捞经过的鱼。鱼塘生新鱼，邻居也受益。",
-  hold_s3_t: "改变湖", hold_s3_p: "围栏改变水流方向，灯笼把鱼引过来，鸬鹚偷附近对手网里的鱼。",
-  hold_s4_t: "扩张", hold_s4_p: "「占地」能拿下你旁边的空水域。",
-  hold_s5_t: "看好水道", hold_s5_p: "一条水道网太多就会干掉（变灰），只有鱼塘能救回来。",
+  hold_goal: "轮流、大家同时出手：四季，每季三步，然后收成。分数 = 收的鱼 + 每格地 1 分，再乘上明年春天的年景。",
+  hold_s1_t: "选卡", hold_s1_p: "手里三张：一定有旗子，再抽两张。选一张，能用的格子会亮。移到（或点一下）格子上看效果，再点一下放下。每步 20 秒。",
+  hold_s2_t: "捞和养", hold_s2_p: "渔网每季最多收 7 条。你的其他格子每季给 2 条。鱼塘这格 +2，周围每格 +1，不管是谁的。",
+  hold_s3_t: "邻居", hold_s3_p: "灯笼从周围每格拉 1 条。鸬鹚从两格内对手的网里偷 2 条。篱笆把鱼留住，也护住你旁边的格子。",
+  hold_s4_t: "亮牌", hold_s4_p: "大家的选择一个个亮出来。两面旗插在同一格：地少的人拿到。",
+  hold_s5_t: "干掉的水面", hold_s5_p: "没鱼的水面会干掉（变灰），旁边有鱼塘才会活过来。明年春天只算还活着的水。",
   hold_phone1: "点一张卡，再点一块地", hold_phone2: "每块地都显示上一次的收成", hold_laptop1: "点一张卡，再点一块地", hold_laptop2: "每块地都显示上一次的收成",
   hold_lake: "每条水道都是大家共用的。鱼塘是投资未来，密集的渔网是在透支未来。",
 

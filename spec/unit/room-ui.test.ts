@@ -113,14 +113,15 @@ describe("nothing that only informs takes a tap", () => {
 });
 
 describe("worldModuleFor(): each /play mode loads exactly one world module, and the right one", () => {
-  it("rush and poach are on v5.0 (world5.js); party and hold are still on v4.0 (world.js)", () => {
+  it("rush, poach and hold are on v5.0 (world5.js); party is still on v4.0 (world.js)", () => {
     // rush moved here in the same commit that rewrote rush.js to world5.js's API
     // (setCameraMode, not world.js's setCamera): left out of 5fc2940, caught by the
     // world-calls-exist check below and by a real browser check (scripts/browser-check.ts).
-    // poach moved in the commit that rebuilt it as Who's Poaching 2.0 (rule change 1).
+    // poach and hold moved in the commits that rebuilt them as 2.0 (rule change 1).
     expect(worldModuleFor("rush")).toBe("world5.js");
     expect(worldModuleFor("poach")).toBe("world5.js");
-    for (const mode of ["party", "hold"]) expect(worldModuleFor(mode)).toBe("world.js");
+    expect(worldModuleFor("hold")).toBe("world5.js");
+    for (const mode of ["party"]) expect(worldModuleFor(mode)).toBe("world.js");
   });
 
   it("a mode listed in WORLD5_MODES loads world5.js", () => {

@@ -1,252 +1,148 @@
 import { describe, expect, it } from "vitest";
-import type { Seat } from "../../src/lib/game-platform.ts";
-import { HOLD } from "../../src/lib/game-constants.ts";
-import { hold, neighbours, type HoldInput, type HoldSim } from "../../src/lib/modes/hold.ts";
+import { botStream, replay, type Seat } from "../../src/lib/game-platform.ts";
+import { chooseFor, cormTarget, hold, holdForecast, type HoldInput, type HoldSim, lakeFish, legal, nbrs } from "../../src/lib/modes/hold.ts";
+import { HOLD as Q } from "../../src/lib/game-constants.ts";
+import { ISLAND, K, nr, tierOf } from "../../src/lib/lake-world.ts";
 
-// Lake Holdings, "holdings 1.0" (DESIGN.md "Lake Holdings"): a hex lake, a
-// seeded current, schools drifting along it, a tide every 15 s for 3
-// minutes, and six cards (Net, Pond, Fence, Cormorant, Lantern, Claim). The
-// server decides every tile, every catch and every score.
-
+// Lake Holdings 2.0 (DESIGN.md "Lake Holdings 抢地盘经营 (2.0)"), pure logic.
 const people = (n: number): Seat[] => Array.from({ length: n }, (_, i) => ({ seat: i, name: `P${i}`, bot: null, character: "mei" }));
-const make = (n = 2, seed = "hold-test", fish = 220): HoldSim => hold.make(seed, people(n), { fish });
+const botsOf = (n: number): Seat[] => Array.from({ length: n }, (_, i) => ({ seat: i, name: `B${i}`, bot: `bot${i}`, character: "mei" }));
+const LAKE = { fish: 280, adults: 224, young: 56 };
+const make = (seed = "hold-test", n = 2): HoldSim => hold.make(seed, people(n), LAKE);
 const step = (s: HoldSim, inputs: { seat: number; i: HoldInput }[] = []) => hold.step(s, inputs);
-const toTide = (s: HoldSim) => { const t = s.tides; const ev = []; while (s.tides === t && !hold.over(s)) ev.push(...step(s)); return ev; };
-const mine = (s: HoldSim, seat: number) => s.tiles.filter((t) => t.owner === seat);
-const give = (s: HoldSim, seat: number, cards: string[]) => { s.hands[seat] = cards as never; };
-const emptyNextTo = (s: HoldSim, seat: number) => s.tiles.find((t) => t.owner === -1 && neighbours(s, t.id).some((n) => s.tiles[n].owner === seat))!;
+const until = (s: HoldSim, pred: () => boolean, max = 20000) => { for (let k = 0; k < max && !pred(); k++) step(s); };
+const place = (s: HoldSim, seat: number, card: string, tile: number) => hold.input(s, seat, { k: "place", card, tile });
+const firstLegal = (s: HoldSim, seat: number, card: string) => legal(s, seat, card as never)[0];
 
-describe("the board and the clock", () => {
-  it("a hex lake; each player starts with 3 shore tiles and 3 cards", () => {
-    const s = make(4);
-    expect(s.tiles.length).toBeGreaterThan(60);
-    for (let p = 0; p < 4; p++) { expect(mine(s, p).length).toBe(3); expect(s.hands[p].length).toBe(3); }
+describe("the board", () => {
+  it("hexes of 8.4 over the lake: every centre within 0.8 of the way to the shore, none on the island; caps by water type", () => {
+    const s = make();
+    expect(s.tiles.length).toBeGreaterThan(40);
+    for (const tl of s.tiles) {
+      expect(nr(tl.x, tl.y)).toBeLessThanOrEqual(Q.IN_LAKE);
+      expect(Math.hypot(tl.x - ISLAND.x, tl.y - ISLAND.y)).toBeGreaterThanOrEqual(ISLAND.r + 2);
+      expect(tl.cap).toBeGreaterThanOrEqual(4);
+      expect(tl.fish).toBeLessThanOrEqual(tl.cap);
+    }
+    const deep = s.tiles.find((tl) => tl.zone === "deep")!, open = s.tiles.find((tl) => tl.zone === "open")!;
+    expect(deep.cap).toBeGreaterThanOrEqual(open.cap);
+    expect(Math.abs(lakeFish(s) - 280)).toBeLessThan(s.tiles.length); // the room's fish, spread by weight (rounding aside)
   });
-  it("a tide every 15 s, twelve in three minutes", () => {
-    const s = make();
-    let tides = 0;
-    while (!hold.over(s)) { for (const e of step(s)) if (e.k === "tide") tides++; }
-    expect(tides).toBe(HOLD.TIDES);
-    expect(s.t).toBeCloseTo(HOLD.TIDES * HOLD.TIDE_S, 1);
-  }, 20000);
-  it("the current comes from the seed, and schools drift along it", () => {
-    expect(make(2, "a").tiles.map((t) => t.dir).join()).not.toBe(make(2, "b").tiles.map((t) => t.dir).join());
-    const s = make();
-    const before = s.schools.map((sc) => sc.tile);
-    toTide(s);
-    const moved = s.schools.filter((sc, i) => before[i] !== undefined && sc.tile !== before[i]);
-    expect(moved.length).toBeGreaterThan(0);
+  it("each player starts with two tiles, next to each other, near their dock", () => {
+    const s = make("start", 4);
+    for (let seat = 0; seat < 4; seat++) {
+      const mine = s.tiles.filter((tl) => tl.owner === seat);
+      expect(mine.length).toBe(2);
+      expect(nbrs(s, mine[0]).includes(mine[1])).toBe(true);
+    }
   });
 });
 
-describe("cards", () => {
-  it("Claim takes empty water next to yours, and only next to yours", () => {
-    const s = make();
-    give(s, 0, ["claim", "claim", "net"]);
-    const t = emptyNextTo(s, 0);
-    const far = s.tiles.find((x) => x.owner === -1 && !neighbours(s, x.id).some((n) => s.tiles[n].owner === 0))!;
-    step(s, [{ seat: 0, i: { k: "play", card: "claim", tile: far.id } }]);
-    expect(far.owner).toBe(-1);
-    step(s, [{ seat: 0, i: { k: "play", card: "claim", tile: t.id } }]);
-    expect(t.owner).toBe(0);
-    expect(s.hands[0]).toEqual(["claim", "net"]);
+describe("a move", () => {
+  it("a hand is always the Flag plus two drawn cards; only the owner sees it", () => {
+    const s = make("hand", 3);
+    for (const p of s.players) { expect(p.hand[0]).toBe("claim"); expect(p.hand.length).toBe(3); }
+    const f0 = hold.frameFor(s, 0) as { me: { hand: string[] } };
+    expect(f0.me.hand).toEqual(s.players[0].hand);
+    expect(JSON.stringify(hold.frameFor(s, 1))).not.toContain(JSON.stringify(s.players[0].hand));
   });
-  it("taking an enemy tile costs two cards", () => {
-    const s = make();
-    const enemy = mine(s, 1)[0];
-    // make one of seat 0's tiles border it
-    const n = neighbours(s, enemy.id).find((x) => s.tiles[x].owner === -1)!;
-    s.tiles[n].owner = 0;
-    give(s, 0, ["claim"]);
-    step(s, [{ seat: 0, i: { k: "play", card: "claim", tile: enemy.id } }]);
-    expect(enemy.owner).toBe(1); // one card is not enough
-    give(s, 0, ["claim", "pond"]);
-    step(s, [{ seat: 0, i: { k: "play", card: "claim", tile: enemy.id } }]);
-    expect(enemy.owner).toBe(0);
-    expect(s.hands[0]).toEqual([]);
+  it("a Flag goes only on an empty tile next to yours; a building only on your own empty tile", () => {
+    const s = make("legal", 2);
+    const own = s.tiles.find((tl) => tl.owner === 0)!, other = s.tiles.find((tl) => tl.owner === 1)!;
+    const empty = s.tiles.find((tl) => tl.owner < 0 && !nbrs(s, tl).some((x) => x.owner === 0))!;
+    expect(place(s, 0, "claim", empty.ix)).toBeNull();
+    expect(place(s, 0, "claim", firstLegal(s, 0, "claim").ix)).not.toBeNull();
+    s.players[0].hand = ["claim", "net", "pond"];
+    expect(place(s, 0, "net", other.ix)).toBeNull();
+    expect(place(s, 0, "net", own.ix)).not.toBeNull();
+    expect(place(s, 0, "fence", own.ix)).toBeNull(); // not in the hand
   });
-  it("buildings go only on your own water, and only from your hand", () => {
-    const s = make();
-    give(s, 0, ["net"]);
-    step(s, [{ seat: 0, i: { k: "play", card: "net", tile: mine(s, 1)[0].id } }]);
-    expect(s.tiles.some((t) => t.building)).toBe(false);
-    step(s, [{ seat: 0, i: { k: "play", card: "pond", tile: mine(s, 0)[0].id } }]);
-    expect(mine(s, 0)[0].building).toBeNull();
-    step(s, [{ seat: 0, i: { k: "play", card: "net", tile: mine(s, 0)[0].id } }]);
-    expect(mine(s, 0)[0].building).toBe("net");
+  it("picks are secret until everyone has chosen, then revealed together; two flags on one tile go to the player with fewer tiles", () => {
+    const s = make("reveal", 2);
+    // give seat 1 an extra tile, then both claim the same tile next to both
+    const shared = s.tiles.find((tl) => tl.owner < 0 && legal(s, 0, "claim").includes(tl))!;
+    const extra = s.tiles.find((tl) => tl.owner < 0 && tl !== shared)!; extra.owner = 1;
+    const nb = nbrs(s, shared).find((x) => x.owner < 0)!; nb.owner = 1;
+    step(s, [{ seat: 0, i: place(s, 0, "claim", shared.ix)! }]);
+    expect(JSON.stringify(hold.frameFor(s, 1))).not.toContain(`"tile":${shared.ix}`);
+    expect((hold.frameFor(s, 1) as { p: { picked: boolean }[] }).p[0].picked).toBe(true);
+    step(s, [{ seat: 1, i: place(s, 1, "claim", shared.ix)! }]);
+    expect(s.phase).toBe("reveal");
+    expect(shared.owner).toBe(0);
+    expect(s.reveal.find((r) => r.seat === 1)!.lost).toBe(true);
   });
-  it("hands draw back to 3 after each tide", () => {
-    const s = make();
-    give(s, 0, ["net"]);
-    step(s, [{ seat: 0, i: { k: "play", card: "net", tile: mine(s, 0)[0].id } }]);
-    expect(s.hands[0].length).toBe(0);
-    toTide(s);
-    expect(s.hands[0].length).toBe(3);
-  });
-  it("the server rejects a card that is not one of the six, and a tile that does not exist", () => {
-    const s = make();
-    expect(hold.input(s, 0, { k: "play", card: "dragon", tile: 0 })).toBeNull();
-    expect(hold.input(s, 0, { k: "play", card: "net", tile: 99999 })).toBeNull();
-    expect(hold.input(s, 0, { k: "play", card: "fence", tile: 0, dir: 2 })).toEqual({ k: "play", card: "fence", tile: 0, dir: 2 });
+  it("after 20 s without a choice, the bot's choice is played for you", () => {
+    const s = make("timeout", 2);
+    until(s, () => s.phase !== "pick");
+    expect(s.t).toBeCloseTo(Q.PICK_S, 1);
+    expect(s.players.every((p) => p.pick !== undefined)).toBe(true);
   });
 });
 
-describe("the tide pays out", () => {
-  const withSchoolOn = (s: HoldSim, tile: number, n: number) => { s.schools = [{ id: 999, tile, fish: n }]; };
-  it("a net takes from the schools passing it, and the harvest scores", () => {
-    const s = make();
-    const t = mine(s, 0)[0];
-    t.building = "net"; t.by = 0;
-    withSchoolOn(s, t.id, 10);
-    s.tiles.forEach((x) => { x.dir = -1; }); // still water: the school stays put
-    const ev = toTide(s);
-    expect(s.harvest[0]).toBe(HOLD.NET_TAKE);
-    expect(s.schools[0].fish).toBe(10 - HOLD.NET_TAKE);
-    expect(ev.some((e) => e.k === "net" && e.seat === 0)).toBe(true);
+describe("the harvest", () => {
+  // play the season's three moves with everyone passing, so only the harvest changes the board
+  const toHarvest = (s: HoldSim) => { for (let a = 0; a < Q.ACTIONS; a++) { until(s, () => s.phase === "pick"); for (const p of s.players) p.pick = null; step(s); until(s, () => s.phase !== "reveal"); } };
+  it("nets take up to 7, every other tile you hold that is not dry gives 2, a pond adds 2 here and 1 around", () => {
+    const s = make("harvest", 2);
+    const [a, b] = s.tiles.filter((tl) => tl.owner === 0);
+    a.build = "net"; a.fish = 9; b.fish = 5;
+    const far = s.tiles.find((tl) => tl.owner < 0 && !nbrs(s, tl).includes(a) && !nbrs(s, tl).includes(b) && nbrs(s, tl).every((x) => x.owner < 0))!;
+    far.build = "pond"; const ring = nbrs(s, far).map((x) => [x, x.fish] as const), before = far.fish;
+    toHarvest(s);
+    until(s, () => s.harvestStep >= 3);
+    expect(s.players[0].fish).toBe(7 + 2);
+    expect(far.fish).toBeGreaterThanOrEqual(Math.min(far.cap, before + Q.POND_SELF) - 0); // before breeding moves it again
+    for (const [x, f] of ring) if (x.owner < 0 && x.build === null) expect(x.fish).toBeGreaterThanOrEqual(Math.min(x.cap, f + Q.POND_NEAR) - (x.fish === 0 ? 1 : 0));
   });
-  it("a pond breeds fish into the tiles next to it", () => {
-    const s = make();
-    const t = mine(s, 0)[0];
-    t.building = "pond"; t.by = 0;
-    s.schools = []; s.tiles.forEach((x) => { x.dir = -1; });
-    toTide(s);
-    const near = new Set(neighbours(s, t.id));
-    expect(s.schools.some((sc) => near.has(sc.tile) && sc.fish > 0)).toBe(true);
+  it("empty water runs dry and stays dry unless a pond is next to it", () => {
+    const s = make("dry", 2);
+    const tl = s.tiles.find((x) => x.owner < 0 && nbrs(s, x).every((n) => n.build === null))!;
+    tl.fish = 0;
+    toHarvest(s); until(s, () => s.phase !== "harvest");
+    expect(tl.dry).toBe(true);
+    const f = holdForecast(s);
+    const n = nbrs(s, tl)[0]; n.build = "pond";
+    expect(holdForecast(s)).toBeGreaterThanOrEqual(f); // a pond beside it brings it back in the forecast
   });
-  it("a fence turns the current on its tile", () => {
-    const s = make();
-    const t = mine(s, 0)[0];
-    give(s, 0, ["fence"]);
-    step(s, [{ seat: 0, i: { k: "play", card: "fence", tile: t.id, dir: 3 } }]);
-    expect(t.dir).toBe(3);
+  it("a cormorant steals 2 from the richest unprotected neighbour net within 2 tiles; a fence protects it", () => {
+    const s = make("corm", 2);
+    const net = s.tiles.find((tl) => tl.owner === 1)!; net.build = "net"; net.fish = 8;
+    const perch = s.tiles.find((tl) => tl.owner < 0 && Math.abs(tl.q - net.q) + Math.abs(tl.r - net.r) + Math.abs(tl.q + tl.r - net.q - net.r) <= 4)!;
+    perch.owner = 0; perch.build = "corm";
+    expect(cormTarget(s, perch, 0)).toBe(net);
+    const fence = nbrs(s, net).find((x) => x !== perch)!; fence.owner = 1; fence.build = "fence";
+    expect(cormTarget(s, perch, 0)).toBeNull();
   });
-  it("a cormorant steals 2 from an enemy net within 2 tiles, once per tide", () => {
-    const s = make();
-    const a = mine(s, 0)[0];
-    const near = neighbours(s, a.id).find((x) => s.tiles[x].owner === -1)!;
-    s.tiles[near].owner = 1; s.tiles[near].building = "net"; s.tiles[near].by = 1;
-    a.building = "cormorant"; a.by = 0;
-    withSchoolOn(s, near, 10); s.tiles.forEach((x) => { x.dir = -1; });
-    s.harvest = [0, 0];
-    toTide(s);
-    expect(s.harvest[0]).toBe(HOLD.CORMORANT);
-    expect(s.harvest[1]).toBe(HOLD.NET_TAKE - HOLD.CORMORANT);
-  });
-  it("a lantern pulls schools within 3 tiles for two tides", () => {
-    const s = make();
-    const t = mine(s, 0)[0];
-    give(s, 0, ["lantern"]);
-    step(s, [{ seat: 0, i: { k: "play", card: "lantern", tile: t.id } }]);
-    const start = neighbours(s, neighbours(s, t.id)[0]).find((x) => x !== t.id)!;
-    withSchoolOn(s, start, 6);
-    const d0 = s.dist(start, t.id);
-    toTide(s);
-    expect(s.dist(s.schools[0].tile, t.id)).toBeLessThan(d0);
-    toTide(s); toTide(s);
-    expect(t.building).toBeNull(); // gone after two tides
-  });
-  it("over-netted lanes thin, and the board shows it", () => {
-    const s = make(2, "thin");
-    const lane = s.tiles.filter((t) => t.owner === -1).slice(0, 4);
-    for (const t of lane) { t.owner = 0; t.building = "net"; t.by = 0; }
-    s.tiles.forEach((x) => { x.dir = -1; }); // still water: the school sits in the lane
-    s.schools = [{ id: 999, tile: lane[0].id, fish: 60 }];
-    for (let i = 0; i < 3; i++) toTide(s);
-    expect(Math.max(...s.tiles.map((t) => t.netted))).toBeGreaterThan(0);
-    const f = hold.frameFor(s, 1) as { tiles: number[][] };
-    expect(f.tiles.some((row) => row[6] > 0)).toBe(true); // the thinned mark is sent
-  });
-  it("each tile shows what it would have paid last tide", () => {
-    const s = make();
-    toTide(s);
-    const f = hold.frameFor(s, 0) as { tiles: number[][] };
-    expect(f.tiles[0].length).toBeGreaterThanOrEqual(8);
-    expect(f.tiles.some((row) => row[7] > 0)).toBe(true);
-  });
-});
-
-describe("score and the lake", () => {
-  it("score is tiles held plus fish harvested; a tie goes to more harvest", () => {
-    const s = make();
-    s.harvest = [5, 5];
-    for (const t of mine(s, 1)) t.owner = -1;
-    const near = s.tiles.filter((t) => t.owner === -1).slice(0, 4);
-    for (const t of near) t.owner = 1;
-    // seat 0: 3 tiles + 5; seat 1: 4 tiles + 4 harvest -> tie at 8; harvest breaks it
-    s.harvest = [5, 4];
-    s.t = HOLD.TIDES * HOLD.TIDE_S;
+  it("four seasons of three moves, then the end; next spring is the forecast, at most K, and sets the tier", () => {
+    const s = make("year", 2);
+    until(s, () => hold.over(s), 60000);
+    expect(s.season).toBe(Q.SEASONS);
     const r = hold.results(s);
-    expect(r.seats[0].score).toBe(8);
-    expect(r.seats[1].score).toBe(8);
-    expect(r.seats[0].place).toBe(1);
-    expect(r.seats[1].place).toBe(2);
-    expect(r.highlights.length).toBe(3);
+    expect(r.lakeLeft).toBe(holdForecast(s));
+    expect(r.lakeLeft).toBeLessThanOrEqual(K);
+    expect(hold.breeds).toBe(true);
+    const p0 = s.players[0], tiles = s.tiles.filter((tl) => tl.owner === 0).length;
+    expect(r.seats.find((x) => x.seat === 0)!.score).toBe(Math.round((p0.fish + tiles * Q.TILE_PTS) * tierOf(r.lakeLeft).mult));
   });
-  it("a match starts with the room's lake, and the results say what is left", () => {
-    const s = make(2, "lake", 100);
-    expect(s.schools.reduce((n, sc) => n + sc.fish, 0)).toBe(100);
-    while (!hold.over(s)) step(s);
-    expect(hold.results(s).lakeLeft).toBe(s.schools.reduce((n, sc) => n + sc.fish, 0));
-  }, 20000);
-  it("bots play their cards", () => {
-    const seats: Seat[] = [{ seat: 0, name: "P0", bot: null, character: "mei" }, { seat: 1, name: "B (bot)", bot: "bot0", character: "jin" }, { seat: 2, name: "C (bot)", bot: "bot1", character: "lu" }];
-    const s = hold.make("bots", seats, { fish: 220 });
-    let r = 3; const rng = () => { r = (r * 16807) % 2147483647; return r / 2147483647; };
-    while (!hold.over(s)) { const ins: { seat: number; i: HoldInput }[] = []; for (const st of seats) if (st.bot) for (const i of hold.bot(s, st.seat, rng)) ins.push({ seat: st.seat, i }); step(s, ins); }
-    expect(s.tiles.filter((t) => t.owner === 1 || t.owner === 2).length).toBeGreaterThan(6);
-    expect(s.harvest[1] + s.harvest[2]).toBeGreaterThan(0);
-  }, 20000);
 });
 
-describe("v3.1: nets take 2 from every school, dry lanes, and previews", () => {
-  it("a net takes 2 from each school that passes, and each school stays smaller", () => {
-    const s = make(2, "v31-net");
-    const t = mine(s, 0)[0];
-    t.building = "net"; t.by = 0;
-    s.tiles.forEach((x) => { x.dir = -1; });
-    const near = neighbours(s, t.id);
-    s.schools = [{ id: 901, tile: t.id, fish: 10 }, { id: 902, tile: near[0], fish: 10 }, { id: 903, tile: near[1], fish: 10 }];
-    toTide(s);
-    expect(HOLD.NET_TAKE).toBe(2);
-    expect(s.harvest[0]).toBe(6);
-    expect(s.schools.map((x) => x.fish)).toEqual([8, 8, 8]);
+describe("bots and replay", () => {
+  it("a bot only ever plays a legal card on a legal tile", () => {
+    const s = make("botlegal", 4);
+    for (let seat = 0; seat < 4; seat++) { const c = chooseFor(s, seat, () => 0.5); if (c) expect(legal(s, seat, c.card).includes(c.tile)).toBe(true); }
   });
-
-  it("all nets on one lane dry it within 12 tides; a dry tile is marked on the board", () => {
-    const s = make(2, "v31-dry");
-    s.tiles.forEach((x) => { x.dir = -1; });
-    const lane = [mine(s, 0)[0].id, ...neighbours(s, mine(s, 0)[0].id)].slice(0, 4);
-    for (const id of lane) { const t = s.tiles[id]; t.owner = 0; t.building = "net"; t.by = 0; }
-    s.schools = [{ id: 950, tile: lane[0], fish: 30 }];
-    for (let i = 0; i < 12 && !hold.over(s); i++) toTide(s);
-    expect(s.tiles[lane[0]].dry).toBe(true);
-    expect(s.schools.filter((x) => x.tile === lane[0]).length).toBe(0);
-    const f = hold.frameFor(s, 1) as { tiles: number[][] };
-    expect(f.tiles[lane[0]][9]).toBe(1);
-  });
-
-  it("only a pond brings a dry tile back", () => {
-    const s = make(2, "v31-pond");
-    s.tiles.forEach((x) => { x.dir = -1; });
-    const t = mine(s, 0)[0], nb = neighbours(s, t.id)[0];
-    s.tiles[nb].dry = true; s.schools = [];
-    toTide(s);
-    expect(s.tiles[nb].dry).toBe(true); // nothing else revives it
-    t.building = "pond"; t.by = 0;
-    toTide(s);
-    expect(s.tiles[nb].dry).toBe(false);
-  });
-
-  it("every built tile shows what it paid last tide, and every tile what a net would have paid", () => {
-    const s = make(2, "v31-paid");
-    const t = mine(s, 0)[0];
-    t.building = "net"; t.by = 0;
-    s.tiles.forEach((x) => { x.dir = -1; });
-    s.schools = [{ id: 960, tile: t.id, fish: 10 }];
-    toTide(s);
-    const f = hold.frameFor(s, 0) as { tiles: number[][] };
-    expect(f.tiles[t.id][7]).toBe(2); // paid
-    const other = neighbours(s, t.id)[0];
-    expect(f.tiles[other][7]).toBe(2); // a net here would also have reached that school
-  });
+  it("bots play whole matches, and a replay of the stored inputs is exact", () => {
+    for (const seed of ["hb-a", "hb-b"]) {
+      const seats = botsOf(4), s = hold.make(seed, seats, LAKE);
+      const inputs = new Map<number, { seat: number; i: unknown }[]>();
+      for (let tick = 0; !hold.over(s) && tick < 40000; tick++) {
+        const applied: { seat: number; i: HoldInput }[] = [];
+        for (const st of seats) for (const raw of hold.bot(s, st.seat, botStream(seed, st.bot!, tick, st.seat))) { const ok = hold.input(s, st.seat, raw); if (ok) applied.push({ seat: st.seat, i: ok }); }
+        if (applied.length) inputs.set(tick, applied);
+        hold.step(s, applied);
+      }
+      expect(hold.over(s)).toBe(true);
+      expect(hold.results(replay(hold, seed, seats, LAKE, inputs))).toEqual(hold.results(s));
+    }
+  }, 120000);
 });

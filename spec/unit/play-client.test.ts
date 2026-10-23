@@ -65,20 +65,21 @@ describe("Lake Holdings", () => {
   beforeEach(() => { dom(); });
 
   it("tapping the board before a card is picked shows the banner, in either language, and does not throw", async () => {
+    // Lake Holdings 2.0 (rule change 1): hold.js draws through world5.js, with 2.0's frame
     const hold = await importJs("../../src/static/play/hold.js");
     for (const lang of ["en", "zh"] as const) {
       dom();
       const { api, banners } = ui(lang);
       const sent: unknown[] = [];
-      const world = fakeWorld();
-      const mode = hold.mount({ world, sound: api.sound, ui: api, send: (x: unknown) => sent.push(x), view: () => ({ mySeat: 0, seats: [{ name: "Ava", character: "mei" }, { name: "Bo", character: "jin" }] }) });
+      let tap: (x: number, y: number) => void = () => {};
+      const world = Object.assign(fakeWorld5(), { setTap: (f: typeof tap) => { tap = f; }, canvas: document.createElement("canvas") });
+      const mode = hold.mount({ world, sound: api.sound, ui: api, send: (x: unknown) => sent.push(x), post: () => {}, view: () => ({ mySeat: 0, seats: [{ name: "Ava", character: "mei" }, { name: "Bo", character: "jin" }] }) });
       // one tile at the tap point, owned by seat 0; the player holds a hand but has not picked a card
-      const tile = [0, 500, 350, 0, -1, -1, 0, 0, 0, 0];
-      mode.start({ tiles: [tile], schools: [], hand: ["net", "pond", "claim"], harvest: [0, 0], held: [1, 0], tide: 0, tides: 12, next: 15, left: 180, hands: [3, 3], fish: 0 }, { seats: [] });
-      const canvas = document.getElementById("gl")!;
-      expect(() => canvas.dispatchEvent(new window.Event("pointerdown", { bubbles: true }) as never)).not.toThrow();
-      expect(banners).toEqual([[DICT[lang].h_pick_first, DICT[lang].h_pick_first_s]]);
-      expect(sent).toEqual([]); // nothing was sent: no card, no play
+      const tile = [0, 0, 0, 0, 40, "open", 10, 6, 0, "", 0, 0];
+      mode.start({ phase: "pick", season: 1, seasons: 4, action: 1, actions: 3, left: 20, t: [tile], p: [{ seat: 0, fish: 0, tiles: 1, picked: false }], lake: 6, next: 7, tier: "none", start: 6, reveal: null, harvestStep: null, me: { hand: ["claim", "net", "pond"], pick: null } }, { seats: [] });
+      expect(() => tap(0, 4)).not.toThrow();
+      expect(banners).toEqual([[DICT[lang].h2_pick_first, DICT[lang].h2_pick_first_s]]);
+      expect(sent).toEqual([]); // nothing was sent: no card, no place
     }
   });
 });
