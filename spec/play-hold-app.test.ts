@@ -36,13 +36,17 @@ it("hold 1. two people and two bots play Lake Holdings 2.0 from the room to the 
 
   expect((await post(baseUrl, code, "in", a, { k: "place", card: "dragon", tile: 0 })).status).toBe(409);
   // every move, both people place a legal card as soon as the pick opens
+  // each move's frames are told apart by season and action: a stream still holds frames of the move before
+  // (sent between one person's pick and the other's), and a move worked out from one of those is illegal now.
+  // That made this test fail on a slower machine (Ava's WSL, 24 Oct: "move 1 B: expected 409 to be 200").
+  const thisMove = (move: number) => (f: Frame) => f.phase === "pick" && f.season === Math.floor(move / 3) + 1 && f.action === (move % 3) + 1;
   for (let move = 0; move < 12; move++) {
-    const fa = JSON.parse((await sa.next((e) => e.event === "frame" && JSON.parse(e.data).f.phase === "pick" && !JSON.parse(e.data).f.p[0].picked, 60_000)).data).f as Frame;
-    const fb = JSON.parse((await sb.next((e) => e.event === "frame" && JSON.parse(e.data).f.phase === "pick" && !JSON.parse(e.data).f.p[1].picked, 60_000)).data).f as Frame;
+    const fa = JSON.parse((await sa.next((e) => e.event === "frame" && thisMove(move)(JSON.parse(e.data).f) && !JSON.parse(e.data).f.p[0].picked, 60_000)).data).f as Frame;
+    const fb = JSON.parse((await sb.next((e) => e.event === "frame" && thisMove(move)(JSON.parse(e.data).f) && !JSON.parse(e.data).f.p[1].picked, 60_000)).data).f as Frame;
     const ma = moveFor(fa, 0), mb = moveFor(fb, 1);
     expect((await post(baseUrl, code, "in", a, ma)).status, `move ${move} A`).toBe(200);
     // B's frame may not show what A picked, only that A has picked
-    const fb2 = JSON.parse((await sb.next((e) => e.event === "frame" && JSON.parse(e.data).f.p[0].picked, 10_000)).data).f;
+    const fb2 = JSON.parse((await sb.next((e) => e.event === "frame" && thisMove(move)(JSON.parse(e.data).f) && JSON.parse(e.data).f.p[0].picked, 10_000)).data).f;
     expect(fb2.reveal).toBeNull();
     expect((await post(baseUrl, code, "in", b, mb)).status, `move ${move} B`).toBe(200);
     await sa.next((e) => e.event === "frame" && JSON.parse(e.data).f.phase !== "pick", 30_000);

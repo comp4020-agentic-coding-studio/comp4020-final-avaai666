@@ -65,11 +65,11 @@ describe("the flow of a round", () => {
 });
 
 describe("the rounds", () => {
-  it("Shoal Scramble: the first tap within TAP_R of an open splash takes it (8 at the prototype's scale; rule change 8 x 0.7): 2 coins and 2 fish out of the lake", () => {
+  it("Shoal Scramble: the first tap within 8 of an open splash takes it: 2 coins and 2 fish out of the lake", () => {
     const s = make("scramble"); toPlay(s);
     until(s, () => s.spots.some((p) => p.open && p.taken < 0));
     const p = s.spots.find((x) => x.open && x.taken < 0)!, before = s.fish.length;
-    step(s, [{ seat: 1, i: inp(s, 1, { k: "tap", x: p.x + Q.TAP_R - 0.5, y: p.y })! }, { seat: 0, i: inp(s, 0, { k: "tap", x: p.x, y: p.y })! }]);
+    step(s, [{ seat: 1, i: inp(s, 1, { k: "tap", x: p.x + 7.5, y: p.y })! }, { seat: 0, i: inp(s, 0, { k: "tap", x: p.x, y: p.y })! }]);
     expect(p.taken).toBe(1);
     expect(s.coins).toEqual([0, Q.SCRAMBLE_COINS]);
     expect(before - s.fish.length).toBe(Q.SCRAMBLE_FISH);
@@ -90,7 +90,7 @@ describe("the rounds", () => {
     s.boats[1].reel = 95; s.tug.needle = s.tug.zone; step(s, [{ seat: 1, i: { k: "reel" } }]);
     expect(s.coins[1]).toBe(6); expect(s.fish.length).toBe(before);
   });
-  it("Lantern Night: a seat's frame holds only the fish within NIGHT_VIEW of its boat or LANTERN_LIGHT of a dropped lantern (16 and 14 at the prototype's scale; rule change 8 x 0.7)", () => {
+  it("Lantern Night: a seat's frame holds only the fish within 16 of its boat or 14 of a dropped lantern", () => {
     const s = make("night"); toRound(s, 4); expect(s.game).toBe("night"); toPlay(s);
     const f0 = party.frameFor(s, 0) as { f: number[][] };
     expect(f0.f.length).toBeLessThan(s.fish.length);

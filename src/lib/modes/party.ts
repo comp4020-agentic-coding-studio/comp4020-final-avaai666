@@ -16,7 +16,7 @@
 // until everyone has picked.
 import { PARTY as Q, PARTY_MODEL } from "../game-constants.ts";
 import { type GameEvent, type Highlight, type Mode, type Results, type Seat, streamOf } from "../game-platform.ts";
-import { dockPos, ISLAND, LAKE_X, LAKE_Y, nextSpring, nr, shape, tierOf, ZONES } from "../lake-world.ts";
+import { dockPos, ISLAND, nextSpring, nr, shape, tierOf, ZONES } from "../lake-world.ts";
 import { counts, type Fish, moveFish, type School, seedFish, updateSchools } from "./lake-life.ts";
 
 export type Game = "scramble" | "koi" | "tug" | "night" | "last";
@@ -110,8 +110,8 @@ function input(s: PartySim, seat: number, raw: unknown): PartyInput | null {
   const num = (v: unknown, lo: number, hi: number) => { const x = Number(v); return Number.isFinite(x) ? Math.round(Math.max(lo, Math.min(hi, x)) * 10) / 10 : null; };
   switch (o.k) {
     case "ready": return s.phase === "intro" && !s.ready[seat] ? { k: "ready" } : null;
-    case "tap": { const x = num(o.x, -LAKE_X, LAKE_X), y = num(o.y, -LAKE_Y, LAKE_Y); return live && s.game === "scramble" && x !== null && y !== null ? { k: "tap", x, y } : null; }
-    case "steer": { const x = num(o.x, -LAKE_X, LAKE_X), y = num(o.y, -LAKE_Y, LAKE_Y); return live && (s.game === "koi" || s.game === "night") && x !== null && y !== null ? { k: "steer", x, y } : null; }
+    case "tap": { const x = num(o.x, -92, 92), y = num(o.y, -64, 64); return live && s.game === "scramble" && x !== null && y !== null ? { k: "tap", x, y } : null; }
+    case "steer": { const x = num(o.x, -92, 92), y = num(o.y, -64, 64); return live && (s.game === "koi" || s.game === "night") && x !== null && y !== null ? { k: "steer", x, y } : null; }
     case "reel": return live && s.game === "tug" ? { k: "reel" } : null;
     case "net": case "lantern": return live && s.game === "night" ? { k: o.k } : null;
     case "buy": return s.phase === "shop" && ITEMS.includes(o.item as Item) && !s.buys[seat].includes(o.item as Item) && s.coins[seat] >= Q.COST ? { k: "buy", item: o.item as Item } : null;
@@ -192,14 +192,14 @@ function moveBoats(s: PartySim): void {
 function roundTick(s: PartySim, ev: GameEvent[]): void {
   moveBoats(s);
   // bait: for its first 8 s, the schools near a bait boat swim to it
-  if (scoring(s) && s.phaseT < Q.BAIT_S) for (const b of s.boats) if (has(s, b.seat, "bait")) for (const sc of s.schools) if (Math.hypot(sc.x - b.x, sc.y - b.y) < Q.BAIT_R) { sc.tx = b.x; sc.ty = b.y; sc.t = 1; }
+  if (scoring(s) && s.phaseT < Q.BAIT_S) for (const b of s.boats) if (has(s, b.seat, "bait")) for (const sc of s.schools) if (Math.hypot(sc.x - b.x, sc.y - b.y) < 30) { sc.tx = b.x; sc.ty = b.y; sc.t = 1; }
   if (s.game === "night" || s.game === "koi") { updateSchools(s); moveFish(s); }
   if (s.game === "scramble") {
     s.spotT -= Q.DT;
     if (s.spotT <= 0) {
       s.spotT = 0.9 + s.rng() * 0.6;
       const x = -60 + s.rng() * 100, y = -32 + s.rng() * 62;
-      if (nr(x, y) < 0.85 && Math.hypot(x - ISLAND.x, y - ISLAND.y) > ISLAND.r + 4.5) { s.spots.push({ id: s.nextId++, x, y, t: 0, open: false, until: 0, taken: -1 }); }
+      if (nr(x, y) < 0.85 && Math.hypot(x - ISLAND.x, y - ISLAND.y) > 12) { s.spots.push({ id: s.nextId++, x, y, t: 0, open: false, until: 0, taken: -1 }); }
     }
     for (const p of s.spots) { p.t += Q.DT; if (!p.open && p.t >= Q.WARN_S) { p.open = true; p.until = p.t + Q.JUMP_S; ev.push({ k: "jump", id: p.id, x: r1(p.x), y: r1(p.y) }); } }
     s.spots = s.spots.filter((p) => (!p.open || p.t < p.until) && !(p.taken >= 0 && p.t > p.until));

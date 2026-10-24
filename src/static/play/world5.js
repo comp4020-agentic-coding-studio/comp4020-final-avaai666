@@ -102,24 +102,27 @@ export function createWorld5(canvas, stage, world, opts = {}) {
     time: { value: 0 }, night: { value: 0 }, isl: { value: new THREE.Vector3(island.x, island.z, island.r) },
     deep: { value: new THREE.Color() }, shallow: { value: new THREE.Color() }, sky: { value: new THREE.Color() },
     glowCol: { value: new THREE.Color("#ffb45a") }, lan: { value: Array.from({ length: LAN_MAX }, () => new THREE.Vector3()) }, lanN: { value: 0 },
+    shore: { value: null },
   };
+  // the shore's distance at each of the outline's angles, as a 1-D texture, so the shader can tell how near the
+  // shore a pixel is (as nr() does). Done per vertex it was smeared along the long thin triangles of the lake's
+  // shape and drew bright diagonal streaks across the water.
+  { const n = outlineW.length, d = new Float32Array(n); for (let i = 0; i < n; i++) d[i] = Math.hypot(outlineW[i][0], outlineW[i][1]);
+    const tex = new THREE.DataTexture(d, n, 1, THREE.RedFormat, THREE.FloatType); tex.wrapS = THREE.RepeatWrapping; tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.needsUpdate = true; waterU.shore.value = tex; }
   const waterGeo = new THREE.ShapeGeometry(lakeShape, 64).rotateX(-Math.PI / 2);
-  { const p = waterGeo.attributes.position, e = new Float32Array(p.count); for (let i = 0; i < p.count; i++) { const x = p.getX(i), z = p.getZ(i); e[i] = Math.max(nr(x, z), 1 - (Math.hypot(x - island.x, z - island.z) - island.r) / 4); } waterGeo.setAttribute("edge", new THREE.BufferAttribute(e, 1)); }
   const water = new THREE.Mesh(waterGeo, new THREE.ShaderMaterial({
     transparent: true, uniforms: waterU,
-    vertexShader: `uniform float time; attribute float edge; varying vec3 wp; varying float ve; void main(){ vec4 w = modelMatrix * vec4(position, 1.0);
-      w.y += (sin(w.x * 0.3 + time * 1.1) + sin(w.z * 0.37 - time * 0.8)) * 0.06; wp = w.xyz; ve = edge; gl_Position = projectionMatrix * viewMatrix * w; }`,
-    fragmentShader: `uniform float time, night; uniform vec3 deep, shallow, sky, glowCol, isl; uniform vec3 lan[${LAN_MAX}]; uniform int lanN; varying vec3 wp; varying float ve;
+    vertexShader: `uniform float time; varying vec3 wp; void main(){ vec4 w = modelMatrix * vec4(position, 1.0);
+      w.y += (sin(w.x * 0.3 + time * 1.1) + sin(w.z * 0.37 - time * 0.8)) * 0.06; wp = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+    fragmentShader: `uniform float time, night; uniform vec3 deep, shallow, sky, glowCol, isl; uniform vec3 lan[${LAN_MAX}]; uniform int lanN; uniform sampler2D shore; varying vec3 wp;
       void main(){
-        vec3 c = mix(deep, shallow, smoothstep(0.55, 1.0, ve));
+        float ang = atan(wp.z, wp.x); float u = fract(ang / 6.2831853 + 1.0);
+        float sr = texture2D(shore, vec2(u, 0.5)).r;
+        float ve = max(length(wp.xz) / max(sr, 1.0), 1.0 - (length(wp.xz - isl.xy) - isl.z) / 4.0);
+        vec3 c = mix(deep, shallow, 0.5 + 0.5 * smoothstep(0.2, 1.0, ve));
         float di = length(wp.xz - isl.xy); c *= mix(0.72, 1.0, smoothstep(isl.z + 4.0, isl.z + 18.0, di));
-        float w = sin(wp.x * 0.55 + time * 0.7 + sin(wp.z * 0.42 + time * 0.4) * 2.0) + sin(wp.z * 0.68 - time * 0.55 + wp.x * 0.2);
-        c = mix(c, sky, 0.08 * (1.0 - night));
-        c *= 1.0 + smoothstep(0.6, 1.9, w) * 0.06;
-        float line = smoothstep(1.6, 1.68, w) - smoothstep(1.7, 1.8, w);
-        c += vec3(0.7, 0.9, 0.95) * line * 0.1 * (1.0 - night * 0.5);
-        float sp = smoothstep(0.93, 1.0, sin(wp.x * 1.2 + time * 1.6) * sin(wp.z * 1.05 - time * 1.25));
-        c += sp * 0.12 * (1.0 - night * 0.7);
+        // calm water (Ava, 24 Oct: the moving light bands, ripple lines and sparkles were dazzling): only a faint sky tint
+        c = mix(c, sky, 0.06 * (1.0 - night));
         float foam = smoothstep(0.9, 0.995, ve) * (0.65 + 0.35 * sin(time * 1.8 + wp.x * 0.5 + wp.z * 0.4));
         c = mix(c, vec3(0.96, 0.93, 0.86), foam * 0.7);
         vec3 g = vec3(0.0); for (int i = 0; i < ${LAN_MAX}; i++) { if (i >= lanN) break; float d = length(wp.xz - lan[i].xz); g += glowCol * exp(-d * d / 30.0) * lan[i].y; }
@@ -433,11 +436,11 @@ export function createWorld5(canvas, stage, world, opts = {}) {
   const camPos = new THREE.Vector3();
   // the camera's tilt: lower while following a boat, so the lake reads as a place in 3D, not a map; a
   // little higher for the whole-lake view, which has to show every shore
-  const PITCH = 0.9, PITCH_FOLLOW = 0.72;
+  const PITCH = 0.9, PITCH_FOLLOW = 0.8;
   // on a tall phone the whole-lake view looks more steeply down, so the lake fills the screen's height
   const ovPitch = () => (stage.clientHeight > stage.clientWidth * 1.25 ? 1.22 : PITCH);
   // how much water the follow camera shows across the screen (rule change 8 made the lake 0.7 the size)
-  function viewSpan() { const w = stage.clientWidth, h = stage.clientHeight; return w < 700 ? (h > w ? 40 : 64) : 84; }
+  function viewSpan() { const w = stage.clientWidth, h = stage.clientHeight; return w < 700 ? (h > w ? 64 : 90) : 118; }
   function distForSpan(span) { const aspect = stage.clientWidth / stage.clientHeight, hf = 2 * Math.atan(Math.tan((camera.fov * Math.PI) / 360) * aspect); return span / 2 / Math.tan(hf / 2); }
   let overviewDist = 160;
   function fitOverview() {

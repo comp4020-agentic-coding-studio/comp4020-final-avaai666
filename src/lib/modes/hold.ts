@@ -16,7 +16,7 @@
 // it for that tick. Secret: a seat's hand and its pick, until the reveal.
 import { HOLD as Q, HOLD_MODEL } from "../game-constants.ts";
 import { type GameEvent, type Highlight, type Mode, type Results, type Seat, streamOf } from "../game-platform.ts";
-import { DEEP, dockPos, ISLAND, K, nr, tierOf, WORLD_SCALE, ZONES } from "../lake-world.ts";
+import { dockPos, ISLAND, K, nr, tierOf, ZONES } from "../lake-world.ts";
 
 export type Card = "claim" | "net" | "pond" | "fence" | "corm" | "lantern";
 export const CARDS: Card[] = ["claim", "net", "pond", "fence", "corm", "lantern"];
@@ -35,7 +35,7 @@ export interface HoldSim {
 
 const SQ3 = Math.sqrt(3);
 const DIRS: [number, number][] = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
-export const hexAt = (q: number, r: number): [number, number] => [Q.HS * SQ3 * (q + r / 2), Q.HS * 1.5 * r + 4 * WORLD_SCALE];
+export const hexAt = (q: number, r: number): [number, number] => [Q.HS * SQ3 * (q + r / 2), Q.HS * 1.5 * r + 4];
 export function nbrs(s: HoldSim, tl: Tile): Tile[] { return DIRS.map(([dq, dr]) => s.byKey.get(`${tl.q + dq},${tl.r + dr}`)).filter((i): i is number => i !== undefined).map((i) => s.tiles[i]); }
 const hexDist = (a: Tile, b: Tile): number => (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(a.q + a.r - b.q - b.r)) / 2;
 const within2 = (s: HoldSim, tl: Tile): Tile[] => s.tiles.filter((o) => o !== tl && hexDist(o, tl) <= 2);
@@ -54,7 +54,7 @@ function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number
   for (let q = -5; q <= 5; q++) for (let r = -4; r <= 4; r++) {
     const [x, y] = hexAt(q, r);
     if (nr(x, y) > Q.IN_LAKE || Math.hypot(x - ISLAND.x, y - ISLAND.y) < ISLAND.r + 2) continue;
-    const zone: Zone = inZone(ZONES.reeds, x, y) ? "reeds" : inZone(ZONES.lotus, x, y) ? "lotus" : Math.hypot(x - ISLAND.x, y - ISLAND.y) < DEEP.r ? "deep" : "open";
+    const zone: Zone = inZone(ZONES.reeds, x, y) ? "reeds" : inZone(ZONES.lotus, x, y) ? "lotus" : Math.hypot(x - ISLAND.x, y - ISLAND.y) < 22 ? "deep" : "open";
     s.byKey.set(`${q},${r}`, s.tiles.length);
     s.tiles.push({ ix: s.tiles.length, q, r, x, y, zone, w: zone === "deep" ? 1.35 : zone === "reeds" ? 1.15 : 1, cap: 0, fish: 0, owner: -1, build: null, dry: false, paid: 0 });
   }

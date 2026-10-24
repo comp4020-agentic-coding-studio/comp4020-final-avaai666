@@ -147,8 +147,8 @@ describe("bots and replay", () => {
   }, 120000);
 });
 
-describe("the board after rule change 8 (the lake at 0.7)", () => {
-  it("keeps the prototype's 61 tiles in the same places: the hexes scale with the lake", () => {
+describe("the board", () => {
+  it("has the prototype's 61 tiles: 48 open, 2 reeds, 4 lotus, 7 deep", () => {
     const s = hold.make("board", [0, 1, 2, 3].map((i) => ({ seat: i, name: `P${i}`, bot: null, character: "mei" as const })), { fish: 280 });
     const byZone = s.tiles.reduce((m: Record<string, number>, tl) => ({ ...m, [tl.zone]: (m[tl.zone] ?? 0) + 1 }), {});
     expect(s.tiles.length).toBe(61);

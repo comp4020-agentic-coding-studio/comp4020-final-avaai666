@@ -13,7 +13,7 @@
 // lakeAfterMatch), never running it through nextSpring() again.
 import { RUSH as Q, RUSH_MODEL } from "../game-constants.ts";
 import { type GameEvent, type Highlight, type Mode, type Results, type Seat, streamOf } from "../game-platform.ts";
-import { breed as breedLake, dockPos, forecast, iceBlocks, ISLAND, K, LAKE_X, LAKE_Y, nr, tierOf, ZONES } from "../lake-world.ts";
+import { breed as breedLake, dockPos, forecast, iceBlocks, ISLAND, K, nr, tierOf, ZONES } from "../lake-world.ts";
 import { counts, type Fish, moveFish, newFish, placeSchools, type School, seedFish, updateSchools } from "./lake-life.ts";
 
 export type Season = 0 | 1 | 2 | 3; // spring, summer, autumn, winter
@@ -114,7 +114,7 @@ function input(_s: RushSim, _seat: number, raw: unknown): RushInput | null {
     const x = Number(o.x), y = Number(o.y);
     if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
     // one decimal place: a whole-unit round loses too much on a 92 x 64 lake
-    return { k: "steer", x: Math.round(Math.max(-LAKE_X, Math.min(LAKE_X, x)) * 10) / 10, y: Math.round(Math.max(-LAKE_Y, Math.min(LAKE_Y, y)) * 10) / 10 };
+    return { k: "steer", x: Math.round(Math.max(-92, Math.min(92, x)) * 10) / 10, y: Math.round(Math.max(-64, Math.min(64, y)) * 10) / 10 };
   }
   if (o.k === "cast") { const c = Number(o.charge ?? 0); return { k: "cast", charge: Number.isFinite(c) ? Math.round(Math.max(0, Math.min(1, c)) * 100) / 100 : 0 }; }
   if (o.k === "dash") return { k: "dash" };

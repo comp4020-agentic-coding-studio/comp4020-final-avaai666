@@ -49,7 +49,7 @@ export const TASKS: { id: string; verb: string; place: PlaceId; x: number; y: nu
   { id: "t3", verb: "lotus", place: "lotus", x: ZONES.lotus.x * 0.9, y: ZONES.lotus.y * 0.9 },
   { id: "t4", verb: "trap", place: "east", x: 60, y: -2 },
   { id: "t5", verb: "sluice", place: "river", x: ZONES.river.x * 0.9, y: ZONES.river.y * 0.9 },
-  { id: "t6", verb: "incense", place: "island", x: ISLAND.x - 2, y: ISLAND.y + ISLAND.r + 4.5 },
+  { id: "t6", verb: "incense", place: "island", x: ISLAND.x - 2, y: ISLAND.y + 12 },
   { id: "t7", verb: "mend", place: "south", x: 2, y: 30 },
   { id: "t8", verb: "trap", place: "west", x: -62, y: 8 },
   { id: "t9", verb: "net", place: "east", x: 40, y: -30 },
@@ -615,7 +615,7 @@ function bot(s: PoachSim, seat: number, r: () => number): PoachInput[] {
 }
 // a point on open water from the bot's own stream (never the lake's)
 function waterPoint(r: () => number, maxK: number): [number, number] {
-  for (let k = 0; k < 40; k++) { const x = (r() * 2 - 1) * LAKE_X * 0.96, y = (r() * 2 - 1) * LAKE_Y * 0.94; if (nr(x, y) < maxK && Math.hypot(x - ISLAND.x, y - ISLAND.y) > ISLAND.r + 3.5) return [x, y]; }
+  for (let k = 0; k < 40; k++) { const x = (r() * 2 - 1) * 88, y = (r() * 2 - 1) * 60; if (nr(x, y) < maxK && Math.hypot(x - ISLAND.x, y - ISLAND.y) > 11) return [x, y]; }
   return [0, 20];
 }
 // how much a bot suspects another boat (the prototype's susOf)

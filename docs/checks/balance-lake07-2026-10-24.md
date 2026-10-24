@@ -1,5 +1,10 @@
 # Balance after rule change 8: the lake at 0.7 (2026-10-24, bots only)
 
+**Taken back the same day.** Ava played it and judged the old lake size and
+handling right; the boats wandered on the small lake. The game is back on the
+92 x 64 lake with its rule-change-7 numbers (docs/checks/balance-rush2-2026-10-23.md).
+This report stays as the record of what was tried and measured.
+
 Written from `node scripts/balance.ts <mode> 300` on the rule-change-8 code (the
 script still writes to each mode's older report file; those are left as they
 were and the numbers are copied here). Every match is bots against bots on
