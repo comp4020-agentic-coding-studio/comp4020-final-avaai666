@@ -293,6 +293,61 @@ describe("following a fish between frames (fishview.js)", () => {
   });
 });
 
+// Ava, 25 October: "the music has no fire in it". The tune now rides a drum: this drives sound.js with a
+// stand-in for Web Audio and listens to what it schedules, so the beat is a tested thing and not a claim.
+function fakeAudio() {
+  const started: { kind: string; at: number; hz: number; to: number }[] = [];
+  let now = 0;
+  const param = (v = 0) => ({ value: v, setValueAtTime(x: number) { this.value = x; return this; }, exponentialRampToValueAtTime(x: number) { this.to = x; return this; }, setTargetAtTime() { return this; }, cancelScheduledValues() { return this; }, to: 0 });
+  const node = (kind: string, extra: Record<string, unknown> = {}) => ({
+    kind, gain: param(1), frequency: param(440), detune: param(0), Q: param(1), type: "sine",
+    threshold: param(0), ratio: param(1), buffer: null, loop: false, loopStart: 0,
+    connect(t: unknown) { return t; }, disconnect() {}, start(at = now) { started.push({ kind, at, hz: (this as { frequency: { value: number } }).frequency.value, to: (this as { frequency: { to: number } }).frequency.to }); }, stop() {},
+    ...extra,
+  });
+  class FakeAudioContext {
+    state = "running";
+    get currentTime() { return now; }
+    get destination() { return node("destination"); }
+    get sampleRate() { return 48000; }
+    resume() { return Promise.resolve(); }
+    createGain() { return node("gain"); }
+    createOscillator() { return node("osc"); }
+    createBiquadFilter() { return node("filter"); }
+    createDynamicsCompressor() { return node("comp"); }
+    createBufferSource() { return node("noise"); }
+    createBuffer() { return { getChannelData: () => new Float32Array(16) }; }
+  }
+  return { started, FakeAudioContext, tick: (s: number) => { now += s; } };
+}
+
+describe("the music", () => {
+  beforeEach(() => { dom(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("the Rush rides a drum on every beat; the end screen's calm music has none", async () => {
+    const { createSound } = await importJs("../../src/static/play/sound.js");
+    const run = async (mood: string) => {
+      const { started, FakeAudioContext, tick } = fakeAudio();
+      Object.assign(globalThis, { AudioContext: FakeAudioContext });
+      vi.useFakeTimers();
+      const sound = createSound(document.createElement("button"), { on: "on", off: "off", label: "s" });
+      sound.music(mood);
+      for (let k = 0; k < 60; k++) { tick(0.1); await vi.advanceTimersByTimeAsync(100); } // six seconds of music
+      vi.useRealTimers();
+      // the drum is the only thing that slides from 150 Hz down to 44
+      return started.filter((x) => x.kind === "osc" && Math.round(x.hz) === 150 && Math.round(x.to) === 44).map((x) => x.at).sort((a, b) => a - b);
+    };
+    const rush = await run("rush"), calm = await run("calm");
+    expect(calm.length).toBe(0);
+    expect(rush.length).toBeGreaterThan(13); // 152 beats a minute, six seconds, plus the pushes into the bar
+    const gaps = rush.slice(1).map((t, i) => t - rush[i]).filter((g) => g > 0.01);
+    const beat = 60 / 152;
+    for (const g of gaps) expect(Math.abs(Math.round(g / (beat / 2)) * (beat / 2) - g)).toBeLessThan(0.02); // on the grid
+    expect(Math.max(...gaps)).toBeLessThanOrEqual(beat + 0.02); // never more than a beat without a drum
+  });
+});
+
 describe("the sound button", () => {
   beforeEach(() => { dom(); });
 

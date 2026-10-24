@@ -775,6 +775,47 @@ describe("what Ava found on 25 October", () => {
     expect(s.fish.length).toBe(8);
   });
 
+  it("a fish never moves faster than it can swim, even scared right across the lake", () => {
+    const s = make("fish-speed", 1);
+    clearFish(s);
+    school(s, 0, 0, 0, 1); // one fish, its school pinned at the middle
+    const f = s.fish[0];
+    f.x = 24; f.y = 16; // a net scared it 29 units away: it now swims home
+    let worst = 0;
+    for (const end = s.t + 6; s.t < end;) { const x = f.x, y = f.y; step(s); worst = Math.max(worst, Math.hypot(f.x - x, f.y - y)); }
+    expect(worst).toBeLessThanOrEqual(RUSH.V_ADULT * 2.2 * RUSH.DT + 1e-9); // its own top speed, fleeing
+    expect(Math.hypot(f.x, f.y)).toBeLessThan(12); // and it did head home
+  });
+
+  it("a new season's schools take their fish with them, instead of leaving them to sprint after", () => {
+    const s = make("season-carry", 2);
+    until(s, RUSH.SEASON_S + RUSH.REST_S + 0.01); // the gong, the rest, into the market
+    for (let seat = 0; seat < s.players; seat++) step(s, [{ seat, i: { k: "pick", id: null } }]);
+    while (s.phase !== "play") step(s); // the reveal, then summer
+    expect(s.season).toBe(1);
+    // every fish is with its own school, as it was all through the season before
+    for (const f of s.fish) expect(Math.hypot(f.x - s.schools[f.school].x, f.y - s.schools[f.school].y)).toBeLessThan(12);
+    // and the first tick of the season moves no fish faster than it swims
+    const was = s.fish.map((f) => ({ x: f.x, y: f.y }));
+    step(s);
+    for (let i = 0; i < s.fish.length; i++) expect(Math.hypot(s.fish[i].x - was[i].x, s.fish[i].y - was[i].y)).toBeLessThanOrEqual(RUSH.V_ADULT * 2.2 * RUSH.DT + 1e-9);
+  });
+
+  it("a bot picks from the three cards on the table, like everyone else", () => {
+    for (const seed of ["bo1", "bo2", "bo3", "bo4", "bo5", "bo6"]) {
+      const seats: Seat[] = [{ seat: 0, name: "P0", bot: null, character: "mei" },
+        ...Array.from({ length: 3 }, (_, i) => ({ seat: i + 1, name: `B${i}`, bot: `bot${i}`, character: "mei" as const }))];
+      const s = rush.make(seed, seats, { fish: 280, adults: 224, young: 56 });
+      until(s, RUSH.SEASON_S + RUSH.REST_S + 0.01);
+      expect(s.phase).toBe("market");
+      const offer = s.market!.offer;
+      for (let seat = 1; seat < 4; seat++) {
+        const picked = s.market!.picked[seat];
+        expect(picked === null || offer.includes(picked!), `seat ${seat} of ${seed} picked ${picked}; the table showed ${offer.join(", ")}`).toBe(true);
+      }
+    }
+  }, 30000);
+
   it("a net that lets the young fish go says how many slipped through", () => {
     const s = make("fry-slip", 1);
     clearFish(s);

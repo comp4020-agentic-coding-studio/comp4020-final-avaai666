@@ -56,17 +56,19 @@ Enforced, by checks that fail if the claim breaks:
   (`spec/unit/site-pages.test.ts`).
 
 Measured, not enforced, in 300 bot matches per table (the 2.0 modes, each
-match on the lake for its boats with the homes round it, rule change 11:
-`docs/checks/balance-lake11-2026-10-24.md`; the earlier reports are named
-there, the v4 numbers stay in `docs/checks/balance-2026-10-15.md`). These are
-claims about the modes' own bots and seeds, not about people:
+match on the lake for its boats with the homes round it; re-measured after
+the fish fixes of 25 October: `docs/checks/balance-fish-2026-10-25.md`, which
+names the report before it, and the v4 numbers stay in
+`docs/checks/balance-2026-10-15.md`). These are claims about the modes' own
+bots and seeds, not about people:
 - Boat Rush, four boats: no bot kind won over 41% of random-mix tables
-  (keeper 26.3%); all-greedy tables ended Lean or No fish in 70.3%, and
-  replayed at 80% of their catch ended Fair or better in 65.0%. With two or
-  three boats (60 matches) the lake was not fished down.
-- Fishing Party, four boats: no shop habit won over 40% (never buy 29.0%);
-  the last net held in 19.0%.
-- Who's Poaching, six boats: fishers won 68.3%, and 50.3% if they always skip
+  (keeper 26.3%); all-greedy tables ended Lean or No fish in 56.7%, and
+  replayed at 80% of their catch ended Fair or better in 73.0%. With two or
+  three boats (60 matches, before the fish fixes) the lake was not fished
+  down.
+- Fishing Party, four boats: no shop habit won over 40% (never buy 28.7%);
+  the last net held in 19.3%.
+- Who's Poaching, six boats: fishers won 67.7%, and 50.7% if they always skip
   the vote.
 - Lake Holdings 3.0 (`docs/checks/balance-hold3-2026-10-24.md`): no bot kind
   won over 41% of random-mix tables (steady 27.4%); all-greedy tables ended

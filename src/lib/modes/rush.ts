@@ -278,12 +278,11 @@ function endSeason(s: RushSim, ev: GameEvent[]): void {
 function startMarket(s: RushSim, ev: GameEvent[]): void {
   s.phase = "market"; s.phaseT = 0;
   const offer = offerFor(s);
-  // KNOWN BUG, waiting on Ava (25 Oct): a bot picks from a roll of its own, not from the three cards on the
-  // table, so 71.5% of the picks the reveal shows (measured over 40 bot matches) are cards nobody was
-  // offered. The one-line fix is botPick(s, offer, ...); it changes the bots' random stream, which tips
-  // spec/unit/boat-move.test.ts's one-seed shore share from 0.139 to 0.162 against a 0.15 limit (the mean
-  // over 20 seeds is 0.145 either way), so the fix waits for her call on that test and a balance re-run.
-  const botPicks: (CardId | null)[] = s.boats.map((b, i) => (s.bots[i] ? botPick(s, offerFor(s), s.botKinds[i]) : null));
+  // from the three cards on the table, the same ones everyone else is looking at. A bot used to pick from a
+  // roll of its own, so 71.5% of the picks the reveal showed (40 bot matches) were cards nobody was offered
+  // (Ava, 25 Oct, after seeing three bots take three cards that were not on her table: "the card problem is
+  // still not solved")
+  const botPicks: (CardId | null)[] = s.boats.map((b, i) => (s.bots[i] ? botPick(s, offer, s.botKinds[i]) : null));
   s.market = { offer, botPicks, picked: s.boats.map((_, i) => (s.bots[i] ? botPicks[i] : undefined)), closesAt: s.t + Q.MARKET_S, closed: false, closedAt: null };
   ev.push({ k: "market", offer, players: s.players });
 }
@@ -294,15 +293,7 @@ export function botKindOf(i: number): string { return DEFAULT_BOT_KINDS[i % 3]; 
 function startSeason(s: RushSim, ev: GameEvent[]): void {
   s.season = (s.season + 1) as Season; s.phase = "play"; s.phaseT = 0; s.market = null;
   for (const b of s.boats) { const d = s.lake.dockPos(b.seat); b.x = d.x; b.y = d.y; b.h = d.inward + Math.PI; b.docked = true; b.combo = 0; }
-  // KNOWN BUG, waiting on Ava (25 Oct): this puts every school in the new season's places while the fish
-  // stay where the last season left them, up to 54 units behind. The follow in lake-life.ts closes 8% of
-  // that gap a tick with no speed limit, so for the first seconds of every season the whole lake streaks
-  // across the water at up to 20x a fish's own speed (measured: 4.8 units in one 0.05 s tick, and 2.0 units
-  // mid-season for a fish a net had scared 21 units away). Two one-line fixes are ready: carry the fish
-  // with their schools here, and cap a fish's move at its own speed in moveFish(). Both move the balance
-  // Ava tuned on 24 October (60 matches a table: all-greedy tables end Lean or No fish 71.7% now, 73.3%
-  // with the carry alone, 60.0% with both), so they wait for her call and a 300-match re-measure.
-  placeSchools(s); // fresh targets for the new season's places (prototype's rNextSeason())
+  placeSchools(s, true); // the new season's places (prototype's rNextSeason()), with the fish carried to them
   const [a, y] = counts(s);
   s.history.push({ startA: a, startY: y, caught: 0, young: 0, gongA: 0, gongY: 0, bred: false, bonus: 0, reedsExtra: 0 });
   ev.push({ k: "season", season: s.season });

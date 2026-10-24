@@ -65,7 +65,15 @@ export function schoolTarget(s: Life, school: School): [number, number] {
   }
   return randomWater(s, 0.84);
 }
-export function placeSchools(s: Life): void {
+// `carry`: bring each school's fish along to its new place. A new season moves every school to that
+// season's places (DESIGN.md's twists: "spring: schools gather at the river mouth and the reeds"), and
+// the lake stands still in between (the gong, the rest and the market), so a fish left where the old
+// season ended would be up to 54 units from its school when play resumes and would then close that gap
+// at 8% a tick: 4.8 units in the first tick, twenty times a fish's top speed, with the whole lake
+// streaking across the water for the first seconds of every season (Ava, 25 Oct: "the fish flicker").
+// Carried, they are already at the season's places when it opens, which is what the twists promise.
+export function placeSchools(s: Life, carry = false): void {
+  const was = carry ? s.schools.map((sc) => ({ x: sc.x, y: sc.y })) : null;
   s.schools = Array.from({ length: 16 }, (_, i): School => ({ x: 0, y: 0, tx: 0, ty: 0, vx: 0, vy: 0, t: 0, nursery: i >= NURSERY_FIRST }));
   for (const school of s.schools) {
     const [x, y] = schoolTarget(s, school);
@@ -73,6 +81,14 @@ export function placeSchools(s: Life): void {
     const [tx, ty] = schoolTarget(s, school);
     school.tx = tx; school.ty = ty;
     school.t = 3 + s.rng() * 6;
+  }
+  if (!was) return;
+  for (const f of s.fish) {
+    const from = was[f.school], to = s.schools[f.school];
+    if (!from || !to) continue;
+    const x = f.x + (to.x - from.x), y = f.y + (to.y - from.y);
+    const ok = !s.lake.blockedAt(x, y, s.season) && s.lake.nr(x, y) < 0.95;
+    f.x = ok ? x : to.x + f.ox; f.y = ok ? y : to.y + f.oy;
   }
 }
 // a new fish joins a school (an adult one, or a nursery one if it's young),
@@ -162,6 +178,13 @@ export function moveFish(s: Life): void {
     const followSpeed = Math.min(1, L.DT * 1.6);
     let nx = f.x + (dx + sepx * 0.5) * followSpeed, ny = f.y + (dy + sepy * 0.5) * followSpeed;
     if (f.scare > 0) { const v = (f.adult ? L.V_ADULT : L.V_FRY) * 2.2 * (inReeds ? 0.6 : 1); nx = f.x + f.sx * v * L.DT; ny = f.y + f.sy * v * L.DT; }
+    // a fish never moves faster than it swims. The follow above closes 8% of the gap to its school every
+    // tick, which is gentle for the 1-2 units a fish usually trails by, but a fish a net has scared 20 units
+    // away came back at 40 units a second, ten times its own speed, and the page showed it flicking across
+    // the water (Ava, 25 Oct: "the fish flicker"). The flee branch already moves at exactly this speed.
+    const vmax = (f.adult ? L.V_ADULT : L.V_FRY) * (f.scare > 0 ? 2.2 : 1) * L.DT;
+    const mx = nx - f.x, my = ny - f.y, m = Math.hypot(mx, my);
+    if (m > vmax) { nx = f.x + (mx / m) * vmax; ny = f.y + (my / m) * vmax; }
     if (s.lake.blockedAt(nx, ny, s.season)) { nx = f.x; ny = f.y; }
     if (Math.abs(nx - f.x) + Math.abs(ny - f.y) > 0.02) { const nh = Math.atan2(ny - f.y, nx - f.x); f.h += Math.atan2(Math.sin(nh - f.h), Math.cos(nh - f.h)) * Math.min(1, L.DT * 5); }
     f.x = nx; f.y = ny;

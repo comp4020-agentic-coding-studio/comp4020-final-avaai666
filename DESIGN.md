@@ -1,4 +1,4 @@
-# Next Year, No Fish (明年无鱼): design v5.9
+# Next Year, No Fish (明年无鱼): design v5.10
 
 ## What it is
 
@@ -173,6 +173,16 @@ P7. **Thumbs away from the edges.**
   Winter puts ice on the water where the shore distance is above 0.86,
   except within 7 units of a dock. Boats cannot cross ice; a boat that
   meets it slides along its edge.
+- **The fish** swim in 16 schools (12 adult, 4 nursery in the reed bed;
+  `src/lib/modes/lake-life.ts`). A fish follows its own school's centre with
+  a small turning offset, is scared out of a closing net, and never moves
+  faster than it swims: 4.2 a second for an adult, 2.6 for a young fish,
+  ×2.2 while fleeing. A new season moves every school to that season's
+  places and the fish travel with their school. Until 25 October a fish
+  closed 8% of the gap to its school each tick with no limit, so a scared
+  fish came back at up to 95 a second and a new season sent the whole lake
+  streaking across the water (Ava: "the fish flicker, and suddenly vanish or
+  appear"; the page's half of that is under frameFor below).
 - **Sailing** (`src/lib/modes/boat-move.ts`, shared by Boat Rush, Who's
   Poaching and Fishing Party; rule changes 10 and 11): the prototype's
   steering (turn towards the target, then speed up), with the shore as a
@@ -208,11 +218,16 @@ P7. **Thumbs away from the edges.**
   - There is no minimap.
   - The water is calm: no moving light streaks on it (Ava, 24 Oct: they
     were dazzling).
-- **Sound** (sound.js, Web Audio, no files): a calm pentatonic tune on a
-  plucked string over a soft drone and the sound of water; it quickens for
-  Boat Rush's last 10 s and calms for the end. Effects for a catch, coins,
-  home, a ram, a miss, the gong, a splash. On unless the player turns it
-  off; the button says which ("Sound: on").
+- **Sound** (sound.js, Web Audio, no files): a pentatonic tune on a plucked
+  string over a soft drone and the sound of water, carried by a village
+  drum. A bass walks under four phrases (gong, gong, yu, zhi), the tune is
+  one motif over it, the drum keeps the beat with a woodblock on the
+  backbeat; Boat Rush's last 10 s put the drum on every beat at 152, add the
+  off-beat pushes, a cymbal each phrase and a tom fill, and the end screen
+  drops the drum altogether. Until 25 October there was no drum, no bass and
+  no motif — a random walk of plucks (Ava: "the music has no fire in it").
+  Effects for a catch, coins, home, a ram, a miss, the gong, a splash. On
+  unless the player turns it off; the button says which ("Sound: on").
 - **The lake remembers.**
   - A room's lake is stored as adults and young fish. A new room starts
     with 230 adults and 50 young fish.
@@ -801,6 +816,7 @@ Lake Holdings becomes turn-based; Boat Rush has four seasons of 45 s.
 
 ## Changelog
 
+- v5.10 (25 Oct, session 18): what was left of "the fish flicker", and the music. A fish now never moves faster than it swims (it closed 8% of the gap to its school every tick with no limit: a scared fish came back at 95 a second against its own 4.2), and a new season's schools carry their fish to the season's places instead of leaving them to sprint after. A bot picks its market card from the three cards on the table, as everyone else does (71.5% of the picks the reveal showed were cards nobody had been offered). The music is rebuilt around a village drum, a four-phrase bass and one motif. Re-measured, 300 matches a table: docs/checks/balance-fish-2026-10-25.md. Boat Rush's three targets still hold, with (a) at 56.7% (70.3% before) and (b) at 73.0% (65.0%); README carries the new numbers. spec/unit/boat-move.test.ts's Boat Rush shore share is now the mean of eight tables, not one: the quantity sits at 0.145 either side of this change and one table against a 0.15 line turned on luck (0.139 before, 0.150 after; the eight-table mean, 0.143 and 0.145).
 - v5.9 (25 Oct, session 18): three things Ava found playing rush 2.0. The market's reveal now runs from the moment the market closes, not from the end of its 14 s, so picking early no longer buys a wait in front of a frozen lake. Every fish in a frame carries its own id and the pages follow it by that (`src/static/play/fishview.js`), instead of by its place in the list, which made a catch move every fish after it. A net that lets young fish go says how many slipped through (the `fry` count in its catch event was always 0, so the page never said it). Nothing in the lake's own model changed: the balance of 24 October stands. Three more bugs are measured and written up for Ava to decide on, in the code where they are (a bot picks from a roll of its own instead of the three cards on the table; a fish crosses the lake at up to 20x its own speed after a scare or a new season's school places).
 - v5.8 (24 Oct, session 18): rule change 12, Lake Holdings is Monopoly on the water (Ava: "the land-grab game is not complete and not fun", then "like Monopoly"; model holdings 3.0). 24 squares round the lake: homes at the docks, the Lake Spirit between them, grounds in colour groups to buy; roll and sail, tolls (double for a whole group), haul or build a net or a pond, nets haul and ponds pay after every round, the grounds breed, a dead lake ends the match. Score: coins + grounds + buildings + fish on your grounds, × next spring's tier. holdings 2.0's section moved word for word to docs/design-history/holdings-v2.0.md and its tests are replaced. Boat Rush's rules card says the hold is 8 with four boats (it said 12). The table under "Where each mode stands" now says Fishing Party follows v5.0. Measured in docs/checks/balance-hold3-2026-10-24.md.
 - v5.7 (24 Oct, session 18): rule change 11 (Ava, after playing v5.6: "the boat spins on the spot; the lake did not change size; I cannot find my home; the 3D was better before"). Sailing: the shore is a wall a boat slides along, and a target past it is no longer moved (that made boats circle). Each match has a lake for its boats (`makeLake(boats)`, the same water per boat), and the homes are spread round it, one per boat; your home has a beam of light, a label and, in Boat Rush, an arrow. The camera follows your boat from low down by default; you can zoom, turn it or show the whole lake. Boat Rush: unloading 0.33 s a fish, a hold of 8 × 4 / boats. Measured in docs/checks/balance-lake11-2026-10-24.md. Ava also approved CC0 3D models (for a later change) and a Monopoly-style Lake Holdings (next).

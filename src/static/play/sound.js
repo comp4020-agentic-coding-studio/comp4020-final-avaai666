@@ -2,9 +2,16 @@
 // (no audio files, nothing generated at run time from outside). One page-level
 // thing: room.js makes it once and every mode script gets it as `sound`.
 //
-// The music is a calm pentatonic tune on a plucked string over a soft drone and
-// the sound of water; music("play") adds notes, music("rush") speeds it up for a
-// final rush, music("calm") is for the end screen. It decides nothing.
+// The music is a pentatonic tune on a plucked string over a soft drone and the
+// sound of water, carried by a village drum: music("play") is the match's pulse,
+// music("rush") drives it for a final rush, music("calm") drops the drum for the
+// end screen. It decides nothing.
+//
+// Before 25 October there was no drum and no bass line, and the tune was a random
+// walk, so nothing ever arrived anywhere (Ava: "the music has no fire in it"). Now
+// a four-phrase bass moves under a tune built from one motif, a drum keeps the
+// beat, a woodblock answers on the backbeat, and the Rush adds the off-beats, a
+// cymbal on every phrase and a tom fill before the phrase turns over.
 //
 // The button shows the current state ("Sound: on" / "Sound: off", aria-pressed).
 // Sound is on unless the player turned it off; a browser lets audio start only
@@ -79,8 +86,32 @@ export function createSound(button, words = { on: "Sound: on", off: "Sound: off"
   const note = (step, oct = 0) => hz(ROOT + PENTA[((step % 5) + 5) % 5] + 12 * (oct + Math.floor(step / 5)));
 
   // ---- music ----
-  let mood = null, musicT = 0, nextAt = 0, step = 0, walk = 2, drone = null, water = null;
-  const MOODS = { calm: { bpm: 72, density: 0.35, vol: 0.32 }, play: { bpm: 92, density: 0.55, vol: 0.28 }, rush: { bpm: 132, density: 0.8, vol: 0.34 } };
+  let mood = null, musicT = 0, nextAt = 0, step = 0, walk = 2, drone = null, water = null, drumBus = null;
+  const MOODS = {
+    calm: { bpm: 76, density: 0.4, vol: 0.32, drums: 0 },
+    play: { bpm: 108, density: 0.7, vol: 0.3, drums: 0.8 },
+    rush: { bpm: 152, density: 1, vol: 0.4, drums: 1.15 },
+  };
+  const ROOTS = [0, 0, 4, 3]; // the bass under the four phrases: gong, gong, yu, zhi
+  const MOTIF = [0, 2, 3, 2, 4, 3, 1, 0]; // the tune's shape, in steps above the phrase's root
+  // ---- the drum kit: a village drum, a woodblock, a hand cymbal, a tom ----
+  function drums() { if (!drumBus) { drumBus = ac.createGain(); drumBus.gain.value = 1; drumBus.connect(musicBus); } return drumBus; }
+  function kick(t, peak = 0.5) {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = "sine"; o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(44, t + 0.09);
+    g.gain.setValueAtTime(peak, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.34);
+    o.connect(g).connect(drums()); o.start(t); o.stop(t + 0.4);
+    noise(t, 0.03, peak * 0.35, "lowpass", 2200, 1, drums()); // the stick on the skin
+  }
+  function hat(t, peak = 0.05, d = 0.035) { noise(t, d, peak, "highpass", 8000, 0.7, drums()); }
+  function cymbal(t, peak = 0.08) { noise(t, 0.5, peak, "highpass", 5000, 0.4, drums()); }
+  function block(t, peak = 0.16) { osc(1150, "square", t, peak, 0.002, 0.05, drums()); osc(1720, "triangle", t, peak * 0.5, 0.002, 0.04, drums()); }
+  function tom(t, freq, peak = 0.3) {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = "sine"; o.frequency.setValueAtTime(freq, t); o.frequency.exponentialRampToValueAtTime(freq * 0.6, t + 0.18);
+    g.gain.setValueAtTime(peak, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+    o.connect(g).connect(drums()); o.start(t); o.stop(t + 0.3);
+  }
   function startDrone() {
     if (drone) return;
     const g = ac.createGain(); g.gain.value = 0.0001; g.gain.exponentialRampToValueAtTime(0.05, ac.currentTime + 2);
@@ -100,15 +131,28 @@ export function createSound(button, words = { on: "Sound: on", off: "Sound: off"
     const m = MOODS[mood]; if (!m || !ac) return;
     const beat = 60 / m.bpm / 2; // eighth notes
     while (nextAt < ac.currentTime + 0.35) {
-      const bar = step % 16;
-      if (bar === 0) pluck(note(0, -1), nextAt, 0.11, 2.4, musicBus); // the root, low, at each bar
-      if (bar === 8 && Math.random() < 0.7) pluck(note(3, -1), nextAt, 0.08, 2, musicBus);
-      if (Math.random() < m.density * (bar % 2 === 0 ? 1 : 0.5)) {
-        walk = Math.max(0, Math.min(9, walk + [-2, -1, -1, 0, 1, 1, 2][Math.floor(Math.random() * 7)]));
-        pluck(note(walk, 0), nextAt, 0.07 + Math.random() * 0.04, mood === "rush" ? 0.6 : 1.3, musicBus);
+      const i = step % 16, phrase = (step / 16 | 0) % 4, root = ROOTS[phrase], d = m.drums;
+      // the beat: the drum on every quarter, a woodblock answering on the backbeat, the hat between
+      // (eight eighths to the bar, so i 0-15 is two bars: the beats are the even i)
+      if (d) {
+        if (d > 1 ? i % 2 === 0 : i % 4 === 0) kick(nextAt, (i === 0 ? 0.55 : 0.38) * d); // the Rush on every beat
+        if (d > 1 && (i === 7 || i === 15)) kick(nextAt, 0.24 * d); // and a push into the next bar
+        if (i === 2 || i === 6 || i === 10 || i === 14) block(nextAt, 0.15 * d); // the backbeat answers
+        if (d > 1 || i % 2 === 1) hat(nextAt, (d > 1 ? 0.045 : 0.03) * d);
+        if (d > 1 && i === 0) cymbal(nextAt, 0.07);
+        if (d > 1 && phrase === 3 && i >= 13) tom(nextAt, [196, 165, 131][i - 13], 0.26); // a fill turns the phrase over
       }
-      if (mood === "rush" && bar % 4 === 0) noise(nextAt, 0.06, 0.05, "highpass", 6000, 0.7, musicBus); // a quick tick, for the rush
-      if (bar === 12 && Math.random() < 0.25) bell(note(4, 1), nextAt, 0.025, 2.2); // a far chime, now and then
+      // the bass: the phrase's root under the tune, and its fifth half way
+      if (i === 0) pluck(note(root, -1), nextAt, 0.13, 2.2, musicBus);
+      if (i === 8) pluck(note(root + 2, -1), nextAt, 0.09, 1.8, musicBus);
+      // the tune: one motif over that root, with a few notes dropped or doubled, so it goes somewhere
+      if (i % 2 === 0 || Math.random() < m.density - 0.55) {
+        const want = Math.random() < 0.82 ? MOTIF[(i >> 1) % MOTIF.length] : walk;
+        walk = Math.max(0, Math.min(9, want));
+        pluck(note(root + walk, 0), nextAt, 0.07 + Math.random() * 0.04, mood === "rush" ? 0.55 : 1.3, musicBus);
+        if (mood === "rush" && i % 8 === 0) pluck(note(root + walk, 1), nextAt, 0.05, 0.5, musicBus); // an octave up, for the lift
+      }
+      if (i === 12 && phrase === 3 && Math.random() < 0.4) bell(note(4, 1), nextAt, 0.025, 2.2); // a far chime, now and then
       nextAt += beat; step++;
     }
   }
@@ -120,7 +164,7 @@ export function createSound(button, words = { on: "Sound: on", off: "Sound: off"
     if (!musicT) { nextAt = c.currentTime + 0.1; musicT = setInterval(schedule, 100); }
   }
   function stopMusic(off = false) {
-    clearInterval(musicT); musicT = 0;
+    clearInterval(musicT); musicT = 0; step = 0;
     if (ac && musicBus) musicBus.gain.setTargetAtTime(0.0001, ac.currentTime, 0.3);
     if (off && drone) { const d = drone, w = water; setTimeout(() => { d.os.forEach((o) => { try { o.stop(); } catch {} }); try { w.src.stop(); w.wl.stop(); } catch {} }, 1500); drone = null; water = null; }
   }
