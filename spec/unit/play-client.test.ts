@@ -61,25 +61,46 @@ function ui(lang: "en" | "zh") {
   };
 }
 
+// Lake Holdings 3.0 (holdings 3.0, Ava 24 Oct: "like Monopoly"): these replace 2.0's two tests here (a tap
+// before a card was picked; the ceremony's wording), whose cards and tiles are gone.
+function holdFrame(over: Record<string, unknown> = {}) {
+  // 6 squares are enough to draw: a home for each of two seats, a Spirit, three grounds (one of seat 0's)
+  const sq = [[0, "home", 0, 120, 0, -1, 0, -1, "", 0, 0, 0], [1, "ground", 60, 100, -1, 0, 3, -1, "", 12, 19, 1], [2, "ground", 100, 60, -1, 0, 3, 0, "", 10, 19, 1],
+    [3, "spirit", 120, 0, -1, -1, 0, -1, "", 0, 0, 0], [4, "home", 0, -120, 1, -1, 0, -1, "", 0, 0, 0], [5, "ground", -100, 60, -1, 1, 4, -1, "", 9, 19, 1]];
+  return { lk: { s: 0.5, k: 1, docks: [[0, 12, 90], [0, -12, 270]] }, phase: "roll", round: 1, rounds: 8, turn: 0, left: 12, roll: null, path: [], moveS: 0, pt: 0, act: [], built: false, cost: 4, haulN: 0,
+    sq, p: [{ seat: 0, pos: 0, coins: 15, grounds: 1, builds: 0 }, { seat: 1, pos: 4, coins: 15, grounds: 0, builds: 0 }], last: null, lake: 31, next: 60, tier: "lean", start: 31, ended: null, ...over };
+}
+
 describe("Lake Holdings", () => {
   beforeEach(() => { dom(); });
 
-  it("tapping the board before a card is picked shows the banner, in either language, and does not throw", async () => {
-    // Lake Holdings 2.0 (rule change 1): hold.js draws through world5.js, with 2.0's frame
+  it("on your turn the ROLL pad sends a roll once; tapping your own ground before rolling offers a net and a pond on it; in either language", async () => {
     const hold = await importJs("../../src/static/play/hold.js");
     for (const lang of ["en", "zh"] as const) {
       dom();
-      const { api, banners } = ui(lang);
+      const { api } = ui(lang);
       const sent: unknown[] = [];
       let tap: (x: number, y: number) => void = () => {};
       const world = Object.assign(fakeWorld5(), { setTap: (f: typeof tap) => { tap = f; }, canvas: document.createElement("canvas") });
       const mode = hold.mount({ world, sound: api.sound, ui: api, send: (x: unknown) => sent.push(x), post: () => {}, view: () => ({ mySeat: 0, seats: [{ name: "Ava", character: "mei" }, { name: "Bo", character: "jin" }] }) });
-      // one tile at the tap point, owned by seat 0; the player holds a hand but has not picked a card
-      const tile = [0, 0, 0, 0, 40, "open", 10, 6, 0, "", 0, 0];
-      mode.start({ phase: "pick", season: 1, seasons: 4, action: 1, actions: 3, left: 20, t: [tile], p: [{ seat: 0, fish: 0, tiles: 1, picked: false }], lake: 6, next: 7, tier: "none", start: 6, reveal: null, harvestStep: null, me: { hand: ["claim", "net", "pond"], pick: null } }, { seats: [] });
-      expect(() => tap(0, 4)).not.toThrow();
-      expect(banners).toEqual([[DICT[lang].h2_pick_first, DICT[lang].h2_pick_first_s]]);
-      expect(sent).toEqual([]); // nothing was sent: no card, no place
+      mode.start(holdFrame(), { seats: [{ name: "Ava", character: "mei" }, { name: "Bo", character: "jin" }] });
+      const pads = document.getElementById("h3-pads")!;
+      expect(pads.textContent).toContain(t(lang, "h3_roll"));
+      expect(() => tap(10, 6)).not.toThrow(); // seat 0's own ground (square 2)
+      expect(pads.textContent).toContain(t(lang, "h3_pond", { c: 4 }));
+      pads.querySelector<HTMLElement>('[data-act="pond"]')!.click();
+      expect(sent).toEqual([{ k: "build", kind: "pond", sq: 2 }]);
+      pads.querySelector<HTMLElement>('[data-act="roll"]')!.click();
+      pads.querySelector<HTMLElement>('[data-act="roll"]')?.click(); // gone, or a second click sends nothing
+      expect(sent).toEqual([{ k: "build", kind: "pond", sq: 2 }, { k: "roll" }]);
+      // someone else's turn: no pads, and a tap only says what the square is
+      mode.frame(holdFrame({ turn: 1 }), [{ k: "turn", seat: 1 }]);
+      expect(pads.querySelector("[data-act]")).toBeNull();
+      expect(() => tap(-10, 6)).not.toThrow();
+      expect(sent.length).toBe(2);
+      // the events of a move draw without throwing
+      expect(() => mode.frame(holdFrame({ turn: 1, phase: "move", path: [5, 0], moveS: 0.6, roll: 2 }), [{ k: "roll", seat: 1, n: 2 }, { k: "home", seat: 1, n: 3, sq: 4 }, { k: "toll", seat: 1, owner: 0, n: 1, sq: 2 }, { k: "card", seat: 1, card: "bloom", sq: 3 }, { k: "nets", list: [[2, 0, 6]] }, { k: "ponds", list: [[2, 0, 2]] }, { k: "breed", round: 1, before: 31, after: 33 }])).not.toThrow();
+      mode.end();
     }
   });
 });
@@ -87,7 +108,7 @@ describe("Lake Holdings", () => {
 describe("Lake Holdings' ceremony", () => {
   beforeEach(() => { dom(); });
 
-  it("says the tier multiplies fish and tiles, not fish home, in either language", async () => {
+  it("says the tier multiplies coins, grounds, buildings and fish, not fish home, in either language", async () => {
     const hold = await importJs("../../src/static/play/hold.js");
     for (const lang of ["en", "zh"] as const) {
       dom();
@@ -96,9 +117,9 @@ describe("Lake Holdings' ceremony", () => {
       const world = Object.assign(fakeWorld5(), { canvas: document.createElement("canvas") });
       const mode = hold.mount({ world, sound: api.sound, ui: api, send: () => {}, post: () => {}, view: () => ({ mySeat: 0, seats, code: "ABCD" }) });
       const overlay = document.createElement("div");
-      mode.results({ results: { seats: [{ seat: 0, score: 12, base: 10, fish: 7, tiles: 3 }, { seat: 1, score: 6, base: 5, fish: 3, tiles: 2 }], lakeAfter: 200, highlights: [], extra: { next: 230, left: { a: 180 }, ledger: [{ seat: 0, home: 7 }, { seat: 1, home: 3 }] } }, code: "ABCD" }, overlay);
+      mode.results({ results: { seats: [{ seat: 0, score: 48, base: 40, coins: 30, grounds: 3 }, { seat: 1, score: 24, base: 20, coins: 14, grounds: 2 }], lakeAfter: 200, highlights: [], extra: { next: 230, left: { a: 180 }, ledger: [{ seat: 0, home: 7 }, { seat: 1, home: 3 }] } }, code: "ABCD" }, overlay);
       overlay.querySelector<HTMLElement>("[data-cer-skip]")?.click();
-      expect(overlay.textContent).toContain(t(lang, "h2_cer_mult", { mult: 1.2, tier: t(lang, "cer_v_rich") }).slice(0, 4));
+      expect(overlay.textContent).toContain(t(lang, "h3_cer_mult", { mult: 1.2, tier: t(lang, "cer_v_rich") }).slice(0, 4));
       expect(overlay.textContent).not.toContain(t(lang, "cer_step3_mult", { mult: 1.2, tier: t(lang, "cer_v_rich") }));
     }
   });

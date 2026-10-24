@@ -1,4 +1,4 @@
-# Next Year, No Fish (明年无鱼): design v5.7
+# Next Year, No Fish (明年无鱼): design v5.8
 
 ## What it is
 
@@ -76,8 +76,8 @@ runs.
 |---|---|---|
 | Boat Rush | v5.0 (rush 2.0) | session 17, part A |
 | Who's Poaching | v5.0 (poach 2.0) | session 18 (23 Oct, in chat) |
-| Lake Holdings | v5.0 (holdings 2.0) | session 18 (24 Oct, in chat) |
-| Fishing Party | v4.0 (party 1.0) | part C |
+| Lake Holdings | v5.8 (holdings 3.0) | session 18 (24 Oct, in chat) |
+| Fishing Party | v5.0 (party 2.0) | session 18 (24 Oct, in chat) |
 
 ## One lake, four games (v5.0)
 
@@ -472,81 +472,77 @@ than people.
 
 Ava decides on these: see "Decisions".
 
-### Lake Holdings 抢地盘经营 (2.0)
+### Lake Holdings 抢地盘经营 (2.0) · holdings 3.0
 
-2 to 4 players. Turn-based, everyone choosing at the same time. Four
-seasons with 3 moves each, then the harvest. About 5 minutes.
+2 to 4 players. Monopoly on the water, turn by turn: eight rounds, one turn
+each. About 5 minutes. (Rule change 12, v5.8. The hex board of holdings 2.0
+is in docs/design-history/holdings-v2.0.md; this section keeps the 2.0 in
+its title because every 2.0-generation game is listed that way.)
 
-**The board:**
-- Hex tiles of size 4.2 (the prototype's 8.4, at the lake's half size, so the
-  board keeps its 61 tiles) over the lake: every tile whose centre has a shore
-  distance up to 0.8, and none on the island.
-- Each tile has a cap of `max(4, round(K × w / Σw))`, where w is 1.35 for
-  deep water, 1.15 for the reeds and 1 otherwise.
-- The lake's fish are spread over the tiles by w.
-- Each player starts with the 2 tiles nearest their dock.
+**The board:** 24 squares round the lake, at 0.84 of the way out to the
+shore, so the board fits every match's lake (rule change 11).
+- Each player's **home** is the square nearest their dock.
+- The **Lake Spirit** sits midway between two homes (one per gap of 3 or
+  more squares).
+- Every other square is a **fishing ground**. Grounds come in colour groups
+  of at most 3 between the homes and the Spirit. A ground costs 3 coins plus
+  its group's place round the board (3 to 8). It holds up to 19 fish.
+- The room's fish are spread evenly over the grounds.
 
-**A move:**
-1. You hold 3 cards: always the Flag (claim), plus 2 drawn from Net 3,
-   Pond 2, Fence 1.2, Cormorant 1 and Lantern 1.2 (weights).
-2. Pick a card: legal tiles glow.
-3. Hover or tap a tile to see a one-line preview of what it will do, for
-   example "Net: takes 7 of the 9 fish here each season; this tile will
-   run dry in about 2 seasons". Tap again (phones) or click (laptops) to
-   place it.
-4. 20 s per move. On time-out the bot's choice is played for you.
-5. Reveal: everyone's placements appear one by one. Two flags on one tile:
-   the player with fewer tiles gets it.
+**A turn:**
+1. Before you roll you may build a net or a pond on one of your own grounds
+   that has none (4 coins, one a turn).
+2. Roll one die (12 s, or it rolls itself) and sail that many squares. Passing
+   or landing on your own home pays 3 coins.
+3. The square acts:
+   - a ground nobody owns: buy it, or pass;
+   - your own ground: **haul** it (3 fish, 8 with a net, 2 with a pond; a coin
+     a fish), or build a **net** or a **pond** there, or pass;
+   - someone else's ground: pay its owner the toll (1, 2 with a net, 3 with a
+     pond; twice that if the owner holds the whole group). You pay what you
+     have, never more;
+   - the Lake Spirit: a card, from a shuffled deck of eight: Bloom (+2 fish on
+     every ground with any), Market day (+4 coins), The inspector (a fine of 2
+     for each of your nets), Lantern festival (everyone gives you a coin),
+     Tailwind (sail 3 more), Thieves (up to 4 fish gone from your fullest
+     ground), Fry (+3 fish on each of your grounds), A lucky find (+3 coins).
+4. 12 s to choose; a choice nobody makes is a pass.
 
-**The cards:**
-- **Flag:** claim an empty tile next to yours.
-- **Net:** takes up to 7 a season.
-- **Pond:** +2 on its own tile and +1 on every tile around it, anyone's.
-  It brings dry neighbours back.
-- **Fence:** fish don't swim away from here. Lanterns and cormorants can't
-  touch this tile or your tiles next to it.
-- **Cormorant:** steals 2 a season from the richest neighbour's net within
-  2 tiles.
-- **Lantern:** pulls 1 fish a season from each tile around it.
+**After every round** (when every player has had a turn):
+1. each net hauls up to 6 fish from its ground for its owner, a coin a fish;
+2. each pond pays its owner 2 coins (visitors come to see the fish);
+3. each ground with fish breeds: + round(0.35 × fish × (1 − fish/19));
+   an empty ground stays empty; a pond adds 2 fish to its ground;
+4. if the lake is below 15% of K (51 fish), it has died: the match ends,
+   and the tier is No fish.
 
-**The harvest,** shown step by step with a banner each:
-1. ponds breed;
-2. lanterns pull;
-3. nets haul, and every other tile you hold that is not dry gives you 2;
-4. cormorants steal;
-5. the lake breeds on each tile that is not dry, at rate 0.2 (0.4 in the
-   reeds) × (1 − fish/cap);
-6. fish swim one tile away from each net;
-7. empty tiles run dry. Dry tiles stay dry unless next to a pond.
+**Score** after 8 rounds: coins + 2 a ground + 2 a building + 1 for each fish
+still on your grounds, × the tier of next spring (the lake's fish, bred as
+`nextSpring()`). Fish left on your grounds count and they breed; a net turns
+them into coins now, and an emptied ground never fills again without a pond.
 
-**Next spring for this mode** is the board after one more pond-and-breed
-step, and dry water stays dry. Score = fish harvested + 1 per tile, × tier.
+**What a frame holds:** everything (nothing in this mode is secret): the
+squares with owner, building, fish and toll, every player's square, coins and
+grounds, whose turn it is, the phase, the die, the path a boat sails, the
+choices open now, and the lake and next spring.
 
-**Measured in the prototype** (bots, 5 runs): the lake fell from 260 to
-199–209 and 13–15 tiles ran dry, but next spring was still 222–232
-(Bountiful). Greed is not punished enough yet. The balance pass must fix
-this.
+**The page:** the whole lake from above (overview). Each square is a tile with
+its group's colour on the shore side, the owner's flag, its net or pond, and
+its fish swimming beside it; a tap on any square says what it is. Your turn:
+ROLL (or Space), then pads for the square you landed on; before rolling, tap
+one of your empty grounds to build on it. The die, tolls, cards, and each
+round's nets, ponds and breeding are shown as they happen. The shared
+ceremony ends the match.
 
-**How holdings 2.0 settles what the text above leaves open** (session 18):
-- a move's reveal shows one placement every 0.45 s, then a 0.8 s pause; each
-  harvest step is shown for 1.3 s;
-- a time-out plays the bot's choice, drawn from the match's own stream; a seat
-  with no legal tile for any card in its hand passes;
-- two flags with the same number of tiles: the match's own stream decides;
-- bots are steady, keeper and greedy by seat (the prototype's botChoose with
-  their weights); the room's lake keeps next spring as this mode computes it
-  (the mode breeds in its own year, like Boat Rush).
+**Bots** (steady, keeper, greedy by seat): roll after a moment; buy when they
+can (greedy with nothing left over, the others keeping a coin); greedy builds
+nets and hauls whatever it lands on; keeper builds ponds and hauls only a
+ground at 60% or more; steady alternates and hauls at 40%.
 
-**Measured in holdings 2.0** (bots only, 300 matches a table,
-docs/checks/balance-hold2-2026-10-24.md): all-greedy tables end Fair (88%),
-all-keeper tables Bountiful (100%), but in a random mix the greedy bot wins
-44.3% (39.3%-49.3%), over the 41% target, and the keeper 7.6%. Greed still
-pays the player who is greedy; this is for Ava's balance pass.
-
-**Removed from v4:**
-- the real-time 15 s tide;
-- the current's flow field;
-- taking an enemy tile.
+**Measured in holdings 3.0** (bots only, 300 matches a table,
+docs/checks/balance-hold3-2026-10-24.md): in a random mix no bot kind wins over 41% (steady
+27.4%, greedy 25.6%, keeper 22.8%); all-greedy tables end Fair in 77.0% and
+Lean in 3.0%, all-keeper tables Bountiful in 100%; no lake died.
 
 ### Fishing Party 钓鱼派对 (2.0)
 
@@ -788,6 +784,7 @@ Lake Holdings becomes turn-based; Boat Rush has four seasons of 45 s.
 
 ## Changelog
 
+- v5.8 (24 Oct, session 18): rule change 12, Lake Holdings is Monopoly on the water (Ava: "the land-grab game is not complete and not fun", then "like Monopoly"; model holdings 3.0). 24 squares round the lake: homes at the docks, the Lake Spirit between them, grounds in colour groups to buy; roll and sail, tolls (double for a whole group), haul or build a net or a pond, nets haul and ponds pay after every round, the grounds breed, a dead lake ends the match. Score: coins + grounds + buildings + fish on your grounds, × next spring's tier. holdings 2.0's section moved word for word to docs/design-history/holdings-v2.0.md and its tests are replaced. Boat Rush's rules card says the hold is 8 with four boats (it said 12). The table under "Where each mode stands" now says Fishing Party follows v5.0. Measured in docs/checks/balance-hold3-2026-10-24.md.
 - v5.7 (24 Oct, session 18): rule change 11 (Ava, after playing v5.6: "the boat spins on the spot; the lake did not change size; I cannot find my home; the 3D was better before"). Sailing: the shore is a wall a boat slides along, and a target past it is no longer moved (that made boats circle). Each match has a lake for its boats (`makeLake(boats)`, the same water per boat), and the homes are spread round it, one per boat; your home has a beam of light, a label and, in Boat Rush, an arrow. The camera follows your boat from low down by default; you can zoom, turn it or show the whole lake. Boat Rush: unloading 0.33 s a fish, a hold of 8 × 4 / boats. Measured in docs/checks/balance-lake11-2026-10-24.md. Ava also approved CC0 3D models (for a later change) and a Monopoly-style Lake Holdings (next).
 
 - v5.6 (24 Oct, session 18): rule change 10, the whole lake on one screen. The lake is the prototype's at 0.5 (46 × 32): every place, distance and sense scales with it (`WORLD_SCALE`), Who's Poaching's lantern is 12 (CLAUDE.md changed with Ava's yes). The camera shows the whole lake always, fitted beside the HUD and turned a quarter on an upright phone; no minimap. Sailing is shared (boat-move.ts): steer targets past the shore are moved onto the water, and a boat slides along the shore instead of sticking. Boat Rush: 30 s seasons (Ava's choice; 45 s fished every lake out), hold 8, speed 16. Fishing Party: boats at 10, the night net waits 2 s. Measured in docs/checks/balance-lake05-2026-10-24.md.

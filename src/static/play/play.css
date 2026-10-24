@@ -506,21 +506,25 @@ body.play.in-room { overflow: hidden; }
   .po-mhead h2 { font-size: 22px; }
 }
 
-/* ---- Lake Holdings 2.0 ---- */
+/* ---- Lake Holdings (holdings 3.0) ---- */
 .h2-bar { position: relative; height: 10px; border-radius: 99px; background: rgba(245,234,214,.1); margin-top: 8px; overflow: hidden; }
 .h2-bar i { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 99px; }
 .h2-bar .now { background: rgba(245,234,214,.35); } .h2-bar .next { height: 4px; top: 3px; background: var(--jade); }
 .h2-bar .next.t-fair { background: var(--mist); } .h2-bar .next.t-lean { background: var(--gold); } .h2-bar .next.t-none { background: var(--lacquer); }
 .h2-bar .mark { width: 2px; background: rgba(245,234,214,.5); }
-.h2-hand { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.hcard { display: grid; justify-items: center; gap: 2px; padding: 8px 6px; border-radius: 12px; border: 2px solid var(--line); background: var(--panel); color: inherit; font: inherit; cursor: pointer; text-align: center; }
-.hcard svg { width: 30px; height: 30px; } .hcard b { font-family: var(--display); font-size: 15px; } .hcard small { font-size: 11.5px; color: var(--mist); line-height: 1.25; }
-.hcard[aria-pressed="true"] { border-color: var(--gold); background: rgba(232,184,77,.18); transform: translateY(-3px); }
-.h2-wait { grid-column: 1 / -1; margin: 0; text-align: center; color: var(--mist); padding: 10px; background: var(--panel); border-radius: 12px; }
+.h2-wait { grid-column: 1 / -1; flex: 1; margin: 0; text-align: center; color: var(--mist); padding: 10px; background: var(--panel); border-radius: 12px; }
 .h2-tip { position: absolute; z-index: 7; transform: translate(-50%, calc(-100% - 14px)); max-width: min(320px, 80vw); background: rgba(18,14,24,.94); border: 1px solid var(--gold); border-radius: 10px; padding: 7px 10px; font-size: 13px; pointer-events: none; }
 .h2-tip[hidden] { display: none; } .h2-tip .plus { color: var(--gold); font-weight: 800; }
 .pin.dry { background: rgba(120,120,120,.6); }
-@media (max-width: 640px) { .hcard small { display: none; } .hcard { padding: 10px 4px; } }
+.h3-pads { flex-wrap: wrap; }
+.h3-pads .pad { display: grid; justify-items: center; gap: 2px; min-width: 0; flex: 1 1 28%; }
+.h3-pads .pad small { font-family: var(--body, inherit); font-weight: 600; font-size: 11.5px; opacity: .8; line-height: 1.2; }
+.h3-die { position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%); z-index: 6; display: grid; justify-items: center; gap: 4px; pointer-events: none; text-align: center; }
+.h3-die[hidden] { display: none; }
+.h3-die b { display: grid; place-items: center; width: 92px; height: 92px; border-radius: 20px; border: 5px solid var(--gold); background: var(--paper); color: var(--ink); font-family: var(--display); font-size: 60px; line-height: 1; box-shadow: 0 6px 0 rgba(0,0,0,.35); animation: h3-roll .5s ease-out; }
+.h3-die span { font-family: var(--display); font-weight: 800; font-size: 16px; background: rgba(18,14,24,.75); padding: 2px 10px; border-radius: 999px; }
+@keyframes h3-roll { from { transform: rotate(-200deg) scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (max-width: 640px) { .h3-pads .pad small { display: none; } .h3-die b { width: 70px; height: 70px; font-size: 44px; } }
 
 /* ---- Fishing Party 2.0 (party.js) ---- */
 .pad { position: relative; }

@@ -12,7 +12,7 @@ game should be better because others play at once. It is good if:
 1. **You feel the dilemma within a minute, in every game.** Each asks one
    question born of sharing the lake: one more cast or home now
    (Boat Rush); grab now or leave fish for the double round (Fishing Party);
-   who do you believe (Who's Poaching); net it now or breed it for later
+   who do you believe (Who's Poaching); haul your ground now or let it breed
    (Lake Holdings). Greed costs you through other players, never a random
    storm.
 2. **No one can cheat or peek.** The server decides every catch, coin and
@@ -68,8 +68,9 @@ claims about the modes' own bots and seeds, not about people:
   the last net held in 19.0%.
 - Who's Poaching, six boats: fishers won 68.3%, and 50.3% if they always skip
   the vote.
-- Lake Holdings: the greedy bot won 41.9% of random-mix tables, over the 41%
-  target; the mode is being redesigned.
+- Lake Holdings 3.0 (`docs/checks/balance-hold3-2026-10-24.md`): no bot kind
+  won over 41% of random-mix tables (steady 27.4%); all-greedy tables ended
+  Fair in 77.0%, all-keeper tables Bountiful in 100%.
 
 Judged, by watching people: whether they name the choice untold, change plans
 for others, and want a rematch.

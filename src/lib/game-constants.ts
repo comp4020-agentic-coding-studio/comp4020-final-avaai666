@@ -248,15 +248,24 @@ export const PARTY = {
   SEATS: { min: 2, max: 4, botFill: 4 },
 } as const;
 
-// ---- Lake Holdings, "holdings 2.0" (DESIGN.md "Lake Holdings 抢地盘经营 (2.0)") ----
-// In lake-world.ts's units; the prototype's HO (docs/prototypes/v10/hold.js).
-export const HOLD_MODEL = "holdings 2.0";
+// ---- Lake Holdings, "holdings 3.0" (DESIGN.md "Lake Holdings 湖上大富翁 (3.0)"; Ava, 24 Oct: "like Monopoly") ----
+// A board of 24 squares round the lake, turn by turn with a die. Coins are what you score; the lake's fish
+// live on the 18 or so fishing grounds and breed after every round.
+export const HOLD_MODEL = "holdings 3.0";
 export const HOLD = {
   DT: 0.05,
-  SEASONS: 4, ACTIONS: 3, PICK_S: 20, // four seasons of three moves; 20 s to choose
-  REVEAL_GAP: 0.45, REVEAL_END: 0.8, HARVEST_STEP_S: 1.3, // the reveal, one placement at a time; the harvest, one step at a time
-  HS: 8.4 * WS, IN_LAKE: 0.8, // hex size (the prototype's 8.4 at the lake's scale, so the board keeps its 61 tiles); tiles whose centre is within this share of the way to the shore
-  WEIGHTS: { net: 3, pond: 2, fence: 1.2, corm: 1, lantern: 1.2 },
-  NET_TAKE: 7, BASE: 2, POND_SELF: 2, POND_NEAR: 1, CORM: 2, GROW: 0.2, GROW_REEDS: 0.4, TILE_PTS: 1,
+  SQUARES: 24, RING_K: 0.84, // the board: 24 squares, this share of the way out to the shore
+  ROUNDS: 8, // every player takes 8 turns
+  ROLL_S: 12, ACT_S: 12, SHOW_S: 1.4, STEP_S: 0.22, MOVE_MIN_S: 0.6, // seconds: to roll, to choose, to show a landing, a square's sail
+  START_COINS: 15, HOME_PAY: 3, // coins to start; passing or landing on your own home
+  PRICE_BASE: 3, // a ground costs PRICE_BASE + its group's number round the board from seat 0's home (3, 4, 5, ...)
+  CAP: 19, // fish a ground can hold (18 grounds x 19 = 342, about K)
+  HAUL: { none: 3, net: 8, pond: 2 }, // fish you take (and sell for a coin each) when you haul your own ground
+  TOLL: { none: 1, net: 2, pond: 3 }, // coins a visitor pays the owner; twice that if the owner holds the whole group
+  BUILD_COST: 4, POND_BREED: 2, POND_PAY: 2, NET_ROUND: 6, // a net or a pond costs 4; after each round a net hauls up to 6 fish for its owner, and a pond adds 2 fish and pays its owner 2
+  BREED: 0.35, // after each round every ground breeds: + round(BREED x stock x (1 - stock / cap)); an empty ground stays empty
+  DEAD: 0.15, // if the lake falls below this share of K after a round, it has died and the match ends
+  GROUND_PTS: 2, BUILD_PTS: 2, FISH_PTS: 1, // at the end: coins + 2 a ground + 2 a building + 1 a fish on your grounds, x next spring's tier
+  CARDS: ["bloom", "market", "inspector", "festival", "tailwind", "thieves", "fry", "lucky"] as const, // the Lake Spirit's deck
   SEATS: { min: 2, max: 4, botFill: 4 },
 } as const;

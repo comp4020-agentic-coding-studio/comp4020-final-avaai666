@@ -1,315 +1,308 @@
-// Lake Holdings, "holdings 2.0" (DESIGN.md "Lake Holdings 抢地盘经营 (2.0)").
-// Turn-based, everyone choosing at the same time: four seasons of three
-// moves on a hex board laid over the v5 lake, then each season's harvest,
-// shown step by step. A move: you hold three cards (always the Flag, plus two
-// drawn by weight), pick one and a legal tile within 20 s, or the bot's
-// choice is played for you. Then everyone's placements are revealed one by
-// one (two flags on one tile: fewer tiles wins). The harvest: ponds breed,
-// lanterns pull, nets haul (and every other tile you hold gives 2), the
-// cormorants steal, the lake breeds, fish swim away from the nets, empty
-// water runs dry. Score = fish harvested + 1 per tile, x the tier of next
-// spring, which is the board after one more pond-and-breed step (dry water
-// stays dry). breeds: true — results().lakeLeft already is next spring.
+// Lake Holdings, "holdings 3.0" (DESIGN.md "Lake Holdings 湖上大富翁 (3.0)"; Ava, 24 Oct: "make it like
+// Monopoly"). A board of 24 squares round the lake, just in from the shore: each player's home (at their
+// own dock), the Lake Spirit's squares between the homes, and fishing grounds in groups between those.
+// Turn by turn: roll one die, sail that many squares, and the square acts:
+// - a ground nobody owns: buy it, or not;
+// - your own ground: haul it (take its fish, a coin each), or build a net (haul more) or a pond (it
+//   breeds, and visitors pay more), or leave it;
+// - someone else's ground: pay its toll to its owner (double if they hold the whole group);
+// - the Lake Spirit: a card; your own home (landing or passing): 3 coins.
+// After every round each net hauls its ground for its owner, each pond pays its owner, then each ground
+// breeds; a hauled-out ground stays empty unless a pond is on it. If the lake falls below 15% of K it has
+// died and the match ends. After 8 rounds: coins, plus 2 for each ground and each building, plus 1 for
+// each fish still on your grounds, times the tier of next spring.
 //
-// Pure and deterministic: the board, the hands and every draw come from the
-// match's "lake" stream; a bot's decisions from the stream the platform gives
-// it for that tick. Secret: a seat's hand and its pick, until the reveal.
+// Pure and deterministic: the die from the match's "dice" stream, the Spirit's deck from "cards"; a bot's
+// choices from the stream the platform gives it for that tick. Nothing is secret.
 import { HOLD as Q, HOLD_MODEL } from "../game-constants.ts";
-import { type GameEvent, type Highlight, type Mode, type Results, type Seat, streamOf } from "../game-platform.ts";
-import { K, type Lake, makeLake, tierOf } from "../lake-world.ts";
+import { type GameEvent, type Highlight, type LakeMemory, type Mode, type Results, type Seat, streamOf } from "../game-platform.ts";
+import { K, type Lake, makeLake, nextSpring, tierOf } from "../lake-world.ts";
 
-export type Card = "claim" | "net" | "pond" | "fence" | "corm" | "lantern";
-export const CARDS: Card[] = ["claim", "net", "pond", "fence", "corm", "lantern"];
-const DRAWN: Exclude<Card, "claim">[] = ["net", "pond", "fence", "corm", "lantern"];
-type Zone = "reeds" | "lotus" | "deep" | "open";
-export type HoldInput = { k: "place"; card: Card; tile: number } | { k: "pass" };
-
-export interface Tile { ix: number; q: number; r: number; x: number; y: number; zone: Zone; w: number; cap: number; fish: number; owner: number; build: Exclude<Card, "claim"> | null; dry: boolean; paid: number }
-interface Player { seat: number; fish: number; hand: Card[]; pick: { card: Card; tile: number } | null | undefined; kind: string; stolen: number; best: number }
+export type SqType = "home" | "spirit" | "ground";
+export type Build = "net" | "pond";
+export type Card = (typeof Q.CARDS)[number];
+export type HoldInput = { k: "roll" } | { k: "buy" } | { k: "pass" } | { k: "haul" } | { k: "build"; kind: Build; sq?: number };
+export interface Square { ix: number; type: SqType; a: number; x: number; y: number; home: number; group: number; price: number; owner: number; build: Build | null; stock: number; cap: number }
+interface Player { seat: number; pos: number; coins: number; kind: string; hauled: number; tolls: number; bestHaul: number }
+export interface Landing { seat: number; sq: number; what: string; n: number; to?: number; card?: Card }
 export interface HoldSim {
   lake: Lake;
-  tick: number; t: number; phase: "pick" | "reveal" | "harvest" | "end"; phaseT: number; season: number; action: number;
-  n: number; rng: () => number; bots: boolean[];
-  tiles: Tile[]; byKey: Map<string, number>; players: Player[]; start: number;
-  reveal: { seat: number; card: Card; tile: number; lost?: boolean }[]; harvestStep: number; log: { season: number; before: number; after: number }[];
+  tick: number; t: number; phase: "roll" | "move" | "act" | "show" | "end"; phaseT: number; round: number; turn: number;
+  n: number; dice: () => number; cards: () => number; bots: boolean[];
+  squares: Square[]; groups: number; players: Player[]; deck: Card[];
+  roll: number | null; path: number[]; moveS: number; act: ("buy" | "haul" | "net" | "pond" | "pass")[]; last: Landing | null;
+  start: number; log: { round: number; before: number; after: number }[]; ended: "rounds" | "dead" | null;
+  builtThisTurn: boolean;
 }
-
-const SQ3 = Math.sqrt(3);
-const DIRS: [number, number][] = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
-// a hex's centre; the hexes scale with the match's lake, so every lake has the same 61 tiles
-export const hexAt = (q: number, r: number, lake: Lake = makeLake()): [number, number] => [Q.HS * lake.k * SQ3 * (q + r / 2), Q.HS * lake.k * 1.5 * r + 4 * lake.scale];
-export function nbrs(s: HoldSim, tl: Tile): Tile[] { return DIRS.map(([dq, dr]) => s.byKey.get(`${tl.q + dq},${tl.r + dr}`)).filter((i): i is number => i !== undefined).map((i) => s.tiles[i]); }
-const hexDist = (a: Tile, b: Tile): number => (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(a.q + a.r - b.q - b.r)) / 2;
-const within2 = (s: HoldSim, tl: Tile): Tile[] => s.tiles.filter((o) => o !== tl && hexDist(o, tl) <= 2);
-export const lakeFish = (s: HoldSim): number => s.tiles.reduce((n, tl) => n + tl.fish, 0);
-const tilesOf = (s: HoldSim, seat: number): number => s.tiles.filter((tl) => tl.owner === seat).length;
-const inZone = (z: { x: number; y: number; r: number }, x: number, y: number): boolean => Math.hypot(x - z.x, y - z.y) < z.r;
 export const BOT_KINDS = ["steady", "keeper", "greedy"];
 
-function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number; young?: number; boats?: number }): HoldSim {
-  const n = seats.length;
+export const lakeFish = (s: HoldSim): number => s.squares.reduce((n, q) => n + (q.type === "ground" ? q.stock : 0), 0);
+const groundsOf = (s: HoldSim, seat: number): Square[] => s.squares.filter((q) => q.type === "ground" && q.owner === seat);
+const holdsGroup = (s: HoldSim, seat: number, g: number): boolean => s.squares.filter((q) => q.type === "ground" && q.group === g).every((q) => q.owner === seat);
+export const tollOf = (s: HoldSim, q: Square): number => Q.TOLL[q.build ?? "none"] * (q.owner >= 0 && holdsGroup(s, q.owner, q.group) ? 2 : 1);
+export const haulOf = (q: Square): number => Math.min(q.stock, Q.HAUL[q.build ?? "none"]);
+export const nextOf = (s: HoldSim): number => (s.ended === "dead" ? Math.min(K, lakeFish(s)) : nextSpring(lakeFish(s)));
+
+// ---- the board: homes at the players' docks, the Spirit between them, grounds in groups of at most 3 ----
+export function boardFor(lake: Lake, n: number): Omit<Square, "stock" | "cap">[] {
+  const N = Q.SQUARES, homes: number[] = [];
+  for (let i = 0; i < n; i++) {
+    let ix = (((Math.round((lake.dockPos(i).a - 90) / (360 / N)) % N) + N) % N);
+    while (homes.includes(ix)) ix = (ix + 1) % N;
+    homes.push(ix);
+  }
+  const sorted = [...homes].sort((a, b) => a - b), spirits: number[] = [];
+  sorted.forEach((h, i) => { const next = i + 1 < sorted.length ? sorted[i + 1] : sorted[0] + N, gap = next - h; if (gap >= 3) spirits.push((h + Math.floor(gap / 2)) % N); });
+  const out: Omit<Square, "stock" | "cap">[] = [];
+  let group = -1, run = 0;
+  for (let ix = 0; ix < N; ix++) {
+    const a = 90 + (ix * 360) / N, [x, y] = lake.shape(a, Q.RING_K);
+    const home = homes.indexOf(ix), type: SqType = home >= 0 ? "home" : spirits.includes(ix) ? "spirit" : "ground";
+    if (type !== "ground") { run = 0; out.push({ ix, type, a, x, y, home, group: -1, price: 0, owner: -1, build: null }); continue; }
+    if (run === 0 || run >= 3) { group++; run = 0; }
+    run++;
+    out.push({ ix, type, a, x, y, home: -1, group, price: 0, owner: -1, build: null });
+  }
+  const groups = group + 1;
+  for (const q of out) if (q.type === "ground") q.price = Q.PRICE_BASE + Math.floor((q.group * 6) / groups);
+  return out;
+}
+
+function make(seed: string, seats: Seat[], lake: LakeMemory): HoldSim {
+  const n = seats.length, L = makeLake(lake.boats);
+  const board = boardFor(L, n);
+  const grounds = board.filter((q) => q.type === "ground");
   const s: HoldSim = {
-    tick: 0, t: 0, phase: "pick", phaseT: 0, season: 1, action: 1, n, rng: streamOf(seed, "lake"), bots: seats.map((x) => x.bot !== null),
-    tiles: [], byKey: new Map(), players: [], start: 0, reveal: [], harvestStep: 0, log: [],
-    lake: makeLake(lake.boats), // the lake for this many boats (rule change 11)
+    lake: L, tick: 0, t: 0, phase: "roll", phaseT: 0, round: 1, turn: 0,
+    n, dice: streamOf(seed, "dice"), cards: streamOf(seed, "cards"), bots: seats.map((x) => x.bot !== null),
+    squares: board.map((q) => ({ ...q, stock: 0, cap: q.type === "ground" ? Q.CAP : 0 })), groups: Math.max(...grounds.map((q) => q.group)) + 1,
+    players: seats.map((st, i) => ({ seat: st.seat, pos: board.findIndex((q) => q.home === i), coins: Q.START_COINS, kind: BOT_KINDS[i % 3], hauled: 0, tolls: 0, bestHaul: 0 })),
+    deck: [], roll: null, path: [], moveS: 0, act: [], last: null, start: 0, log: [], ended: null, builtThisTurn: false,
   };
-  // the board: every hex whose centre is within 0.8 of the way to the shore, none on the island
-  for (let q = -5; q <= 5; q++) for (let r = -4; r <= 4; r++) {
-    const [x, y] = hexAt(q, r, s.lake);
-    if (s.lake.nr(x, y) > Q.IN_LAKE || Math.hypot(x - s.lake.island.x, y - s.lake.island.y) < s.lake.island.r + 2) continue;
-    const zone: Zone = inZone(s.lake.zones.reeds, x, y) ? "reeds" : inZone(s.lake.zones.lotus, x, y) ? "lotus" : Math.hypot(x - s.lake.island.x, y - s.lake.island.y) < s.lake.deep.r ? "deep" : "open";
-    s.byKey.set(`${q},${r}`, s.tiles.length);
-    s.tiles.push({ ix: s.tiles.length, q, r, x, y, zone, w: zone === "deep" ? 1.35 : zone === "reeds" ? 1.15 : 1, cap: 0, fish: 0, owner: -1, build: null, dry: false, paid: 0 });
-  }
-  // the lake's fish, spread over the water by where fish like to be
-  const total = lake.adults !== undefined && lake.young !== undefined ? lake.adults + lake.young : lake.fish;
-  const wsum = s.tiles.reduce((n2, tl) => n2 + tl.w, 0);
-  for (const tl of s.tiles) { tl.cap = Math.max(4, Math.round((K * tl.w) / wsum)); tl.fish = Math.min(tl.cap, Math.round((total * tl.w) / wsum)); }
+  // the room's fish, spread evenly over the grounds (the first ones get the remainder)
+  const total = Math.min(grounds.length * Q.CAP, lake.adults !== undefined && lake.young !== undefined ? lake.adults + lake.young : lake.fish);
+  const gs = s.squares.filter((q) => q.type === "ground");
+  gs.forEach((q, i) => { q.stock = Math.floor(total / gs.length) + (i < total % gs.length ? 1 : 0); });
   s.start = lakeFish(s);
-  s.players = seats.map((st, i) => ({ seat: st.seat, fish: 0, hand: [], pick: undefined, kind: BOT_KINDS[i % 3], stolen: 0, best: 0 }));
-  // two tiles to start, the closest to each player's dock
-  for (const p of s.players) {
-    const d = s.lake.dockPos(p.seat);
-    const near = s.tiles.filter((tl) => tl.owner < 0).sort((a, b) => Math.hypot(a.x - d.x, a.y - d.y) - Math.hypot(b.x - d.x, b.y - d.y));
-    const a = near[0]; a.owner = p.seat;
-    const b = nbrs(s, a).filter((x) => x.owner < 0).sort((u, v) => Math.hypot(u.x - d.x, u.y - d.y) - Math.hypot(v.x - d.x, v.y - d.y))[0] ?? near[1];
-    b.owner = p.seat;
-  }
-  deal(s);
   return s;
 }
 
-// the Flag, plus two drawn by weight (different if the draw allows)
-function drawOne(s: HoldSim): Exclude<Card, "claim"> {
-  const total = DRAWN.reduce((n, c) => n + Q.WEIGHTS[c], 0);
-  let r = s.rng() * total;
-  for (const c of DRAWN) { r -= Q.WEIGHTS[c]; if (r <= 0) return c; }
-  return "net";
-}
-function deal(s: HoldSim): void {
-  for (const p of s.players) {
-    const a = drawOne(s); let b = drawOne(s);
-    for (let k = 0; k < 6 && b === a; k++) b = drawOne(s);
-    p.hand = ["claim", a, b]; p.pick = undefined;
-  }
-}
-
-export function legal(s: HoldSim, seat: number, card: Card): Tile[] {
-  if (card === "claim") return s.tiles.filter((tl) => tl.owner < 0 && nbrs(s, tl).some((x) => x.owner === seat));
-  return s.tiles.filter((tl) => tl.owner === seat && !tl.build);
-}
-export const isProtected = (s: HoldSim, tl: Tile): boolean => tl.build === "fence" || (tl.owner >= 0 && nbrs(s, tl).some((x) => x.build === "fence" && x.owner === tl.owner));
-export function cormTarget(s: HoldSim, tl: Tile, seat: number): Tile | null {
-  return within2(s, tl).filter((o) => o.build === "net" && o.owner >= 0 && o.owner !== seat && !isProtected(s, o)).sort((a, b) => b.fish - a.fish || a.ix - b.ix)[0] ?? null;
+function shuffleDeck(s: HoldSim): void {
+  const d = [...Q.CARDS];
+  for (let i = d.length - 1; i > 0; i--) { const j = Math.floor(s.cards() * (i + 1)); [d[i], d[j]] = [d[j], d[i]]; }
+  s.deck = d;
 }
 
 function input(s: HoldSim, seat: number, raw: unknown): HoldInput | null {
   const o = raw as Record<string, unknown> | null;
-  if (!o || typeof o !== "object" || s.phase !== "pick") return null;
-  const p = s.players[seat]; if (!p || p.pick !== undefined) return null;
-  if (o.k === "pass") return legalAny(s, seat) ? null : { k: "pass" };
-  if (o.k !== "place" || !CARDS.includes(o.card as Card) || !Number.isInteger(o.tile)) return null;
-  const card = o.card as Card, tile = o.tile as number;
-  if (!p.hand.includes(card) || !legal(s, seat, card).some((tl) => tl.ix === tile)) return null;
-  return { k: "place", card, tile };
+  if (!o || typeof o !== "object" || seat !== s.turn || s.phase === "end") return null;
+  if (o.k === "roll") return s.phase === "roll" ? { k: "roll" } : null;
+  // before you roll you may build on any ground of yours that has nothing yet (one a turn), as in Monopoly
+  if (s.phase === "roll") {
+    if (o.k !== "build" || (o.kind !== "net" && o.kind !== "pond") || !Number.isInteger(o.sq)) return null;
+    const q = s.squares[o.sq as number], p = s.players[seat];
+    return q && q.type === "ground" && q.owner === seat && !q.build && p.coins >= Q.BUILD_COST && !s.builtThisTurn ? { k: "build", kind: o.kind, sq: q.ix } : null;
+  }
+  if (s.phase !== "act") return null;
+  if (o.k === "buy" && s.act.includes("buy")) return { k: "buy" };
+  if (o.k === "haul" && s.act.includes("haul")) return { k: "haul" };
+  if (o.k === "build" && (o.kind === "net" || o.kind === "pond") && s.act.includes(o.kind)) return { k: "build", kind: o.kind };
+  if (o.k === "pass") return { k: "pass" };
+  return null;
 }
-const legalAny = (s: HoldSim, seat: number): boolean => s.players[seat].hand.some((c) => legal(s, seat, c).length > 0);
+
+// what the player whose turn it is may do on the square they landed on (nothing to choose: [])
+function choices(s: HoldSim): HoldSim["act"] {
+  const p = s.players[s.turn], q = s.squares[p.pos];
+  if (q.type !== "ground") return [];
+  if (q.owner < 0) return p.coins >= q.price ? ["buy", "pass"] : [];
+  if (q.owner !== p.seat) return [];
+  const out: HoldSim["act"] = [];
+  if (q.stock > 0) out.push("haul");
+  if (!q.build && p.coins >= Q.BUILD_COST) out.push("net", "pond");
+  return out.length ? [...out, "pass"] : [];
+}
+
+function setPhase(s: HoldSim, phase: HoldSim["phase"]): void { s.phase = phase; s.phaseT = 0; }
+
+// sail `steps` squares: your own home pays as you pass it or land on it
+function sail(s: HoldSim, steps: number, ev: GameEvent[]): void {
+  const p = s.players[s.turn], N = Q.SQUARES;
+  s.path = [];
+  for (let k = 1; k <= steps; k++) {
+    p.pos = (p.pos + 1) % N; s.path.push(p.pos);
+    if (s.squares[p.pos].home === p.seat) { p.coins += Q.HOME_PAY; ev.push({ k: "home", seat: p.seat, n: Q.HOME_PAY, sq: p.pos }); }
+  }
+  s.moveS = Math.max(Q.MOVE_MIN_S, steps * Q.STEP_S);
+  setPhase(s, "move");
+}
+
+// the square the player whose turn it is has landed on acts
+function land(s: HoldSim, ev: GameEvent[]): void {
+  const p = s.players[s.turn], q = s.squares[p.pos];
+  s.last = { seat: p.seat, sq: q.ix, what: q.type, n: 0 };
+  if (q.type === "ground" && q.owner >= 0 && q.owner !== p.seat) {
+    const toll = Math.min(p.coins, tollOf(s, q)), owner = s.players[q.owner];
+    p.coins -= toll; owner.coins += toll; owner.tolls += toll;
+    s.last = { seat: p.seat, sq: q.ix, what: "toll", n: toll, to: owner.seat };
+    ev.push({ k: "toll", seat: p.seat, owner: owner.seat, n: toll, sq: q.ix }); // (not "to": an event's "to" lists who may see it)
+  } else if (q.type === "spirit") {
+    if (!s.deck.length) shuffleDeck(s);
+    const card = s.deck.shift()!;
+    s.last = { seat: p.seat, sq: q.ix, what: "card", n: 0, card };
+    ev.push({ k: "card", seat: p.seat, card, sq: q.ix });
+    if (spirit(s, card, ev)) return; // the tailwind sails on
+  }
+  s.act = choices(s);
+  setPhase(s, s.act.length ? "act" : "show");
+}
+
+// the Lake Spirit's cards; true if the card moved the boat on (it lands again after that sail)
+function spirit(s: HoldSim, card: Card, ev: GameEvent[]): boolean {
+  const p = s.players[s.turn], grounds = s.squares.filter((q) => q.type === "ground");
+  if (card === "bloom") for (const q of grounds) if (q.stock > 0) q.stock = Math.min(q.cap, q.stock + 2);
+  if (card === "market") p.coins += 4;
+  if (card === "lucky") p.coins += 3;
+  if (card === "inspector") { const fine = Math.min(p.coins, 2 * groundsOf(s, p.seat).filter((q) => q.build === "net").length); p.coins -= fine; if (s.last) s.last.n = fine; }
+  if (card === "festival") for (const o of s.players) if (o !== p && o.coins > 0) { o.coins--; p.coins++; }
+  if (card === "thieves") { const q = groundsOf(s, p.seat).sort((a, b) => b.stock - a.stock || a.ix - b.ix)[0]; if (q) { const lost = Math.min(4, q.stock); q.stock -= lost; if (s.last) s.last.n = lost; } }
+  if (card === "fry") for (const q of groundsOf(s, p.seat)) q.stock = Math.min(q.cap, q.stock + 3);
+  if (card === "tailwind") { sail(s, 3, ev); return true; }
+  return false;
+}
+
+function apply(s: HoldSim, seat: number, i: HoldInput, ev: GameEvent[]): void {
+  if (seat !== s.turn) return;
+  const p = s.players[seat];
+  if (i.k === "build" && s.phase === "roll" && i.sq !== undefined) {
+    const q = s.squares[i.sq];
+    if (q.owner === seat && !q.build && p.coins >= Q.BUILD_COST && !s.builtThisTurn) { p.coins -= Q.BUILD_COST; q.build = i.kind; s.builtThisTurn = true; ev.push({ k: "build", seat, sq: q.ix, kind: i.kind }); }
+    return;
+  }
+  if (i.k === "roll" && s.phase === "roll") {
+    s.roll = 1 + Math.floor(s.dice() * 6);
+    ev.push({ k: "roll", seat, n: s.roll });
+    sail(s, s.roll, ev);
+    return;
+  }
+  if (s.phase !== "act") return;
+  const q = s.squares[p.pos];
+  if (i.k === "buy" && s.act.includes("buy")) { p.coins -= q.price; q.owner = seat; ev.push({ k: "buy", seat, sq: q.ix, n: q.price }); s.last = { seat, sq: q.ix, what: "buy", n: q.price }; }
+  if (i.k === "haul" && s.act.includes("haul")) {
+    const n = haulOf(q); q.stock -= n; p.coins += n; p.hauled += n; p.bestHaul = Math.max(p.bestHaul, n);
+    ev.push({ k: "haul", seat, sq: q.ix, n }); s.last = { seat, sq: q.ix, what: "haul", n };
+  }
+  if (i.k === "build" && s.act.includes(i.kind)) { p.coins -= Q.BUILD_COST; q.build = i.kind; ev.push({ k: "build", seat, sq: q.ix, kind: i.kind }); s.last = { seat, sq: q.ix, what: i.kind, n: Q.BUILD_COST }; }
+  s.act = []; setPhase(s, "show");
+}
+
+// after every player's turn of a round: nets haul, ponds pay, the grounds breed, a pond adds its fish, and the lake may have died
+function endRound(s: HoldSim, ev: GameEvent[]): void {
+  const before = lakeFish(s);
+  // every net hauls its ground for its owner (a coin a fish): the income that empties the lake
+  const nets: [number, number, number][] = [];
+  for (const q of s.squares) if (q.type === "ground" && q.build === "net" && q.owner >= 0 && q.stock > 0) {
+    const n = Math.min(q.stock, Q.NET_ROUND), p = s.players[q.owner]; q.stock -= n; p.coins += n; p.hauled += n; nets.push([q.ix, q.owner, n]);
+  }
+  if (nets.length) ev.push({ k: "nets", list: nets });
+  // every pond pays its owner (visitors come to see the fish), and takes none
+  const ponds: [number, number, number][] = [];
+  for (const q of s.squares) if (q.type === "ground" && q.build === "pond" && q.owner >= 0) { s.players[q.owner].coins += Q.POND_PAY; ponds.push([q.ix, q.owner, Q.POND_PAY]); }
+  if (ponds.length) ev.push({ k: "ponds", list: ponds });
+  for (const q of s.squares) {
+    if (q.type !== "ground") continue;
+    if (q.stock > 0) q.stock = Math.min(q.cap, q.stock + Math.round(Q.BREED * q.stock * (1 - q.stock / q.cap)));
+    if (q.build === "pond") q.stock = Math.min(q.cap, q.stock + Q.POND_BREED);
+  }
+  const after = lakeFish(s);
+  s.log.push({ round: s.round, before, after });
+  ev.push({ k: "breed", round: s.round, before, after });
+  if (after < Q.DEAD * K) { s.ended = "dead"; ev.push({ k: "dead", round: s.round, lake: after }); setPhase(s, "end"); ev.push({ k: "end" }); return; }
+  if (s.round >= Q.ROUNDS) { s.ended = "rounds"; setPhase(s, "end"); ev.push({ k: "end" }); return; }
+  s.round++;
+  ev.push({ k: "round", round: s.round });
+}
+
+function nextTurn(s: HoldSim, ev: GameEvent[]): void {
+  s.turn = (s.turn + 1) % s.n; s.roll = null; s.path = []; s.act = []; s.builtThisTurn = false;
+  if (s.turn === 0) { endRound(s, ev); if (s.phase === "end") return; }
+  setPhase(s, "roll");
+  ev.push({ k: "turn", seat: s.turn });
+}
 
 function step(s: HoldSim, inputs: { seat: number; i: HoldInput }[]): GameEvent[] {
   const ev: GameEvent[] = [];
   if (s.phase === "end") return ev;
-  if (s.phase === "pick") {
-    for (const { seat, i } of inputs) {
-      const p = s.players[seat]; if (!p || p.pick !== undefined) continue;
-      p.pick = i.k === "place" ? { card: i.card, tile: i.tile } : null;
-      ev.push({ k: "picked", seat });
-    }
-  }
+  for (const { seat, i } of inputs) apply(s, seat, i, ev);
   s.tick++;
   s.t = Math.round(s.tick * Q.DT * 1000) / 1000;
   s.phaseT = Math.round((s.phaseT + Q.DT) * 1000) / 1000;
-  if (s.phase === "pick") {
-    // time up: the bot's choice is played for anyone who has not chosen
-    if (s.phaseT >= Q.PICK_S - 1e-9) for (const p of s.players) if (p.pick === undefined) { const c = choose(s, p, s.rng); p.pick = c ? { card: c.card, tile: c.tile.ix } : null; ev.push({ k: "picked", seat: p.seat, auto: true }); }
-    if (s.players.every((p) => p.pick !== undefined)) startReveal(s, ev);
-  } else if (s.phase === "reveal") {
-    if (s.phaseT >= Q.REVEAL_GAP * s.reveal.length + Q.REVEAL_END - 1e-9) {
-      if (s.action < Q.ACTIONS) { s.action++; s.phase = "pick"; s.phaseT = 0; deal(s); ev.push({ k: "move", season: s.season, action: s.action }); }
-      else { s.phase = "harvest"; s.phaseT = 0; s.harvestStep = 0; s.log.push({ season: s.season, before: lakeFish(s), after: 0 }); }
-    }
-  } else if (s.phase === "harvest") {
-    const due = Math.floor(s.phaseT / Q.HARVEST_STEP_S);
-    while (s.harvestStep < Math.min(due, HARVEST.length)) { HARVEST[s.harvestStep](s, ev); s.harvestStep++; }
-    if (s.harvestStep >= HARVEST.length && s.phaseT >= Q.HARVEST_STEP_S * (HARVEST.length + 1) - 1e-9) {
-      s.log[s.log.length - 1].after = lakeFish(s);
-      if (s.season >= Q.SEASONS) { s.phase = "end"; ev.push({ k: "end" }); }
-      else { s.season++; s.action = 1; s.phase = "pick"; s.phaseT = 0; deal(s); ev.push({ k: "season", season: s.season }); }
-    }
-  }
+  // the clock: a roll nobody makes is made for them; a choice nobody makes is a pass
+  if (s.phase === "roll" && s.phaseT >= Q.ROLL_S - 1e-9) apply(s, s.turn, { k: "roll" }, ev);
+  else if (s.phase === "move" && s.phaseT >= s.moveS - 1e-9) land(s, ev);
+  else if (s.phase === "act" && s.phaseT >= Q.ACT_S - 1e-9) apply(s, s.turn, { k: "pass" }, ev);
+  else if (s.phase === "show" && s.phaseT >= Q.SHOW_S - 1e-9) nextTurn(s, ev);
   return ev;
 }
 
-function startReveal(s: HoldSim, ev: GameEvent[]): void {
-  // two flags on one tile: the player with fewer tiles gets it (a tie: the lake's stream decides)
-  const flags = new Map<number, Player[]>();
-  for (const p of s.players) if (p.pick && p.pick.card === "claim") { const l = flags.get(p.pick.tile) ?? []; l.push(p); flags.set(p.pick.tile, l); }
-  const lost = new Set<number>();
-  for (const list of flags.values()) if (list.length > 1) {
-    const order = list.map((p) => [p, tilesOf(s, p.seat), s.rng()] as const).sort((a, b) => a[1] - b[1] || a[2] - b[2]);
-    for (const [p] of order.slice(1)) lost.add(p.seat);
-  }
-  s.reveal = [];
-  for (const p of s.players) {
-    if (!p.pick) continue;
-    const tl = s.tiles[p.pick.tile];
-    const gone = lost.has(p.seat);
-    if (!gone) { if (p.pick.card === "claim") tl.owner = p.seat; else tl.build = p.pick.card; }
-    s.reveal.push({ seat: p.seat, card: p.pick.card, tile: p.pick.tile, ...(gone ? { lost: true } : {}) });
-  }
-  s.phase = "reveal"; s.phaseT = 0;
-  ev.push({ k: "reveal", list: s.reveal });
-}
-
-// ---- the harvest, one step at a time ----
-const HARVEST: ((s: HoldSim, ev: GameEvent[]) => void)[] = [
-  // 1. ponds breed: +2 here, +1 on every tile around (anyone's), and dry neighbours come back
-  (s, ev) => {
-    for (const tl of s.tiles) if (tl.build === "pond") {
-      tl.fish = Math.min(tl.cap, tl.fish + Q.POND_SELF); tl.dry = false;
-      for (const x of nbrs(s, tl)) { x.fish = Math.min(x.cap, x.fish + Q.POND_NEAR); x.dry = false; }
-    }
-    ev.push({ k: "harvest", step: "pond" });
-  },
-  // 2. lanterns pull 1 from each unprotected tile around
-  (s, ev) => {
-    for (const tl of s.tiles) if (tl.build === "lantern") for (const x of nbrs(s, tl)) if (x.fish > 0 && !isProtected(s, x) && tl.fish < tl.cap) { x.fish--; tl.fish++; }
-    ev.push({ k: "harvest", step: "lantern" });
-  },
-  // 3. nets haul up to 7; every other tile you hold that is not dry gives 2
-  (s, ev) => {
-    const paid: Record<number, number> = {};
-    for (const tl of s.tiles) {
-      tl.paid = 0;
-      if (tl.owner < 0 || (tl.build !== "net" && (tl.build || tl.dry))) continue;
-      const k = Math.min(tl.build === "net" ? Q.NET_TAKE : Q.BASE, tl.fish);
-      tl.fish -= k; tl.paid = k; s.players[tl.owner].fish += k; paid[tl.owner] = (paid[tl.owner] ?? 0) + k;
-    }
-    for (const p of s.players) p.best = Math.max(p.best, paid[p.seat] ?? 0);
-    ev.push({ k: "harvest", step: "net", paid: s.tiles.filter((tl) => tl.paid > 0).map((tl) => [tl.ix, tl.paid]) });
-  },
-  // 4. cormorants steal 2 from the richest unprotected neighbour net within 2 tiles
-  (s, ev) => {
-    const thefts: [number, number, number][] = [];
-    for (const tl of s.tiles) if (tl.build === "corm" && tl.owner >= 0) {
-      const v = cormTarget(s, tl, tl.owner);
-      if (v && v.paid > 0) { const k = Math.min(Q.CORM, v.paid); s.players[v.owner].fish -= k; s.players[v.owner].stolen += k; s.players[tl.owner].fish += k; thefts.push([tl.ix, v.ix, k]); }
-    }
-    ev.push({ k: "harvest", step: "corm", thefts });
-  },
-  // 5. the lake breeds on each tile that is not dry
-  (s, ev) => {
-    for (const tl of s.tiles) {
-      if (tl.dry) continue;
-      const g = tl.zone === "reeds" ? Q.GROW_REEDS : Q.GROW;
-      const born = tl.fish < 2 ? 0 : Math.round(tl.fish * g * (1 - tl.fish / tl.cap));
-      if (born > 0) tl.fish = Math.min(tl.cap, tl.fish + born);
-    }
-    ev.push({ k: "harvest", step: "grow" });
-  },
-  // 6. fish swim one tile away from each unprotected net; 7. empty water runs dry
-  (s, ev) => {
-    for (const tl of s.tiles) if (tl.build === "net" && tl.fish > 0 && !isProtected(s, tl)) {
-      const free = nbrs(s, tl).filter((x) => x.build !== "net" && !x.dry && x.fish < x.cap);
-      if (free.length) { const x = free[Math.floor(s.rng() * free.length)]; tl.fish--; x.fish++; }
-    }
-    const dried: number[] = [];
-    for (const tl of s.tiles) if (!tl.dry && tl.fish <= 0) { tl.dry = true; tl.fish = 0; dried.push(tl.ix); }
-    ev.push({ k: "harvest", step: "swim", dried });
-  },
-];
-
-// next spring on this board: ponds and breeding for one more season; dry water stays dry
-export function holdForecast(s: HoldSim): number {
-  let sum = 0;
-  for (const tl of s.tiles) {
-    if (tl.dry && !nbrs(s, tl).some((x) => x.build === "pond")) continue;
-    let f = tl.fish + (tl.build === "pond" ? Q.POND_SELF : 0) + nbrs(s, tl).filter((x) => x.build === "pond").length * Q.POND_NEAR;
-    f = Math.min(tl.cap, f);
-    const g = tl.zone === "reeds" ? Q.GROW_REEDS : Q.GROW;
-    f += f < 2 ? 0 : Math.round(f * g * (1 - f / tl.cap));
-    sum += Math.min(tl.cap, f);
-  }
-  return Math.min(K, sum);
-}
-
-// ---- bots: value every card on every legal tile (the prototype's botChoose) ----
-function choose(s: HoldSim, p: Player, r: () => number): { card: Card; tile: Tile } | null {
-  let best: { card: Card; tile: Tile; v: number } | null = null;
-  const greedy = p.kind === "greedy", keeper = p.kind === "keeper";
-  for (const card of p.hand) for (const tl of legal(s, p.seat, card)) {
-    const ns = nbrs(s, tl);
-    let v = 0;
-    if (card === "claim") v = tl.fish * 0.5 + ns.filter((x) => x.owner < 0).length * 0.6 + (tl.zone === "deep" ? 1.5 : 0) + 1.5;
-    if (card === "net") v = Math.min(Q.NET_TAKE, tl.fish) * (greedy ? 1.9 : keeper ? 0.9 : 1.4) * (Q.SEASONS - s.season + 1) * 0.55 + (ns.some((x) => x.build === "pond") ? 1.5 : 0);
-    if (card === "pond") v = (2 + ns.filter((x) => x.owner === p.seat).length * 1.6 + (s.season <= 2 ? 1.5 : 0)) * (keeper ? 1.7 : greedy ? 0.7 : 1.1) + ns.filter((x) => x.dry).length * 1.5;
-    if (card === "fence") v = ns.filter((x) => x.owner === p.seat && x.build).length * 1.4 + (tl.build ? 0 : 0.5) + (keeper ? 1 : 0);
-    if (card === "lantern") v = ns.filter((x) => x.owner >= 0 && x.owner !== p.seat && x.fish > 0 && !isProtected(s, x)).length * (greedy ? 1.6 : 1) + ns.filter((x) => x.owner < 0 && x.fish > 0).length * 0.5;
-    if (card === "corm") v = cormTarget(s, tl, p.seat) ? (greedy ? 5 : 3.2) : 0.2;
-    v += r() * 1.2;
-    if (!best || v > best.v) best = { card, tile: tl, v };
-  }
-  return best;
-}
+// ---- bots: roll after a moment; buy while they can afford it and keep a little; on their own ground a
+// greedy bot builds a net and hauls, a keeper builds a pond and hauls only a full ground ----
 function bot(s: HoldSim, seat: number, r: () => number): HoldInput[] {
+  if (seat !== s.turn) return [];
   const p = s.players[seat];
-  if (s.phase !== "pick" || !p || p.pick !== undefined) return [];
-  if (s.phaseT < 1.5 + (seat % 4) * 0.7 || r() > 0.3) return []; // a moment's thought
-  const c = choose(s, p, r);
-  return [c ? { k: "place", card: c.card, tile: c.tile.ix } : { k: "pass" }];
+  if (s.phase === "roll") {
+    if (s.phaseT < 0.7 + (seat % 3) * 0.2 || r() > 0.5) return [];
+    const mine = s.squares.filter((q) => q.type === "ground" && q.owner === seat && !q.build).sort((a, b) => b.stock - a.stock || a.ix - b.ix);
+    const kind: Build | null = p.kind === "greedy" ? "net" : p.kind === "keeper" ? "pond" : (s.round % 2 ? "net" : "pond");
+    const keep = p.kind === "greedy" ? 0 : 1;
+    if (!s.builtThisTurn && mine.length && kind && p.coins >= Q.BUILD_COST + keep) return [{ k: "build", kind, sq: mine[0].ix }, { k: "roll" }];
+    return [{ k: "roll" }];
+  }
+  if (s.phase !== "act" || s.phaseT < 0.6 || r() > 0.5) return [];
+  const q = s.squares[p.pos], greedy = p.kind === "greedy", keeper = p.kind === "keeper";
+  if (s.act.includes("buy")) return [p.coins - q.price >= (greedy ? 0 : 1) ? { k: "buy" } : { k: "pass" }];
+  if (greedy) return [s.act.includes("net") && p.coins >= Q.BUILD_COST + 2 ? { k: "build", kind: "net" } : s.act.includes("haul") ? { k: "haul" } : { k: "pass" }];
+  if (keeper) return [s.act.includes("pond") ? { k: "build", kind: "pond" } : s.act.includes("haul") && q.stock >= q.cap * 0.6 ? { k: "haul" } : { k: "pass" }];
+  return [s.act.includes("net") && p.coins >= Q.BUILD_COST + 4 ? { k: "build", kind: "net" } : s.act.includes("haul") && q.stock >= q.cap * 0.4 ? { k: "haul" } : { k: "pass" }];
 }
 
-// ---- frames: the board is everyone's; a hand and a pick are their owner's ----
-function frameFor(s: HoldSim, seat: number) {
-  const me = seat >= 0 ? s.players[seat] : undefined;
-  const next = holdForecast(s);
+// ---- frames: everything is public ----
+function frameFor(s: HoldSim, _seat: number) {
+  const next = nextOf(s);
+  const left = s.phase === "roll" ? Q.ROLL_S - s.phaseT : s.phase === "act" ? Q.ACT_S - s.phaseT : 0;
   return {
     lk: s.lake.meta(), // which lake this match has, for the page to draw (rule change 11)
-    phase: s.phase, season: s.season, seasons: Q.SEASONS, action: s.action, actions: Q.ACTIONS,
-    left: s.phase === "pick" ? Math.max(0, Math.ceil(Q.PICK_S - s.phaseT)) : 0,
-    // tiles: [ix, q, r, x*10, y*10, zone, cap, fish, owner, build, dry, paid]
-    t: s.tiles.map((tl) => [tl.ix, tl.q, tl.r, Math.round(tl.x * 10), Math.round(tl.y * 10), tl.zone, tl.cap, tl.fish, tl.owner, tl.build ?? "", tl.dry ? 1 : 0, tl.paid]),
-    p: s.players.map((x) => ({ seat: x.seat, fish: x.fish, tiles: tilesOf(s, x.seat), picked: x.pick !== undefined })),
-    lake: lakeFish(s), next, tier: tierOf(next).id, start: s.start,
-    reveal: s.phase === "reveal" ? s.reveal : null,
-    harvestStep: s.phase === "harvest" ? s.harvestStep : null,
-    me: me ? { hand: me.hand, pick: me.pick ?? null } : null,
+    phase: s.phase, round: s.round, rounds: Q.ROUNDS, turn: s.turn, left: Math.max(0, Math.ceil(left)),
+    roll: s.roll, path: s.path, moveS: s.moveS, pt: s.phaseT, act: s.phase === "act" ? s.act : [], built: s.builtThisTurn,
+    cost: Q.BUILD_COST, haulN: haulOf(s.squares[s.players[s.turn].pos]), // what the pads say a build costs and a haul takes
+    // squares: [ix, type, x*10, y*10, home, group, price, owner, build, stock, cap, toll]
+    sq: s.squares.map((q) => [q.ix, q.type, Math.round(q.x * 10), Math.round(q.y * 10), q.home, q.group, q.price, q.owner, q.build ?? "", q.stock, q.cap, q.type === "ground" ? tollOf(s, q) : 0]),
+    p: s.players.map((x) => ({ seat: x.seat, pos: x.pos, coins: x.coins, grounds: groundsOf(s, x.seat).length, builds: groundsOf(s, x.seat).filter((q) => q.build).length })),
+    last: s.last, lake: lakeFish(s), next, tier: tierOf(next).id, start: s.start, ended: s.ended,
   };
 }
 
 function results(s: HoldSim): Results {
-  const next = holdForecast(s), tier = tierOf(next);
-  const rows = s.players.map((p) => { const tiles = tilesOf(s, p.seat), base = p.fish + tiles * Q.TILE_PTS; return { p, tiles, base, score: Math.round(base * tier.mult) }; });
+  const next = nextOf(s), tier = s.ended === "dead" ? { id: "none" as const, mult: 0.5 } : tierOf(next);
+  const rows = s.players.map((p) => { const g = groundsOf(s, p.seat), base = p.coins + g.length * Q.GROUND_PTS + g.filter((q) => q.build).length * Q.BUILD_PTS + Math.floor(g.reduce((n, q) => n + q.stock, 0) * Q.FISH_PTS); return { p, grounds: g.length, base, score: Math.round(base * tier.mult) }; });
   const order = rows.map((x) => x.score);
-  const top = [...s.players].sort((a, b) => b.best - a.best)[0];
-  const robbed = [...s.players].sort((a, b) => b.stolen - a.stolen)[0];
-  const dry = s.tiles.filter((tl) => tl.dry).length;
+  const top = [...s.players].sort((a, b) => b.bestHaul - a.bestHaul || a.seat - b.seat)[0];
+  const rich = [...s.players].sort((a, b) => b.tolls - a.tolls || a.seat - b.seat)[0];
   const highlights: Highlight[] = [
-    { title: "Best harvest", text: top.best ? `{name}: ${top.best} fish in one harvest` : "no net caught anything", seat: top.seat, tkey: "h2_hl_best_t", key: top.best ? "h2_hl_best" : "h2_hl_best_none", vars: { n: top.best } },
-    { title: "Cormorants", text: robbed.stolen ? `{name}: lost ${robbed.stolen} to cormorants` : "no cormorant struck", seat: robbed.seat, tkey: "h2_hl_corm_t", key: robbed.stolen ? "h2_hl_corm" : "h2_hl_corm_none", vars: { n: robbed.stolen } },
-    { title: "Dry water", text: `${dry} tiles ran dry`, tkey: "h2_hl_dry_t", key: "h2_hl_dry", vars: { n: dry } },
+    { title: "Biggest haul", text: top.bestHaul ? `{name}: ${top.bestHaul} fish in one haul` : "nobody hauled", seat: top.seat, tkey: "h3_hl_haul_t", key: top.bestHaul ? "h3_hl_haul" : "h3_hl_haul_none", vars: { n: top.bestHaul } },
+    { title: "Tolls", text: rich.tolls ? `{name}: ${rich.tolls} coins in tolls` : "nobody paid a toll", seat: rich.seat, tkey: "h3_hl_toll_t", key: rich.tolls ? "h3_hl_toll" : "h3_hl_toll_none", vars: { n: rich.tolls } },
+    { title: "The lake", text: s.ended === "dead" ? `the lake died in round ${s.round}` : `${lakeFish(s)} fish left of ${s.start}`, tkey: "h3_hl_lake_t", key: s.ended === "dead" ? "h3_hl_lake_dead" : "h3_hl_lake", vars: { n: lakeFish(s), start: s.start, round: s.round } },
   ];
   return {
-    seats: rows.map((x) => ({ seat: x.p.seat, score: x.score, place: 1 + order.filter((v) => v > x.score).length, firstScoreS: null, base: x.base, fish: x.p.fish, tiles: x.tiles })),
-    lakeLeft: next, highlights,
-    left: { a: lakeFish(s), y: 0 }, next, tier: tier.id,
-    ledger: s.players.map((p) => ({ seat: p.seat, home: p.fish, young: 0, spared: 0 })),
-    log: s.log, dry,
+    seats: rows.map((x) => ({ seat: x.p.seat, score: x.score, place: 1 + order.filter((v) => v > x.score).length, firstScoreS: null, base: x.base, coins: x.p.coins, grounds: x.grounds })),
+    lakeLeft: lakeFish(s), highlights,
+    left: { a: lakeFish(s), y: 0 }, next, tier: tier.id, dead: s.ended === "dead",
+    ledger: s.players.map((p) => ({ seat: p.seat, home: p.hauled, young: 0, spared: 0 })),
+    log: s.log,
   };
 }
 
 export const hold: Mode<HoldSim, HoldInput> = {
-  id: "hold", model: HOLD_MODEL, seats: Q.SEATS, breeds: true,
+  id: "hold", model: HOLD_MODEL, seats: Q.SEATS, breeds: false,
   make, input, step, frameFor, over: (s) => s.phase === "end", results, bot,
 };
-// for a test or script: what the bot would play for this seat now
-export const chooseFor = (s: HoldSim, seat: number, r: () => number) => choose(s, s.players[seat], r);

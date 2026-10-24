@@ -41,12 +41,12 @@ export const MODE_CARDS: ModeCard[] = [
     flow: ["Shoal Scramble, Koi Chase, Tug of Line, Lantern Night, Last Net: a new game each round.", "Eight seconds in the shop between rounds. Muddy Water is for players behind.", "The last-placed player picks the next round's variant.", "The lake carries over: Last Net's school is what the first rounds left."],
   },
   {
-    id: "hold", name: "Lake Holdings", zh: "抢地盘经营", tag: "Build nets, ponds and fences. Bend the current your way.", players: "2–4 players", len: "3 min", due: "11/03",
-    goal: "Tiles held plus fish harvested. The lake pays out every 15 seconds, twelve times. A tie goes to more fish harvested.",
-    hud: "Tiles + fish harvested",
-    choice: "Net hard now, or build ponds so the lane still has fish later?",
-    actions: [["Pick a card", "Net, Pond, Fence, Cormorant, Lantern, Claim"], ["Tap a hex", "Place it; see what it paid last tide"], ["Tide", "Every 15 s the lake pays out"]],
-    flow: ["Place nets where the current carries the schools.", "Fence the current away from a rival, or raid their net with a cormorant.", "Ponds breed fish for you and your neighbours. Lanterns pull schools in.", "Over-netted lanes thin out, for everyone downstream."],
+    id: "hold", name: "Lake Holdings", zh: "抢地盘经营", tag: "Monopoly on the water: buy grounds, take tolls, don't fish them dry.", players: "2–4 players", len: "about 5 min", due: "11/03",
+    goal: "Eight rounds, one turn each. Coins + 2 a ground + 2 a building + 1 a fish on your grounds, times next spring's year.",
+    hud: "Coins + grounds + fish",
+    choice: "Haul your ground now, or let it breed?",
+    actions: [["ROLL", "Sail 1-6 squares"], ["BUY", "A ground nobody owns"], ["HAUL or BUILD", "On your own ground: fish, a net or a pond"]],
+    flow: ["Roll and sail round the lake; passing your home pays 3.", "Buy grounds; visitors pay you a toll, double for a whole colour.", "Nets haul after every round; ponds breed and pay.", "Fish left on your grounds count, and the lake's next spring multiplies everything."],
   },
 ];
 export const cardOf = (id: string): ModeCard => MODE_CARDS.find((m) => m.id === id)!;
