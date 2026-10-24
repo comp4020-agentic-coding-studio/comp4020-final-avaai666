@@ -14,7 +14,9 @@ const THREE = await importJs("../../src/static/vendor/three.module.js");
 
 function dom() {
   const d = new JSDOM(`<!doctype html><canvas id="gl"></canvas><div id="stage"></div><div id="hud"></div><div id="goal"></div>`, { pretendToBeVisual: true });
-  Object.assign(globalThis, { document: d.window.document, window: d.window, addEventListener: d.window.addEventListener.bind(d.window), removeEventListener: d.window.removeEventListener.bind(d.window) });
+  // matchMedia too: a browser always has it, and the scripts ask it whether this is a touch screen
+  const mm = d.window.matchMedia?.bind(d.window) ?? ((q: string) => ({ matches: false, media: q }));
+  Object.assign(globalThis, { document: d.window.document, window: d.window, matchMedia: mm, addEventListener: d.window.addEventListener.bind(d.window), removeEventListener: d.window.removeEventListener.bind(d.window) });
   return d;
 }
 
@@ -239,6 +241,54 @@ describe("Boat Rush's keys", () => {
     vi.advanceTimersByTime(200);
     const steer = sent.find((s) => s.k === "steer")!;
     expect(steer).toEqual({ k: "steer", x: 0, y: -2 });
+    mode.end();
+  });
+});
+
+// Ava, 25 October: "the fish flicker, and suddenly vanish or appear". A frame's fish used to be
+// followed by their place in the list, so one fish caught in the middle moved every fish after it
+// (and swapped its colour, which world5.js gives a fish by the slot it is drawn in). The server now
+// names each fish and fishview.js keeps a name in one slot.
+describe("following a fish between frames (fishview.js)", () => {
+  beforeEach(() => { dom(); });
+
+  it("keeps each fish in its own slot when another is caught, and eases it between the two frames", async () => {
+    const { makeFishView } = await importJs("../../src/static/play/fishview.js");
+    const v = makeFishView();
+    // [x*10, y*10, h*100, adult, id], as the server sends them: three fish far apart
+    const a = [[100, 0, 0, 1, 7], [0, 200, 0, 1, 8], [-300, 0, 0, 1, 9]];
+    expect(v.list(a, null, 1)).toEqual([[10, 0, 0, 1], [0, 20, 0, 1], [-30, 0, 0, 1]]);
+    // fish 8 is netted: it leaves the list, and 9 moves up into its place in it
+    const b = [[110, 0, 0, 1, 7], [-290, 0, 0, 1, 9]];
+    const second = v.list(b, a, 1);
+    expect(second[0]).toEqual([11, 0, 0, 1]); // 7 is still slot 0
+    expect(second[1]).toEqual([0, 0, 0, 0]); // 8's slot is empty: world5.js draws scale 0, nothing
+    expect(second[2]).toEqual([-29, 0, 0, 1]); // 9 kept its slot and swam one unit; it did not jump to 8's
+    // half way between two frames, a fish is half way along its own path, not along another's
+    expect(v.list([[120, 0, 0, 1, 7], [-280, 0, 0, 1, 9]], b, 0.5)).toEqual([[11.5, 0, 0, 1], [0, 0, 0, 0], [-28.5, 0, 0, 1]]);
+    // a fish that is new to this seat appears where it is, and takes the slot 8 left
+    const d = v.list([[120, 0, 0, 1, 7], [-280, 0, 0, 1, 9], [50, 50, 0, 0, 10]], b, 1);
+    expect(d[1]).toEqual([5, 5, 0, 0.6]);
+  });
+
+  it("rush.js draws the fish of a frame through it: a catch moves no other fish", async () => {
+    const rush = await importJs("../../src/static/play/rush.js");
+    const { api } = ui("en");
+    let drawn: number[][] = [], draw: ((dt: number, t: number) => void) | null = null;
+    const world = Object.assign(fakeWorld5(), {
+      boats: new Map(), wantDir: () => null,
+      onFrame: (f: (dt: number, t: number) => void) => { draw = f; },
+      setFish: (list: number[][]) => { drawn = list; },
+    });
+    const mode = rush.mount({ world, sound: api.sound, ui: api, send: () => {}, post: () => {}, view: () => ({ mySeat: 0, seats: [{ name: "Ava", character: "mei" }] }) });
+    const frame = (f: number[][]) => ({ phase: "play", season: 0, left: 30, market: null, n: [], l: [], k: null, f, b: [[0, 0, 100, 0, 0, 8, 0, 0, 0, 0, [], 0, 100]] });
+    mode.start(frame([[100, 0, 0, 1, 7], [0, 200, 0, 1, 8], [-300, 0, 0, 1, 9]]), { seats: [{ name: "Ava", character: "mei" }] });
+    draw!(0.05, 1);
+    expect(drawn.length).toBe(3);
+    mode.frame(frame([[100, 0, 0, 1, 7], [-300, 0, 0, 1, 9]]), []); // fish 8 was netted
+    draw!(0.05, 1.1);
+    expect(drawn[0]).toEqual([10, 0, 0, 1]);
+    expect(drawn[2]).toEqual([-30, 0, 0, 1]); // still itself, still in its own slot
     mode.end();
   });
 });

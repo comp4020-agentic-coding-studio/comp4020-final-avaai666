@@ -697,3 +697,93 @@ describe("boats, unloading and schools, as the prototype (port fidelity)", () =>
     expect(b.hold.length).toBe(1);
   });
 });
+
+// What Ava found playing rush 2.0 on 25 October: "after I pick a card there is a long
+// wait", "the fish flicker, and suddenly vanish or appear", and "my boat counts every
+// fish it touches, and I never cast". The first two were bugs (the market held the
+// season back for its whole 14 s even once everyone had picked; a frame did not name
+// its fish, so the page followed them by their place in the list and a caught fish
+// moved every fish after it). The third was the Trawl card doing exactly what it says,
+// and the test below holds the line for a boat without it.
+describe("what Ava found on 25 October", () => {
+  // a school of n fish pinned at (x, y), so a test can put fish somewhere and keep them there
+  const school = (s: RushSim, k: number, x: number, y: number, n: number, adult = true) => {
+    const sc = s.schools[k]; sc.x = sc.tx = x; sc.y = sc.ty = y; sc.vx = sc.vy = 0; sc.t = 999;
+    for (let i = 0; i < n; i++) {
+      const ox = (i % 3) - 1, oy = ((i / 3) | 0) - 1;
+      s.fish.push({ id: s.nextId++, x: x + ox, y: y + oy, h: 0, adult, scare: 0, sx: 0, sy: 0, big: false, school: k, ox, oy, ph: 0 });
+    }
+  };
+  const fishRows = (s: RushSim) => (rush.frameFor(s, 0) as { f: number[][] }).f.map(([x, y, , , id]) => ({ id, x: x / 10, y: y / 10 }));
+  const castOver = (s: RushSim, seat: number, x: number, y: number) => {
+    put(s, seat, x, y - RUSH.NET_AHEAD); s.boats[seat].h = Math.PI / 2; // facing the school, which is NET_AHEAD in front
+    step(s, [{ seat, i: { k: "cast", charge: 0 } }]);
+  };
+
+  it("the next season starts REVEAL_S after the market closes, however early everyone picked", () => {
+    const s = make("market-wait");
+    until(s, RUSH.SEASON_S + RUSH.REST_S + 0.01);
+    expect(s.phase).toBe("market");
+    for (let seat = 0; seat < s.players; seat++) step(s, [{ seat, i: { k: "pick", id: null } }]);
+    expect(s.market!.closed).toBe(true);
+    const closedAt = s.t;
+    while (s.phase === "market" && s.t < closedAt + RUSH.MARKET_S + RUSH.REVEAL_S) step(s);
+    expect(s.phase).toBe("play");
+    expect(s.t - closedAt).toBeLessThanOrEqual(RUSH.REVEAL_S + RUSH.DT + 1e-9);
+  });
+
+  it("the market's clock counts the reveal down instead of sitting at 0", () => {
+    const s = make("market-clock");
+    until(s, RUSH.SEASON_S + RUSH.REST_S + 0.01);
+    for (let seat = 0; seat < s.players; seat++) step(s, [{ seat, i: { k: "pick", id: null } }]);
+    const left = (rush.frameFor(s, 0) as { left: number }).left;
+    expect(left).toBeGreaterThan(0);
+    expect(left).toBeLessThanOrEqual(RUSH.REVEAL_S);
+  });
+
+  it("every fish in a frame carries its own id, so one caught fish never moves another", () => {
+    const s = make("fish-ids");
+    clearFish(s);
+    school(s, 0, 12, 10, 9); // the school the net takes from
+    school(s, 1, -20, -8, 9); // and one right across the lake, which must not move on the page
+    const before = fishRows(s);
+    expect(new Set(before.map((f) => f.id)).size).toBe(before.length);
+    castOver(s, 0, 12, 10);
+    until(s, s.t + RUSH.SINK + 2 * RUSH.DT);
+    const after = fishRows(s);
+    expect(after.length).toBeLessThan(before.length); // the net took some
+    // a fish swims at most V_ADULT x 2.2 a second, even fleeing a net
+    const far = RUSH.V_ADULT * 2.2 * (RUSH.SINK + 3 * RUSH.DT);
+    for (const f of after) {
+      const was = before.find((p) => p.id === f.id);
+      expect(was, `fish ${f.id} was already in the lake`).toBeDefined();
+      expect(Math.hypot(f.x - was!.x, f.y - was!.y), `fish ${f.id} swam, it did not jump`).toBeLessThan(far);
+    }
+  });
+
+  it("a boat with no Trawl card catches nothing by sailing over a school", () => {
+    const s = make("no-trawl", 1);
+    const b = s.boats[0];
+    clearFish(s);
+    put(s, 0, 0, 0); b.h = 0; b.tx = 40; b.ty = 0; // sail east, fast
+    until(s, s.t + 1);
+    school(s, 0, b.x + 8, b.y, 8); // a school right in its path
+    let closest = 99;
+    for (const end = s.t + 2; s.t < end;) { step(s); closest = Math.min(closest, Math.min(...s.fish.map((f) => Math.hypot(f.x - b.x, f.y - b.y)))); }
+    expect(closest).toBeLessThan(1); // it really did sail through them
+    expect(b.hold.length).toBe(0);
+    expect(s.fish.length).toBe(8);
+  });
+
+  it("a net that lets the young fish go says how many slipped through", () => {
+    const s = make("fry-slip", 1);
+    clearFish(s);
+    school(s, 0, 10, 8, 6, false); // young fish only
+    castOver(s, 0, 10, 8);
+    let caught: { k: string; n?: number; fry?: number } | undefined;
+    for (let k = 0; k < 20 && !caught; k++) caught = step(s).find((e) => e.k === "catch") as typeof caught;
+    expect(caught).toBeDefined();
+    expect(caught!.n).toBe(0); // a plain net keeps no young fish
+    expect(caught!.fry).toBeGreaterThan(0); // and says so
+  });
+});

@@ -5,12 +5,14 @@
 // sent, stored or scored). It decides nothing about a real match.
 import { CREW } from "./art.js";
 import { ceremonySteps } from "./ceremony.js";
+import { makeFishView } from "./fishview.js";
 
 const COLORS = { mei: "#d6473a", wang: "#4a7d9c", jin: "#e0a93a", lu: "#2f9a8f", lian: "#d9668a", shitou: "#62a344" };
 
 export function mount({ world, sound, ui, send, view, post }) {
   const t = ui.t, esc = ui.esc;
   let prev = null, cur = null, curAt = 0, seats = null, practice = null;
+  const fishView = makeFishView();
   // in the practice (before any match, so no seat) you are seat 0, alone
   const me = () => (practice ? practice.seat : view().mySeat);
   const colorOf = (seat) => COLORS[seats?.[seat]?.character] ?? "#f5ead6";
@@ -201,6 +203,7 @@ export function mount({ world, sound, ui, send, view, post }) {
     ui.overlay.innerHTML = "";
     ui.setClock(null, t("r_practising"));
     pBanner(1);
+    fishView.clear();
     prev = cur = practiceFrame(); curAt = performance.now();
     world.onFrame(draw);
     practice.timer = setInterval(practiceTick, 50);
@@ -210,7 +213,7 @@ export function mount({ world, sound, ui, send, view, post }) {
     const p = practice;
     return { phase: "sail", season: 0, left: 0, market: null, n: [], l: [], k: null,
       b: [[p.seat, Math.round(p.x * 10), Math.round(p.y * 10), Math.round(p.h * 100), p.hold, p.P.hold, 0, p.banked, Math.ceil(p.castCd * 10), 0, [], Math.round(p.tx * 10), Math.round(p.ty * 10)]],
-      f: p.fish.map((f) => [Math.round(f.x * 10), Math.round(f.y * 10), Math.round(f.h * 100), 1]) };
+      f: p.fish.map((f) => [Math.round(f.x * 10), Math.round(f.y * 10), Math.round(f.h * 100), 1, f.id]) }; // [x, y, h, adult, id], the shape a match's frame has
   }
   function practiceTick() {
     const p = practice; if (!p) return;
@@ -242,7 +245,7 @@ export function mount({ world, sound, ui, send, view, post }) {
       // the school surfaces just ahead of your bow and the boat drifts to a stop: one NET takes it
       p.step = 2; p.tx = p.x; p.ty = p.y;
       p.ring = [p.x + Math.cos(p.h) * (p.P.netAhead + 1), p.y + Math.sin(p.h) * (p.P.netAhead + 1)];
-      p.fish = Array.from({ length: 5 }, (_, i) => ({ a: (i / 5) * Math.PI * 2, r: 1.2 + (i % 2) * 0.8, x: p.ring[0], y: p.ring[1], h: 0 }));
+      p.fish = Array.from({ length: 5 }, (_, i) => ({ id: i + 1, a: (i / 5) * Math.PI * 2, r: 1.2 + (i % 2) * 0.8, x: p.ring[0], y: p.ring[1], h: 0 }));
       world.pointAt(null); pBanner(2); ui.did("sail");
     }
     if (p.step === 3 && Math.hypot(p.x - p.dock[0], p.y - p.dock[1]) < p.P.dockR) {
@@ -264,13 +267,13 @@ export function mount({ world, sound, ui, send, view, post }) {
     if (p.step === 2 && (p.hold >= 3 || !p.fish.length)) { p.step = 3; world.pointAt(p.dock[0], p.dock[1]); pBanner(3); }
   }
   function practiceDash() { /* no boat to ram in practice */ }
-  function endPractice() { if (!practice) return; clearInterval(practice.timer); practice = null; world.pointAt(null); prev = cur = null; ui.overlay.innerHTML = ""; }
+  function endPractice() { if (!practice) return; clearInterval(practice.timer); practice = null; world.pointAt(null); prev = cur = null; fishView.clear(); ui.overlay.innerHTML = ""; }
 
   return {
     room(v) { seats = v.seats; },
     start(frame, v) {
       endPractice();
-      seats = v.seats; prev = cur = frame; curAt = performance.now();
+      seats = v.seats; prev = cur = frame; curAt = performance.now(); fishView.clear();
       world.setLake?.(frame.lk);
       world.setDocks(seats.map((s, i) => ({ x: world.docks[i]?.x ?? 0, y: world.docks[i]?.z ?? 0, color: COLORS[s.character] })));
       for (const b of frame.b) world.boat(b[0], colorOf(b[0]), nameOf(b[0]));
@@ -292,8 +295,7 @@ export function mount({ world, sound, ui, send, view, post }) {
       const bt = world.boat(b[0], colorOf(b[0]), `${nameOf(b[0])} · ${b[7]}${b[4] ? ` (+${b[4]})` : ""}`);
       world.drawBoat(bt, lerp(p[1] / 10, b[1] / 10), lerp(p[2] / 10, b[2] / 10), la(p[3] / 100, b[3] / 100), t, { hold: b[4] });
     }
-    const fish = cur.f.map((f, i) => { const p = prev.f[i]; return p ? [lerp(p[0] / 10, f[0] / 10), lerp(p[1] / 10, f[1] / 10), f[2] / 100, f[3] ? 1 : 0.6] : [f[0] / 10, f[1] / 10, f[2] / 100, f[3] ? 1 : 0.6]; });
-    world.setFish(fish, t);
+    world.setFish(fishView.list(cur.f, prev.f, k), t); // each fish followed by its own id, not by its place in the list
     world.setKoi(cur.k ? [cur.k[0] / 10, cur.k[1] / 10, cur.k[2] / 100] : null, t);
     for (const l of cur.l) { const m = world.prop(`l${l[0]}`, () => { const g = new world.THREE.Mesh(new world.THREE.SphereGeometry(0.04, 6, 5).scale(1.6, 0.7, 1), world.toon(l[3] > 1 ? "#ffd34d" : "#f08a3c")); return g; }); m.position.set(l[1] / 10, 0.015 + Math.sin(t * 4 + l[0]) * 0.008, l[2] / 10); m.rotation.y += dt * 2; }
     // the practice's gold ring (step 1)

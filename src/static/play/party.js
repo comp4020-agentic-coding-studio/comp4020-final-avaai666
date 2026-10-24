@@ -5,6 +5,7 @@
 // revealed one by one. Draws what the server sent; sends only ready, tap,
 // steer, reel, net, lantern, buy, done and a pick. It decides nothing.
 import { ceremonySteps } from "./ceremony.js";
+import { makeFishView } from "./fishview.js";
 
 const COLORS = { mei: "#d6473a", wang: "#4a7d9c", jin: "#e0a93a", lu: "#2f9a8f", lian: "#d9668a", shitou: "#62a344" };
 // a small picture for each round's intro card (SVG written here, no image model)
@@ -22,6 +23,7 @@ export function mount({ world, sound, ui, send, view, post }) {
   const boot = bootEl ? JSON.parse(bootEl.textContent) : { lang: "en", world: {} };
   const W = { tiers: [[0.6, "rich", 1.2], [0.35, "fair", 1], [0.15, "lean", 0.8], [0, "none", 0.5]], k: 340, ...(boot.world ?? {}) };
   let koiH = 0, prev = null, cur = null, curAt = 0, seats = null, lastKey = "", lastPhase = "", trying = false, revealT = [];
+  const fishView = makeFishView();
   const me = () => view().mySeat;
   const colorOf = (seat) => COLORS[seats?.[seat]?.character] ?? "#f5ead6";
   const charOf = (seat) => seats?.[seat]?.character ?? "mei";
@@ -192,7 +194,7 @@ export function mount({ world, sound, ui, send, view, post }) {
       world.drawBoat(bt, lerp(p[1] / 10, b[1] / 10), lerp(p[2] / 10, b[2] / 10), b[3] / 100, tt, { visible: true, lantern: cur.game === "night" });
     }
     for (const [seat, bt] of world.boats ?? []) if (!shown.has(seat)) bt.mesh.visible = false;
-    world.setFish((cur.f ?? []).map((f, i) => { const p = prev?.f?.[i]; return p ? [lerp(p[0] / 10, f[0] / 10), lerp(p[1] / 10, f[1] / 10), f[2] / 100, f[3] ? 1 : 0.6] : [f[0] / 10, f[1] / 10, f[2] / 100, f[3] ? 1 : 0.6]; }), tt);
+    world.setFish(fishView.list(cur.f, prev?.f, k), tt); // each fish followed by its own id, not by its place in the list
     for (const [id, x, y, state, by] of cur.spots ?? []) {
       // deep gold on a dark halo (pale gold vanished on sunlit water); a warning ring is dimmer, an open one pulses
       const ring = world.prop(`sp${id}`, () => world.makeRing(4.3, 6.4));
@@ -282,9 +284,9 @@ export function mount({ world, sound, ui, send, view, post }) {
   world.onFrame(draw);
   return {
     room(v) { seats = v.seats; },
-    start(frame, v) { seats = v.seats; prev = cur = null; lastKey = ""; lastPhase = ""; trying = false; world.clearBoats?.(); world.clearProps?.(); world.setLake?.(frame.lk); world.setDocks(seats.map((s, i) => ({ x: world.docks[i]?.x ?? 0, y: world.docks[i]?.z ?? 0, color: COLORS[s.character] }))); onFrame(frame, []); },
+    start(frame, v) { seats = v.seats; prev = cur = null; fishView.clear(); lastKey = ""; lastPhase = ""; trying = false; world.clearBoats?.(); world.clearProps?.(); world.setLake?.(frame.lk); world.setDocks(seats.map((s, i) => ({ x: world.docks[i]?.x ?? 0, y: world.docks[i]?.z ?? 0, color: COLORS[s.character] }))); onFrame(frame, []); },
     frame(f, ev) { onFrame(f, ev); },
     results(v, overlayEl) { renderResults(v, overlayEl); },
-    end() { clearInterval(wasdId); removeEventListener("keydown", onKey); revealT.forEach(clearTimeout); tugEl.remove(); fog.remove(); world.setNight(0); world.pointAt(null); world.setSteerMode(true); },
+    end() { clearInterval(wasdId); removeEventListener("keydown", onKey); fishView.clear(); revealT.forEach(clearTimeout); tugEl.remove(); fog.remove(); world.setNight(0); world.pointAt(null); world.setSteerMode(true); },
   };
 }

@@ -302,7 +302,9 @@ function frameFor(s: PartySim, seat: number) {
   if (live && (game === "koi" || game === "night")) {
     const me = seat >= 0 ? s.boats[seat] : null;
     f.b = s.boats.filter((b) => game !== "night" || !me || b === me || Math.hypot(b.x - me.x, b.y - me.y) < (Q.NIGHT_BOATS * s.lake.k) || s.lanterns.some((l) => Math.hypot(b.x - l.x, b.y - l.y) < (Q.LANTERN_LIGHT * s.lake.k))).map((b) => [b.seat, p10(b.x), p10(b.y), Math.round(b.h * 100), b.gate]);
-    f.f = s.fish.filter((x) => seesFish(s, seat, x.x, x.y)).map((x) => [p10(x.x), p10(x.y), Math.round(x.h * 100), x.adult ? 1 : 0]);
+    // [x, y, h, adult, id]: the id lets the page follow one fish from frame to frame. Without it it followed
+    // whatever sat in the same place in this list, and the list changes as fish swim in and out of the light
+    f.f = s.fish.filter((x) => seesFish(s, seat, x.x, x.y)).map((x) => [p10(x.x), p10(x.y), Math.round(x.h * 100), x.adult ? 1 : 0, x.id]);
   }
   if (live && game === "koi") { f.path = s.path.map(([x, y]) => [p10(x), p10(y)]); f.koi = [p10(s.koi.x), p10(s.koi.y)]; }
   if (live && game === "scramble") f.spots = s.spots.map((p) => [p.id, p10(p.x), p10(p.y), p.taken >= 0 ? 2 : p.open ? 1 : 0, p.taken]);

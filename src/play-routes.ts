@@ -22,6 +22,7 @@ const FILES: Record<string, string> = {
   "play/world5.js": "text/javascript; charset=utf-8",
   "play/world-select.js": "text/javascript; charset=utf-8",
   "play/art.js": "text/javascript; charset=utf-8",
+  "play/fishview.js": "text/javascript; charset=utf-8",
   "play/room.js": "text/javascript; charset=utf-8",
   "play/roomlive.js": "text/javascript; charset=utf-8",
   "play/lobby.js": "text/javascript; charset=utf-8",

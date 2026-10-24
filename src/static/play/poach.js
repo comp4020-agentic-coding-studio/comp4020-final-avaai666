@@ -7,6 +7,7 @@
 // outcome, and nothing the server did not send is shown.
 import { CREW } from "./art.js";
 import { ceremonySteps } from "./ceremony.js";
+import { makeFishView } from "./fishview.js";
 
 const COLORS = { mei: "#d6473a", wang: "#4a7d9c", jin: "#e0a93a", lu: "#2f9a8f", lian: "#d9668a", shitou: "#62a344" };
 
@@ -19,6 +20,7 @@ export function mount({ world, sound, ui, send, view, post }) {
   const SIGHT = { view: 12, buoyR: 7.5, ...(boot.poachSight ?? {}) };
   const W = { lake: { x: 92, y: 64 }, outline: [], bays: [], zones: {}, island: { x: 10, y: -15, r: 7.5 }, tiers: [], k: 340, ...(boot.world ?? {}) };
   let prev = null, cur = null, curAt = 0, seats = null, lastPhase = null, lastMeetKey = "", sel = null, typedFor = null;
+  const fishView = makeFishView();
   const me = () => view().mySeat;
   const colorOf = (seat) => COLORS[seats?.[seat]?.character] ?? "#f5ead6";
   const charOf = (seat) => seats?.[seat]?.character ?? "mei";
@@ -124,7 +126,7 @@ export function mount({ world, sound, ui, send, view, post }) {
     }
     // a boat that left your lantern's light is hidden, not left where you last saw it
     for (const [seat, bt] of world.boats ?? []) if (!shown.has(seat)) { bt.mesh.visible = false; }
-    world.setFish((cur.f ?? []).map((f, i) => { const p = prev.f?.[i]; return p ? [lerp(p[0] / 10, f[0] / 10), lerp(p[1] / 10, f[1] / 10), f[2] / 100, f[3] ? 1 : 0.6] : [f[0] / 10, f[1] / 10, f[2] / 100, f[3] ? 1 : 0.6]; }), tt);
+    world.setFish(fishView.list(cur.f, prev?.f, k), tt); // each fish followed by its own id, not by its place in the list
     for (const [id, x, y] of cur.ev ?? []) {
       const m = world.prop(`ev${id}`, () => { const g = new world.THREE.Group(); for (let i = 0; i < 14; i++) { const f = new world.THREE.Mesh(new world.THREE.SphereGeometry(0.22, 6, 5).scale(1.6, 0.5, 1), world.toon(i % 3 ? "#e9e3d6" : "#c9b9a6")); const a = i * 2.4, d = 0.4 + (i % 5) * 0.55; f.position.set(Math.cos(a) * d, 0.05, Math.sin(a) * d); f.rotation.set(Math.PI / 2, 0, a); g.add(f); } const ring = new world.THREE.Mesh(new world.THREE.RingGeometry(3.2, 3.5, 32).rotateX(-Math.PI / 2), new world.THREE.MeshBasicMaterial({ color: "#ff7a5a", transparent: true, opacity: 0.55 })); ring.position.y = 0.08; g.add(ring); return g; });
       const [wx, wz] = world.toWorld(x / 10, y / 10); m.position.set(wx, Math.sin(tt * 2) * 0.03, wz);
@@ -349,13 +351,13 @@ export function mount({ world, sound, ui, send, view, post }) {
   return {
     room(v) { seats = v.seats; },
     start(frame, v) {
-      seats = v.seats; prev = cur = frame; curAt = performance.now(); lastPhase = null; typedFor = null;
+      seats = v.seats; prev = cur = frame; curAt = performance.now(); lastPhase = null; typedFor = null; fishView.clear();
       world.clearBoats?.(); world.clearProps?.(); world.setLake?.(frame.lk);
       world.setDocks(seats.map((s, i) => ({ x: world.docks[i]?.x ?? 0, y: world.docks[i]?.z ?? 0, color: COLORS[s.character] })));
       world.onFrame(draw); renderPhase(frame);
     },
     frame(f, ev) { seats = view().seats ?? seats; prev = cur ?? f; cur = f; curAt = performance.now(); world.setLake?.(f.lk); if (me() !== null) world.setHome?.(me(), colorOf(me()), t("g_your_home")); events(ev); renderPhase(f); },
     results(v, overlayEl) { renderResults(v, overlayEl); },
-    end() { clearInterval(wasdId); removeEventListener("keydown", onKey); fog.remove(); seenEl.remove(); world.setLabels([]); },
+    end() { clearInterval(wasdId); removeEventListener("keydown", onKey); fishView.clear(); fog.remove(); seenEl.remove(); world.setLabels([]); },
   };
 }

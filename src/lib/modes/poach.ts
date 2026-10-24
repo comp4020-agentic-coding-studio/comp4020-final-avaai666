@@ -489,7 +489,10 @@ function frameFor(s: PoachSim, seat: number) {
     b: boatsSeen.map((b) => [b.seat, p10(b.x), p10(b.y), Math.round(b.h * 100), b.insp ? 1 : 0]),
   };
   if (day || showAll) {
-    f.f = s.fish.filter((x) => showAll || canSee(s, seat, x.x, x.y)).map((x) => [p10(x.x), p10(x.y), Math.round(x.h * 100), x.adult ? 1 : 0]);
+    // [x, y, h, adult, id]: a fish this seat can see, named so the page can follow it between frames instead
+    // of following whatever sits in the same place in the list, which changes as the lantern moves. The id
+    // says nothing about a fish outside the lantern: only the ones listed here have one.
+    f.f = s.fish.filter((x) => showAll || canSee(s, seat, x.x, x.y)).map((x) => [p10(x.x), p10(x.y), Math.round(x.h * 100), x.adult ? 1 : 0, x.id]);
     f.ev = s.patches.filter((p) => p.day === s.day && (showAll || canSee(s, seat, p.x, p.y))).map((p) => [p.id, p10(p.x), p10(p.y), p.reported ? 1 : 0]);
   }
   if (me && !ghost && s.phase !== "end") {

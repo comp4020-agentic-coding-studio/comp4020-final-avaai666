@@ -1,4 +1,4 @@
-# Next Year, No Fish (明年无鱼): design v5.8
+# Next Year, No Fish (明年无鱼): design v5.9
 
 ## What it is
 
@@ -324,10 +324,15 @@ and the match is shown.
 6. The lake breathes, for 4.5 s, with the camera on the whole lake: young
    fish grow up, and the adults breed by the formula, plus Fish Ladder and
    Reed Bed effects.
-7. The market, 14 s:
+7. The market, at most 14 s:
    - one plain, one keeper and one greedy card;
    - a reroll costs 2 banked fish;
-   - picks are hidden until the market closes, then everyone sees them.
+   - picks are hidden until the market closes, then everyone sees them;
+   - it closes as soon as everyone has picked, or when the 14 s run out, and
+     the reveal is shown for 2.6 s from that moment. The reveal used to wait
+     for the whole 14 s to pass however early the table had picked, so a
+     player who picked at once sat in front of a frozen lake for 14 s (Ava,
+     25 Oct: "after I pick there is a long wait").
 8. After winter, the ceremony.
 
 **Numbers:**
@@ -676,6 +681,18 @@ Boat Rush 2.0's frames are the same for everyone, except that during a market
 a seat's card pick is not in anyone else's frame or events until the market
 closes.
 
+A frame names each fish it carries (its row is [x, y, h, adult, id]), in
+Boat Rush, Fishing Party and Who's Poaching. The page follows a fish by that
+name, through `src/static/play/fishview.js`, which keeps each one in the same
+drawing slot while it is on screen. Before this it followed a fish by its
+place in the frame's list, so one fish caught in the middle moved every fish
+after it to its neighbour's place, and swapped its colour (Ava, 25 Oct: "the
+fish flicker, and suddenly vanish or appear"; measured over 777 pairs of
+frames of a bot match, 17.0% of them had a fish jump more than 2 units, the
+worst 78.7 — a fish swims at most 0.92 between two frames). A name tells a
+seat nothing it could not already see: only the fish in its own frame have
+one.
+
 
 ### The platform
 
@@ -784,6 +801,7 @@ Lake Holdings becomes turn-based; Boat Rush has four seasons of 45 s.
 
 ## Changelog
 
+- v5.9 (25 Oct, session 18): three things Ava found playing rush 2.0. The market's reveal now runs from the moment the market closes, not from the end of its 14 s, so picking early no longer buys a wait in front of a frozen lake. Every fish in a frame carries its own id and the pages follow it by that (`src/static/play/fishview.js`), instead of by its place in the list, which made a catch move every fish after it. A net that lets young fish go says how many slipped through (the `fry` count in its catch event was always 0, so the page never said it). Nothing in the lake's own model changed: the balance of 24 October stands. Three more bugs are measured and written up for Ava to decide on, in the code where they are (a bot picks from a roll of its own instead of the three cards on the table; a fish crosses the lake at up to 20x its own speed after a scare or a new season's school places).
 - v5.8 (24 Oct, session 18): rule change 12, Lake Holdings is Monopoly on the water (Ava: "the land-grab game is not complete and not fun", then "like Monopoly"; model holdings 3.0). 24 squares round the lake: homes at the docks, the Lake Spirit between them, grounds in colour groups to buy; roll and sail, tolls (double for a whole group), haul or build a net or a pond, nets haul and ponds pay after every round, the grounds breed, a dead lake ends the match. Score: coins + grounds + buildings + fish on your grounds, × next spring's tier. holdings 2.0's section moved word for word to docs/design-history/holdings-v2.0.md and its tests are replaced. Boat Rush's rules card says the hold is 8 with four boats (it said 12). The table under "Where each mode stands" now says Fishing Party follows v5.0. Measured in docs/checks/balance-hold3-2026-10-24.md.
 - v5.7 (24 Oct, session 18): rule change 11 (Ava, after playing v5.6: "the boat spins on the spot; the lake did not change size; I cannot find my home; the 3D was better before"). Sailing: the shore is a wall a boat slides along, and a target past it is no longer moved (that made boats circle). Each match has a lake for its boats (`makeLake(boats)`, the same water per boat), and the homes are spread round it, one per boat; your home has a beam of light, a label and, in Boat Rush, an arrow. The camera follows your boat from low down by default; you can zoom, turn it or show the whole lake. Boat Rush: unloading 0.33 s a fish, a hold of 8 × 4 / boats. Measured in docs/checks/balance-lake11-2026-10-24.md. Ava also approved CC0 3D models (for a later change) and a Monopoly-style Lake Holdings (next).
 

@@ -41,7 +41,7 @@ interface Boat {
   docked: boolean; tripValue: number; banked: number; cards: CardId[]; combo: number; lastCatch: number;
   stats: Stats; firstScoreAt: number | null;
 }
-interface Market { offer: CardId[]; botPicks: (CardId | null)[]; picked: (CardId | null | undefined)[]; closesAt: number; closed: boolean; perSeatOffer?: Record<number, CardId[]> }
+interface Market { offer: CardId[]; botPicks: (CardId | null)[]; picked: (CardId | null | undefined)[]; closesAt: number; closed: boolean; closedAt: number | null; perSeatOffer?: Record<number, CardId[]> }
 // One entry per season, from the moment it starts (spring: make(); summer
 // on: startSeason()) to its gong. caught/young is every fish a net or trawl
 // removed that season (young is the subset that were young, always
@@ -196,7 +196,7 @@ function maybeCloseMarket(s: RushSim, ev: GameEvent[]): void {
 }
 function closeMarket(s: RushSim, ev: GameEvent[]): void {
   const m = s.market; if (!m) return;
-  m.closed = true;
+  m.closed = true; m.closedAt = s.t;
   for (const b of s.boats) {
     const chosen = m.picked[b.seat] ?? null;
     if (chosen) b.cards.push(chosen);
@@ -236,7 +236,10 @@ function advancePhase(s: RushSim, ev: GameEvent[]): void {
       for (const seat of s.boats.map((b) => b.seat)) if (m.picked[seat] === undefined) m.picked[seat] = null;
       closeMarket(s, ev);
     }
-    if (m.closed && s.phaseT >= Q.MARKET_S + Q.REVEAL_S - 1e-9) startSeason(s, ev); // the reveal pause, matching the prototype's picked-screen pause
+    // the reveal pause (the prototype's picked-screen pause) runs from the moment the market closed, not
+    // from the end of its 14 s: a table that has all picked waited out the rest of the market staring at a
+    // frozen lake (Ava, 25 Oct: "after I pick there is a long wait"; she picked at once and waited 16.5 s)
+    if (m.closed && s.t >= (m.closedAt ?? s.t) + Q.REVEAL_S - 1e-9) startSeason(s, ev);
   }
 }
 
@@ -275,8 +278,13 @@ function endSeason(s: RushSim, ev: GameEvent[]): void {
 function startMarket(s: RushSim, ev: GameEvent[]): void {
   s.phase = "market"; s.phaseT = 0;
   const offer = offerFor(s);
+  // KNOWN BUG, waiting on Ava (25 Oct): a bot picks from a roll of its own, not from the three cards on the
+  // table, so 71.5% of the picks the reveal shows (measured over 40 bot matches) are cards nobody was
+  // offered. The one-line fix is botPick(s, offer, ...); it changes the bots' random stream, which tips
+  // spec/unit/boat-move.test.ts's one-seed shore share from 0.139 to 0.162 against a 0.15 limit (the mean
+  // over 20 seeds is 0.145 either way), so the fix waits for her call on that test and a balance re-run.
   const botPicks: (CardId | null)[] = s.boats.map((b, i) => (s.bots[i] ? botPick(s, offerFor(s), s.botKinds[i]) : null));
-  s.market = { offer, botPicks, picked: s.boats.map((_, i) => (s.bots[i] ? botPicks[i] : undefined)), closesAt: s.t + Q.MARKET_S, closed: false };
+  s.market = { offer, botPicks, picked: s.boats.map((_, i) => (s.bots[i] ? botPicks[i] : undefined)), closesAt: s.t + Q.MARKET_S, closed: false, closedAt: null };
   ev.push({ k: "market", offer, players: s.players });
 }
 // the default bot kinds by seat, steady/keeper/greedy (seat % 3); a real
@@ -286,6 +294,14 @@ export function botKindOf(i: number): string { return DEFAULT_BOT_KINDS[i % 3]; 
 function startSeason(s: RushSim, ev: GameEvent[]): void {
   s.season = (s.season + 1) as Season; s.phase = "play"; s.phaseT = 0; s.market = null;
   for (const b of s.boats) { const d = s.lake.dockPos(b.seat); b.x = d.x; b.y = d.y; b.h = d.inward + Math.PI; b.docked = true; b.combo = 0; }
+  // KNOWN BUG, waiting on Ava (25 Oct): this puts every school in the new season's places while the fish
+  // stay where the last season left them, up to 54 units behind. The follow in lake-life.ts closes 8% of
+  // that gap a tick with no speed limit, so for the first seconds of every season the whole lake streaks
+  // across the water at up to 20x a fish's own speed (measured: 4.8 units in one 0.05 s tick, and 2.0 units
+  // mid-season for a fish a net had scared 21 units away). Two one-line fixes are ready: carry the fish
+  // with their schools here, and cap a fish's move at its own speed in moveFish(). Both move the balance
+  // Ava tuned on 24 October (60 matches a table: all-greedy tables end Lean or No fish 71.7% now, 73.3%
+  // with the carry alone, 60.0% with both), so they wait for her call and a 300-match re-measure.
   placeSchools(s); // fresh targets for the new season's places (prototype's rNextSeason())
   const [a, y] = counts(s);
   s.history.push({ startA: a, startY: y, caught: 0, young: 0, gongA: 0, gongY: 0, bred: false, bonus: 0, reedsExtra: 0 });
@@ -372,6 +388,7 @@ function closeNets(s: RushSim, ev: GameEvent[]): void {
       if (d > net.r) return true;
       if (!f.adult) {
         if (takesYoung(b)) { if (room > 0) { room--; n++; youngKilled++; b.hold.push(val * (has(b, "fineMesh") ? 1 : 1)); return false; } full++; return true; }
+        fry++; // this cast let it go, and the page says so (youngSpared, below, counts each fish once a match)
         if (!((f.sp ?? 0) & (1 << b.seat))) { f.sp = (f.sp ?? 0) | (1 << b.seat); youngSpared++; } f.scare = 0.6; f.sx = dx / (d || 1); f.sy = dy / (d || 1); return true;
       }
       if (room <= 0) { full++; return true; }
@@ -528,7 +545,8 @@ function frameFor(s: RushSim, seat: number) {
   return {
     lk: s.lake.meta(), // which lake this match has, for the page to draw (rule change 11)
     t: s.t, season: s.season, phase: s.phase, phaseT: Math.round(s.phaseT * 10) / 10,
-    left: s.phase === "play" ? Math.max(0, Q.SEASON_S - s.phaseT) : s.phase === "rest" ? Math.max(0, Q.REST_S - s.phaseT) : Math.max(0, Q.MARKET_S - s.phaseT),
+    left: s.phase === "play" ? Math.max(0, Q.SEASON_S - s.phaseT) : s.phase === "rest" ? Math.max(0, Q.REST_S - s.phaseT)
+      : m?.closed ? Math.max(0, (m.closedAt ?? s.t) + Q.REVEAL_S - s.t) : Math.max(0, Q.MARKET_S - s.phaseT),
     fishN: s.fish.length, players: s.players,
     market: m ? {
       offer: seat >= 0 ? (m.perSeatOffer?.[seat] ?? m.offer) : m.offer,
@@ -539,7 +557,10 @@ function frameFor(s: RushSim, seat: number) {
     b: s.boats.map((b) => [b.seat, Math.round(b.x * 10), Math.round(b.y * 10), Math.round(b.h * 100), b.hold.length, holdMax(b),
       (b.dashT > 0 ? FLAG.DASH : 0) | (b.stun > 0 ? FLAG.STUN : 0) | (b.shield > 0 ? FLAG.SHIELD : 0) | (b.docked ? FLAG.DOCKED : 0) | (b.hold.includes(koiValue(b)) ? FLAG.KOI : 0),
       b.banked, Math.max(0, Math.ceil(b.castCd * 10)), Math.max(0, Math.ceil(b.dashCd * 10)), b.cards, Math.round(b.tx * 10), Math.round(b.ty * 10)]),
-    f: s.fish.map((f) => [Math.round(f.x * 10), Math.round(f.y * 10), Math.round(f.h * 100), f.adult ? 1 : 0]),
+    // [x, y, h, adult, id]: the id goes last so every reader of the first four stays as it was. Without it the
+    // page followed a fish by its place in this list, and one fish caught in the middle moved every fish after
+    // it to its neighbour's spot (Ava, 25 Oct: "the fish flicker, and suddenly vanish or appear")
+    f: s.fish.map((f) => [Math.round(f.x * 10), Math.round(f.y * 10), Math.round(f.h * 100), f.adult ? 1 : 0, f.id]),
     n: s.nets.map((n) => [n.seat, Math.round(n.x * 10), Math.round(n.y * 10), Math.round(n.r * 10), Math.round((n.closeAt - s.t) * 1000)]),
     l: s.loose.map((l) => [l.id, Math.round(l.x * 10), Math.round(l.y * 10), l.value]),
     k: s.koi ? [Math.round(s.koi.x * 10), Math.round(s.koi.y * 10), Math.round(s.koi.h * 100)] : null,
