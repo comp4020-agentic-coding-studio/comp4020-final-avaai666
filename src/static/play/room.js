@@ -93,7 +93,7 @@ async function loadMode(id) {
   modeApi?.end?.();
   const moduleName = worldModuleFor(id), world = worldFor(moduleName);
   $("gl").hidden = moduleName !== "world.js"; $("gl5").hidden = moduleName !== "world5.js";
-  if ($("mini")) $("mini").hidden = moduleName !== "world5.js";
+  if ($("mini")) $("mini").hidden = true; // rule change 10: the whole lake is always on screen, so no minimap
   world.clearBoats(); world.clearProps(); world.setFish([], 0); world.setKoi(null, 0); world.setNight(0); world.setLanterns([]);
   hud.innerHTML = "";
   mode = await import(`/static/play/${id}.js`);

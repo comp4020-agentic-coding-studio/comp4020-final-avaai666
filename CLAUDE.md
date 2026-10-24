@@ -82,8 +82,9 @@ Authority
   breeding formula and the tiers are in one server module (src/lib/lake-world.ts);
   the page gets them in its boot JSON and keeps no copy.
 - Who's Poaching 2.0: a seat's frame holds no boat, fish or evidence outside
-  its lantern's view (24 units of its boat, and its own buoy's circle). The
-  server does not send what that seat may not see, and a test checks it.
+  its lantern's view (12 units of its boat, and its own buoy's circle; 24 on
+  the lake before rule change 10 halved it). The server does not send what
+  that seat may not see, and a test checks it.
 - Boat Rush 2.0: no frame or event shows another seat's market pick before the
   market closes.
 - Events, frames and snapshots never contain an idempotency key, a net

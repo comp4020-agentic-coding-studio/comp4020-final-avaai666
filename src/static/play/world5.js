@@ -430,50 +430,87 @@ export function createWorld5(canvas, stage, world, opts = {}) {
     floatsEl.appendChild(el); setTimeout(() => el.remove(), 1400);
   }
 
-  // ---- camera: follow the boat, or show the whole lake ----
-  // span: null means "use viewSpan() for this screen" (a fixed 120 here once made viewSpan() dead code, so every screen showed the whole lake)
-  const cam = { mode: "overview", x: 0, z: 10, span: null, dist: 120, target: null, orbit: 0 };
+  // ---- camera: the whole lake, always (rule change 10) ----
+  // The lake is one screen now: every mode shows all of it while you play, so no camera moves with your boat
+  // (Ava, 24 Oct: on the 0.7 lake a close camera that swung ahead of the boat made "my own boat not do what I
+  // tell it"). "follow" is kept as a mode name for the scripts and means the playing view: the whole lake,
+  // tilted lower so it reads as a place in 3D. "overview" (results, meetings) looks a little more steeply down.
+  // On a tall phone the camera turns a quarter (yaw), so the lake's long east-west side runs up the screen.
+  const cam = { mode: "overview", x: 0, z: 4, dist: 120, target: null, orbit: 0, yaw: 0 };
   const camPos = new THREE.Vector3();
-  // the camera's tilt: lower while following a boat, so the lake reads as a place in 3D, not a map; a
-  // little higher for the whole-lake view, which has to show every shore
-  const PITCH = 0.9, PITCH_FOLLOW = 0.8;
-  // on a tall phone the whole-lake view looks more steeply down, so the lake fills the screen's height
-  const ovPitch = () => (stage.clientHeight > stage.clientWidth * 1.25 ? 1.22 : PITCH);
-  // how much water the follow camera shows across the screen (rule change 8 made the lake 0.7 the size)
-  function viewSpan() { const w = stage.clientWidth, h = stage.clientHeight; return w < 700 ? (h > w ? 64 : 90) : 118; }
-  function distForSpan(span) { const aspect = stage.clientWidth / stage.clientHeight, hf = 2 * Math.atan(Math.tan((camera.fov * Math.PI) / 360) * aspect); return span / 2 / Math.tan(hf / 2); }
-  let overviewDist = 160;
-  function fitOverview() {
-    camera.aspect = stage.clientWidth / stage.clientHeight; camera.updateProjectionMatrix();
-    const pts = outlineBankW.map(([x, z]) => new THREE.Vector3(x, 0, z));
-    let lo = 40, hi = 900; for (let k = 0; k < 22; k++) { const mid = (lo + hi) / 2; placeCam(0, 4, mid, ovPitch()); camera.updateMatrixWorld(); const ok = pts.every((p) => { const q = p.clone().project(camera); return Math.abs(q.x) < 0.97 && q.y < 0.8 && q.y > -0.78; }); if (ok) hi = mid; else lo = mid; }
-    overviewDist = hi;
+  const PITCH = 1.05, PITCH_PLAY = 0.92;
+  const tall = () => stage.clientHeight > stage.clientWidth * 1.1;
+  const yawFor = () => (tall() ? Math.PI / 2 : 0);
+  const pitchFor = (mode) => (mode === "follow" ? PITCH_PLAY : PITCH) + (tall() ? 0.12 : 0);
+  // kept for the mode scripts' tests: how much water a screen shows across (the whole lake, with its bank)
+  function viewSpan() { return 2 * LX * 1.12; }
+  const fitDist = { follow: 160, overview: 160 };
+  // The lake is fitted into the part of the screen the HUD leaves free: the top bar (and on a phone the
+  // strip under it), the pads at the bottom, and on a wide screen the HUD's column on the right. A view
+  // offset moves the picture so the lake sits in the middle of that space.
+  let free = { t: 0, b: 0, r: 0 };
+  function freeArea() {
+    const sr = stage.getBoundingClientRect(), W = sr.width, H = sr.height, out = { t: 0, b: 0, r: 0 };
+    const vis = (e) => { if (!e || e.hidden) return null; const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? r : null; };
+    const bar = vis(document.getElementById("topbar")); if (bar) out.t = bar.bottom - sr.top;
+    const hud = vis(document.getElementById("hud"));
+    if (hud && W >= 900 && hud.left - sr.left > W * 0.55 && hud.height > 40) out.r = sr.right - hud.left + 12;
+    for (const pads of stage.querySelectorAll(".pads")) {
+      const r = vis(pads); if (!r || r.top - sr.top < H * 0.5 || (out.r && r.left - sr.left > W * 0.55)) continue;
+      if (r.width > W * 0.55) out.b = Math.max(out.b, sr.bottom - r.top); // across the bottom
+      else if (r.left - sr.left > W * 0.4) out.r = Math.max(out.r, sr.right - r.left + 8); // in the bottom-right corner (a phone on its side)
+    }
+    // on a phone the HUD's first card is a strip across the top, under the bar
+    if (hud && W < 900) { const card = vis(hud.firstElementChild); if (card && card.width > W * 0.4 && card.top - sr.top < H * 0.3) out.t = Math.max(out.t, card.bottom - sr.top); }
+    for (const k of ["t", "b", "r"]) out[k] = Math.round(Math.min(out[k], (k === "r" ? W : H) * 0.45));
+    return out;
   }
-  function placeCam(x, z, dist, pitch = PITCH) { camera.position.set(x, Math.sin(pitch) * dist, z + Math.cos(pitch) * dist); camera.up.set(0, 1, 0); camera.lookAt(x, 0, z); }
+  function fitOverview() {
+    const W = stage.clientWidth || 1, H = stage.clientHeight || 1;
+    free = freeArea();
+    camera.aspect = W / H;
+    const ox = free.r / 2, oy = (free.b - free.t) / 2;
+    if (ox || oy) camera.setViewOffset(W, H, ox, oy, W, H); else camera.clearViewOffset();
+    camera.updateProjectionMatrix();
+    const right = 0.97 - (2 * free.r) / W, top = 0.97 - (2 * free.t) / H, bottom = -0.97 + (2 * free.b) / H;
+    const pts = outlineBankW.map(([x, z]) => new THREE.Vector3(x, 0, z));
+    for (const mode of ["follow", "overview"]) {
+      let lo = 20, hi = 900;
+      for (let k = 0; k < 22; k++) {
+        const mid = (lo + hi) / 2; placeCam(0, 4, mid, pitchFor(mode), yawFor()); camera.updateMatrixWorld();
+        const ok = pts.every((p) => { const q = p.clone().project(camera); return q.x > -0.97 && q.x < right && q.y < top && q.y > bottom; });
+        if (ok) hi = mid; else lo = mid;
+      }
+      fitDist[mode] = hi;
+    }
+  }
+  // the HUD changes once a match starts: fit again when the space it leaves changes
+  const refitT = setInterval(() => { const f = freeArea(); if (f.t !== free.t || f.b !== free.b || f.r !== free.r) fitOverview(); }, 700);
+  // the camera looks at (x, z) from dist away, tilted pitch above the water, from the south (yaw 0) or the west (yaw pi/2)
+  function placeCam(x, z, dist, pitch = PITCH, yaw = 0) {
+    const h = Math.cos(pitch) * dist;
+    camera.position.set(x - Math.sin(yaw) * h, Math.sin(pitch) * dist, z + Math.cos(yaw) * h); camera.up.set(0, 1, 0); camera.lookAt(x, 0, z);
+  }
   let shakeA = 0;
-  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   function updateCamera(dt, tt) {
     shakeA *= Math.pow(0.02, dt); const sx = (Math.random() - 0.5) * shakeA, sz = (Math.random() - 0.5) * shakeA;
-    if (cam.mode === "follow" && cam.target) {
-      const b = cam.target, lead = Math.min(10, b.speed * 0.8);
-      const gx = clamp(b.x + Math.cos(b.h) * lead, -LX * 0.72, LX * 0.72), gz = clamp(b.z + Math.sin(b.h) * lead - 4, -LY * 0.75, LY * 0.58);
-      cam.x += (gx - cam.x) * Math.min(1, dt * 2.6); cam.z += (gz - cam.z) * Math.min(1, dt * 2.6);
-      const want = distForSpan(cam.span ?? viewSpan()); cam.dist += (want - cam.dist) * Math.min(1, dt * 2);
-      // a tall phone screen shows far more depth than width, so it looks more steeply down
-      placeCam(cam.x + sx, cam.z + sz, cam.dist, stage.clientHeight > stage.clientWidth * 1.25 ? 1.0 : PITCH_FOLLOW);
-    } else if (cam.mode === "orbit") {
-      cam.orbit += dt * 0.08; const d = overviewDist * 0.78; camera.position.set(Math.cos(cam.orbit) * d * 0.62, d * 0.6, Math.sin(cam.orbit) * d * 0.62 + 10); camera.up.set(0, 1, 0); camera.lookAt(0, 0, 4);
-    } else {
-      cam.dist += (overviewDist - cam.dist) * Math.min(1, dt * 2); cam.x += (0 - cam.x) * Math.min(1, dt * 2); cam.z += (4 - cam.z) * Math.min(1, dt * 2);
-      placeCam(cam.x + sx + Math.sin(tt * 0.1) * 1.2, cam.z + sz, cam.dist, ovPitch());
+    if (cam.mode === "orbit") {
+      cam.orbit += dt * 0.08; const d = fitDist.overview * 0.78; camera.position.set(Math.cos(cam.orbit) * d * 0.62, d * 0.6, Math.sin(cam.orbit) * d * 0.62 + 10); camera.up.set(0, 1, 0); camera.lookAt(0, 0, 4);
+      return;
     }
+    const mode = cam.mode === "follow" ? "follow" : "overview", k = Math.min(1, dt * 2);
+    cam.dist += (fitDist[mode] - cam.dist) * k; cam.pitch = (cam.pitch ?? pitchFor(mode)) + (pitchFor(mode) - (cam.pitch ?? pitchFor(mode))) * k;
+    cam.yaw = yawFor();
+    placeCam(cam.x + sx, cam.z + sz, cam.dist, cam.pitch, cam.yaw);
   }
   function setCameraMode(mode, target = null) { cam.mode = mode; cam.target = target; }
   function onResize() { if (renderer) { renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(stage.clientWidth, stage.clientHeight, false); } camera.aspect = stage.clientWidth / stage.clientHeight; camera.updateProjectionMatrix(); fitOverview(); }
   new ResizeObserver(onResize).observe(stage);
 
   // ---- the minimap ----
+  // the minimap is not shown since rule change 10: the whole lake is always on the screen
   const miniEl = opts.minimap ?? stage.querySelector("#mini");
+  if (miniEl) miniEl.hidden = true;
   const mctx = miniEl?.getContext("2d");
   function drawMinimap(reveal = () => true) {
     if (!mctx || miniEl.hidden) return;
@@ -494,12 +531,21 @@ export function createWorld5(canvas, stage, world, opts = {}) {
   const onKeyUp = (e) => keys.delete(e.code);
   const onBlur = () => keys.clear();
   addEventListener("keydown", onKey); addEventListener("keyup", onKeyUp); addEventListener("blur", onBlur);
+  // the direction you want, on the water: "up" on the screen (W, the arrow, the stick pushed up) is away from
+  // the camera, whichever way the camera faces (on a tall phone it faces east, rule change 10)
+  const camFwd = new THREE.Vector3();
+  function screenToWater(sx, sy) {
+    camera.getWorldDirection(camFwd); camFwd.y = 0; if (camFwd.lengthSq() < 1e-9) camFwd.set(0, 0, -1); camFwd.normalize();
+    const rx = -camFwd.z, rz = camFwd.x; // the screen's right, on the water
+    const x = rx * sx - camFwd.x * sy, z = rz * sx - camFwd.z * sy, L = Math.hypot(x, z) || 1;
+    return { x: x / L, z: z / L };
+  }
   function wantDir() {
-    let x = 0, z = 0;
-    if (keys.has("KeyW") || keys.has("ArrowUp")) z -= 1; if (keys.has("KeyS") || keys.has("ArrowDown")) z += 1;
+    let x = 0, y = 0;
+    if (keys.has("KeyW") || keys.has("ArrowUp")) y -= 1; if (keys.has("KeyS") || keys.has("ArrowDown")) y += 1;
     if (keys.has("KeyA") || keys.has("ArrowLeft")) x -= 1; if (keys.has("KeyD") || keys.has("ArrowRight")) x += 1;
-    if (x || z) { const L = Math.hypot(x, z); return { x: x / L, z: z / L, mag: 1 }; }
-    const j = joy; if (j) { const L = Math.hypot(j.dx, j.dy); if (L > 10) return { x: j.dx / L, z: j.dy / L, mag: Math.min(1, L / 52) }; }
+    if (x || y) return { ...screenToWater(x, y), mag: 1 };
+    const j = joy; if (j) { const L = Math.hypot(j.dx, j.dy); if (L > 10) return { ...screenToWater(j.dx, j.dy), mag: Math.min(1, L / 52) }; }
     return null;
   }
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit = new THREE.Vector3();
@@ -606,6 +652,7 @@ export function createWorld5(canvas, stage, world, opts = {}) {
     shake(a = 0.3) { shakeA = Math.max(shakeA, a); },
     canvas,
     end() {
+      clearInterval(refitT);
       removeEventListener("keydown", onKey); removeEventListener("keyup", onKeyUp); removeEventListener("blur", onBlur);
       canvas.removeEventListener("pointerdown", onPointerDown); removeEventListener("pointermove", onPointerMove); removeEventListener("pointerup", onPointerEnd); removeEventListener("pointercancel", onPointerEnd);
     },

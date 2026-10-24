@@ -75,7 +75,8 @@ export function mount({ world, sound, ui, send, view, post }) {
   const fog = document.createElement("div"); fog.className = "y2-fog"; fog.hidden = true; ui.stage.appendChild(fog);
   const pv = new world.THREE.Vector3();
   const toScreen = (x, y) => { const [wx, wz] = world.toWorld(x, y); pv.set(wx, 0, wz).project(world.camera); return [(pv.x * 0.5 + 0.5) * ui.stage.clientWidth, (-pv.y * 0.5 + 0.5) * ui.stage.clientHeight]; };
-  const holeAt = (x, y, r) => { const [sx, sy] = toScreen(x, y), [qx] = toScreen(x + r, y), R = Math.max(30, Math.abs(qx - sx)); return `radial-gradient(circle ${R.toFixed(0)}px at ${sx.toFixed(0)}px ${sy.toFixed(0)}px, transparent 0, transparent 70%, #000 100%)`; };
+  // a light's hole on screen, along whichever lake axis runs across it (the camera turns on a tall phone)
+  const holeAt = (x, y, r) => { const [sx, sy] = toScreen(x, y), [ax, ay] = toScreen(x + r, y), [bx, by] = toScreen(x, y + r), R = Math.max(30, Math.hypot(ax - sx, ay - sy), Math.hypot(bx - sx, by - sy)); return `radial-gradient(circle ${R.toFixed(0)}px at ${sx.toFixed(0)}px ${sy.toFixed(0)}px, transparent 0, transparent 70%, #000 100%)`; };
   function updateHud(f) {
     const clock = $("y2-clock"); if (clock) clock.textContent = `0:${String(f.left).padStart(2, "0")}`;
     const lk = $("y2-lake"); if (lk) lk.textContent = f.lake;

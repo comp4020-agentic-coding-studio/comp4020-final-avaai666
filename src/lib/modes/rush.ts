@@ -13,7 +13,8 @@
 // lakeAfterMatch), never running it through nextSpring() again.
 import { RUSH as Q, RUSH_MODEL } from "../game-constants.ts";
 import { type GameEvent, type Highlight, type Mode, type Results, type Seat, streamOf } from "../game-platform.ts";
-import { breed as breedLake, dockPos, forecast, iceBlocks, ISLAND, K, nr, tierOf, ZONES } from "../lake-world.ts";
+import { breed as breedLake, dockPos, forecast, ICE_K, iceBlocks, ISLAND, K, LAKE_X, LAKE_Y, nr, tierOf, WORLD_SCALE, ZONES } from "../lake-world.ts";
+import { keepOnWater, SLIDE, steer } from "./boat-move.ts";
 import { counts, type Fish, moveFish, newFish, placeSchools, type School, seedFish, updateSchools } from "./lake-life.ts";
 
 export type Season = 0 | 1 | 2 | 3; // spring, summer, autumn, winter
@@ -114,7 +115,7 @@ function input(_s: RushSim, _seat: number, raw: unknown): RushInput | null {
     const x = Number(o.x), y = Number(o.y);
     if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
     // one decimal place: a whole-unit round loses too much on a 92 x 64 lake
-    return { k: "steer", x: Math.round(Math.max(-92, Math.min(92, x)) * 10) / 10, y: Math.round(Math.max(-64, Math.min(64, y)) * 10) / 10 };
+    return { k: "steer", x: Math.round(Math.max(-LAKE_X, Math.min(LAKE_X, x)) * 10) / 10, y: Math.round(Math.max(-LAKE_Y, Math.min(LAKE_Y, y)) * 10) / 10 };
   }
   if (o.k === "cast") { const c = Number(o.charge ?? 0); return { k: "cast", charge: Number.isFinite(c) ? Math.round(Math.max(0, Math.min(1, c)) * 100) / 100 : 0 }; }
   if (o.k === "dash") return { k: "dash" };
@@ -301,25 +302,17 @@ function moveBoats(s: RushSim, ev: GameEvent[]): void {
     } else {
       // the prototype's steerBoat() (ui.js), the tx/ty branch only: the
       // client always resolves keys/stick into a target point before
-      // sending steer, so the server never needs the raw-direction branch
-      const maxSpeed = speedOf(b);
-      const dx = b.tx - b.x, dy = b.ty - b.y, d = Math.hypot(dx, dy);
-      let want: number | null = null, throttle = 0;
-      if (d > 0.9) { want = Math.atan2(dy, dx); throttle = Math.min(1, d / 4); }
-      if (want !== null) {
-        const diff = Math.atan2(Math.sin(want - b.h), Math.cos(want - b.h));
-        b.h += Math.sign(diff) * Math.min(Math.abs(diff), dt * 3.2);
-        throttle *= Math.max(0.25, Math.cos(Math.min(1.4, Math.abs(diff))));
-      }
-      const inReeds = Math.hypot(b.x - ZONES.reeds.x, b.y - ZONES.reeds.y) < ZONES.reeds.r && nr(b.x, b.y) > 0.6;
-      const slow = inReeds ? 0.62 : 1;
-      b.speed += (maxSpeed * throttle * slow - b.speed) * Math.min(1, dt * 2.6);
+      // sending steer. Shared with poach and party (boat-move.ts).
+      steer(b, speedOf(b), dt);
       nx = b.x + Math.cos(b.h) * b.speed * dt; ny = b.y + Math.sin(b.h) * b.speed * dt;
     }
-    if (nr(nx, ny) > 0.965) { const k = 0.965 / nr(nx, ny); nx *= k; ny *= k; b.speed *= 0.7; }
-    if (iceBlocks(nx, ny, s.season)) { nx = b.x; ny = b.y; b.speed *= 0.3; }
-    const di = Math.hypot(nx - ISLAND.x, ny - ISLAND.y);
-    if (di < ISLAND.r + 2.2) { const a = Math.atan2(ny - ISLAND.y, nx - ISLAND.x); nx = ISLAND.x + Math.cos(a) * (ISLAND.r + 2.2); ny = ISLAND.y + Math.sin(a) * (ISLAND.r + 2.2); b.speed *= 0.8; }
+    [nx, ny] = keepOnWater(b, nx, ny);
+    // winter ice: slide along its edge, as along the shore (rule change 10); stop only where that is ice too
+    if (iceBlocks(nx, ny, s.season)) {
+      // (a boat already in the ice, which froze round it, stays where it is)
+      const k = (ICE_K * 0.995) / nr(nx, ny), px = nx * k, py = ny * k;
+      if (!iceBlocks(b.x, b.y, s.season) && !iceBlocks(px, py, s.season)) { nx = px; ny = py; b.speed *= SLIDE; } else { nx = b.x; ny = b.y; b.speed *= 0.3; }
+    }
     b.x = nx; b.y = ny;
     if (b.dashT > 0) for (const f of s.fish) { const fx = f.x - b.x, fy = f.y - b.y, fd = Math.hypot(fx, fy); if (fd < 4 && fd > 0) { f.scare = 0.4; f.sx = fx / fd; f.sy = fy / fd; } }
     if (has(b, "trawl") && b.speed >= 2 && b.hold.length < holdMax(b)) {
@@ -454,7 +447,7 @@ function koiTick(s: RushSim, ev: GameEvent[]): void {
   let fx = 0, fy = 0;
   for (const b of s.boats) {
     const pull = has(b, "goldHook") ? 1.6 : 0;
-    const dx = k.x - b.x, dy = k.y - b.y, d = Math.hypot(dx, dy); if (pull && d < 14 && d > 0) { fx += (dx / d) * pull; fy += (dy / d) * pull; }
+    const dx = k.x - b.x, dy = k.y - b.y, d = Math.hypot(dx, dy); if (pull && d < 14 * WORLD_SCALE && d > 0) { fx += (dx / d) * pull; fy += (dy / d) * pull; }
   }
   k.h = Math.atan2(Math.sin(k.h) + fy, Math.cos(k.h) + fx) + (s.rng() - 0.5) * 0.4;
   if (nr(k.x, k.y) > 0.7) k.h = Math.atan2(-k.y, -k.x);
@@ -480,13 +473,13 @@ function bot(s: RushSim, seat: number, r: () => number): RushInput[] {
   const tripHome = Math.hypot(d.x - b.x, d.y - b.y) / Math.max(4, speedOf(b));
   const goHome = n >= max * homeAt || left < tripHome + (kind === "greedy" ? 2.5 : 4.5);
   if (goHome) { out.push({ k: "steer", x: Math.round(d.x), y: Math.round(d.y) }); return out; }
-  if (s.koi && n < max && Math.hypot(s.koi.x - b.x, s.koi.y - b.y) < 26) {
+  if (s.koi && n < max && Math.hypot(s.koi.x - b.x, s.koi.y - b.y) < 26 * WORLD_SCALE) {
     out.push({ k: "steer", x: Math.round(s.koi.x), y: Math.round(s.koi.y) });
     if (Math.hypot(s.koi.x - b.x, s.koi.y - b.y) < 10 && b.dashCd <= 0) out.push({ k: "dash" });
     return out;
   }
   if (kind === "greedy" && b.dashCd <= 0) {
-    const prey = s.boats.filter((o) => o !== b && o.hold.length >= 5 && o.shield <= 0 && Math.hypot(o.x - b.x, o.y - b.y) < 14 && !nearAnyDock(s, o.x, o.y, Q.SAFE_R))[0];
+    const prey = s.boats.filter((o) => o !== b && o.hold.length >= 5 && o.shield <= 0 && Math.hypot(o.x - b.x, o.y - b.y) < 14 * WORLD_SCALE && !nearAnyDock(s, o.x, o.y, Q.SAFE_R))[0];
     if (prey) {
       out.push({ k: "steer", x: Math.round(prey.x), y: Math.round(prey.y) });
       if (Math.hypot(prey.x - b.x, prey.y - b.y) < 8) out.push({ k: "dash" });

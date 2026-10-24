@@ -134,7 +134,7 @@ const en = {
 
   // ---- the four games: cards and rules ----
   rush_name: "Boat Rush", rush_one: "Sail out, net fish, and get them home before the gong.", rush_choice: "One more cast, or home now?",
-  rush_goal: "Four seasons, 45 seconds each. The most fish unloaded at your own dock wins. Fish still in your boat when the gong sounds spoil.",
+  rush_goal: "Four seasons, 30 seconds each. The most fish unloaded at your own dock wins. Fish still in your boat when the gong sounds spoil.",
   rush_s1_t: "Sail", rush_s1_p: "Tap the water and your boat sails there.",
   rush_s2_t: "Cast", rush_s2_p: "Tap CAST when fish are just in front of your boat. Your boat holds 12 fish, and a full boat is slow.",
   rush_s3_t: "Go home", rush_s3_p: "Sail into your own dock to unload. Between seasons, pick one of three cards: gear, greedy, or a keeper's choice.",
@@ -156,7 +156,7 @@ const en = {
   poach_name: "Who's Poaching", poach_one: "One of you is secretly netting baby fish. Find them before the lake dies.", poach_choice: "Who do you believe?",
   poach_goal: "Three days of 70 seconds, each ending in a village meeting. Fishers win by voting out the poacher while the lake's health stays at 40% or more. The poacher wins by lasting three days, or if the lake falls below 40%.",
   poach_s1_t: "Check your role", poach_s1_p: "Your role is secret. Only you can see it.",
-  poach_s2_t: "Work by day", poach_s2_p: "You only see what your lantern lights: 24 units round your boat. Do your three tasks at the named places (each one is 2 fish for the village). Stay alongside a boat for 1.5 seconds to INSPECT it: young fish aboard are evidence.",
+  poach_s2_t: "Work by day", poach_s2_p: "You only see what your lantern lights: 12 units round your boat. Do your three tasks at the named places (each one is 2 fish for the village). Stay alongside a boat for 1.5 seconds to INSPECT it: young fish aboard are evidence.",
   poach_s3_t: "Buoys and dead fish", poach_s3_p: "One buoy a day logs every boat that passes, and lights a second circle for you. The poacher's fine net leaves dead young fish floating: REPORT them to call the meeting at once.",
   poach_s4_t: "Meet and vote", poach_s4_p: "The map shows what you know. Say what you saw with lines built from it (the poacher gets lies), talk out loud, then vote. Whoever is voted out shows their role.",
   poach_s5_t: "Don't stall", poach_s5_p: "A meeting that votes nobody out costs the lake 5 health. The last meeting must vote someone out.",
@@ -281,7 +281,7 @@ const en = {
   r_card_release: "Let Them Go", r_text_release: "Young fish in your net go free; each one you spare scores ½ a fish if next year is Fair or better.",
   r_card_reeds: "Reed Bed", r_text_reeds: "Plant reeds by your dock: 10 more young fish hatch there each time the lake breeds.",
   // practice (client-only, never sent to the server)
-  r_p1t: "Fish fast", r_p1p: "Each season lasts 45 seconds. Sail to a school and press NET when the fish are just ahead of your bow.",
+  r_p1t: "Fish fast", r_p1p: "Each season lasts 30 seconds. Sail to a school and press NET when the fish are just ahead of your bow.",
   r_p2t: "Home before the gong", r_p2p: "Unload at your own dock. Fish still in your boat when the gong sounds spoil.",
   r_p3t: "Pick one card", r_p3p: "Between seasons, pick one of three. Red cards catch more but kill the young fish: next year's fish.",
   r_p_choice: "Most fish home wins. But everyone's fish are multiplied by how full next year's lake is. Greed can lose you the game.",
@@ -545,7 +545,7 @@ const zh: Record<Key, string> = {
   play_err_pick: "请从四个游戏里选一个。", play_err_soon: "这个游戏还没做好，卡片上写着什么时候上线。",
 
   rush_name: "开船抢鱼", rush_one: "开船出去撒网，在锣响之前把鱼运回家。", rush_choice: "再撒一网，还是现在回家？",
-  rush_goal: "四个季节，每季 45 秒。卸到自家码头的鱼最多的人赢。锣响时还在船上的鱼会坏掉。",
+  rush_goal: "四个季节，每季 30 秒。卸到自家码头的鱼最多的人赢。锣响时还在船上的鱼会坏掉。",
   rush_s1_t: "开船", rush_s1_p: "点水面，船就开过去。",
   rush_s2_t: "撒网", rush_s2_p: "鱼在船头前方时点「撒网」。船舱最多装 12 条，装得越满船越慢。",
   rush_s3_t: "回家", rush_s3_p: "开进自家码头卸货。两季之间三选一：渔具、贪心，或护湖的选择。",
@@ -567,7 +567,7 @@ const zh: Record<Key, string> = {
   poach_name: "谁在偷鱼", poach_one: "你们中间有人在偷偷捞小鱼。在湖死掉之前把他找出来。", poach_choice: "你相信谁？",
   poach_goal: "三天，每天 70 秒，天黑开村会。湖的健康保持在 40% 以上并把偷渔人赶走，渔民赢。偷渔人撑过三天，或者湖掉到 40% 以下，偷渔人赢。",
   poach_s1_t: "看身份", poach_s1_p: "你的身份是秘密，只有你自己看得到。",
-  poach_s2_t: "白天干活", poach_s2_p: "你只看得见灯照到的地方：船周围 24 个单位。到指定的地方做三件活（每件给村里 2 条鱼）。贴着一条船 1.5 秒就能「查船」：船上有小鱼就是证据。",
+  poach_s2_t: "白天干活", poach_s2_p: "你只看得见灯照到的地方：船周围 12 个单位。到指定的地方做三件活（每件给村里 2 条鱼）。贴着一条船 1.5 秒就能「查船」：船上有小鱼就是证据。",
   poach_s3_t: "浮标和死鱼苗", poach_s3_p: "每天一个浮标，记下谁经过，还给你多照亮一圈。偷渔人的绝户网会留下浮着的死鱼苗：点「报告」马上开村会。",
   poach_s4_t: "开会投票", poach_s4_p: "地图上是你知道的事。用它拼出来的话发言（偷渔人拿到的是谎话），大声讨论，然后投票。被赶走的人亮出身份。",
   poach_s5_t: "别拖", poach_s5_p: "一次会议没投出人，湖的健康就掉 5。最后一次会议必须投出一个人。",
@@ -683,7 +683,7 @@ const zh: Record<Key, string> = {
   r_card_ladder: "鱼道", r_text_ladder: "全湖繁殖多 15%。每出生 8 条，你得 1 条。",
   r_card_release: "放生", r_text_release: "网里的小鱼都放回去；如果明年是平年或更好，每放一条算半条鱼。",
   r_card_reeds: "种芦苇", r_text_reeds: "在你码头边种芦苇：每次繁殖那里多孵 10 条小鱼。",
-  r_p1t: "快快捕鱼", r_p1p: "每季 45 秒。开到鱼群旁边，鱼在船头正前方时按「撒网」。",
+  r_p1t: "快快捕鱼", r_p1p: "每季 30 秒。开到鱼群旁边，鱼在船头正前方时按「撒网」。",
   r_p2t: "锣响前回家", r_p2p: "回自家码头卸鱼。锣响时还在船上的鱼会坏掉。",
   r_p3t: "选一张卡", r_p3p: "两季之间三选一。红色的卡捞得多，但会捞死小鱼——那是明年的鱼。",
   r_p_choice: "运回家的鱼最多的人赢。但每个人的鱼都要乘上明年湖的年景。太贪，反而会输。",
@@ -855,7 +855,7 @@ export function t(lang: Lang, key: string, vars: Record<string, string | number>
 // The four games, in the order the mock shows them, with what is the same in
 // both languages.
 export const GAMES = [
-  { id: "rush", color: "#c8372d", players: "2–4", min: "4" },
+  { id: "rush", color: "#c8372d", players: "2–4", min: "3" }, // 4 seasons of 30 s, the rests and 3 markets (rule change 10)
   { id: "party", color: "#c9921f", players: "2–4", min: "5" },
   { id: "poach", color: "#2b8571", players: "4–8", min: "7" },
   { id: "hold", color: "#5a6fb0", players: "2–4", min: "5" },

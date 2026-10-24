@@ -18,7 +18,8 @@
 // never reads a bot's mind, so a replay that does not run the bots is exact.
 import { POACH as Q, POACH_MODEL } from "../game-constants.ts";
 import { type GameEvent, type Highlight, type Mode, type Results, type Seat, streamOf } from "../game-platform.ts";
-import { BAYS, dockPos, ISLAND, LAKE_X, LAKE_Y, nextSpring, nr, type PlaceId, placeOf, tierOf, ZONES } from "../lake-world.ts";
+import { BAYS, dockPos, ISLAND, LAKE_X, LAKE_Y, nextSpring, nr, type PlaceId, placeOf, tierOf, WORLD_SCALE as S, ZONES } from "../lake-world.ts";
+import { sail } from "./boat-move.ts";
 import { counts, type Fish, moveFish, newFish, NURSERY_FIRST, type School, seedFish, updateSchools } from "./lake-life.ts";
 
 export type Role = "fisher" | "poacher";
@@ -44,15 +45,15 @@ export type PoachInput =
 
 // the task spots (the prototype's TASKS): a verb and a named place
 export const TASKS: { id: string; verb: string; place: PlaceId; x: number; y: number }[] = [
-  { id: "t1", verb: "net", place: "north", x: -16, y: -42 },
+  { id: "t1", verb: "net", place: "north", x: -16 * S, y: -42 * S },
   { id: "t2", verb: "count", place: "reeds", x: ZONES.reeds.x * 0.9, y: ZONES.reeds.y * 0.9 },
   { id: "t3", verb: "lotus", place: "lotus", x: ZONES.lotus.x * 0.9, y: ZONES.lotus.y * 0.9 },
-  { id: "t4", verb: "trap", place: "east", x: 60, y: -2 },
+  { id: "t4", verb: "trap", place: "east", x: 60 * S, y: -2 * S },
   { id: "t5", verb: "sluice", place: "river", x: ZONES.river.x * 0.9, y: ZONES.river.y * 0.9 },
-  { id: "t6", verb: "incense", place: "island", x: ISLAND.x - 2, y: ISLAND.y + 12 },
-  { id: "t7", verb: "mend", place: "south", x: 2, y: 30 },
-  { id: "t8", verb: "trap", place: "west", x: -62, y: 8 },
-  { id: "t9", verb: "net", place: "east", x: 40, y: -30 },
+  { id: "t6", verb: "incense", place: "island", x: ISLAND.x - 2, y: ISLAND.y + ISLAND.r + 4.5 },
+  { id: "t7", verb: "mend", place: "south", x: 2 * S, y: 30 * S },
+  { id: "t8", verb: "trap", place: "west", x: -62 * S, y: 8 * S },
+  { id: "t9", verb: "net", place: "east", x: 40 * S, y: -30 * S },
 ];
 
 interface Task { id: string; verb: string; place: PlaceId; x: number; y: number; p: number; done: boolean }
@@ -259,21 +260,8 @@ function moveBoats(s: PoachSim): void {
   for (const b of alive(s)) {
     if (b.netCd > 0) b.netCd -= dt;
     if (b.fineCd > 0) b.fineCd -= dt;
-    // the prototype's steerBoat() (ui.js), as rush.ts uses it
-    const dx = b.tx - b.x, dy = b.ty - b.y, d = Math.hypot(dx, dy);
-    let throttle = 0;
-    if (d > 0.9) {
-      const want = Math.atan2(dy, dx), diff = Math.atan2(Math.sin(want - b.h), Math.cos(want - b.h));
-      b.h += Math.sign(diff) * Math.min(Math.abs(diff), dt * 3.2);
-      throttle = Math.min(1, d / 4) * Math.max(0.25, Math.cos(Math.min(1.4, Math.abs(diff))));
-    }
-    const inReeds = Math.hypot(b.x - ZONES.reeds.x, b.y - ZONES.reeds.y) < ZONES.reeds.r && nr(b.x, b.y) > 0.6;
-    b.speed += (Q.SPEED * throttle * (inReeds ? 0.62 : 1) - b.speed) * Math.min(1, dt * 2.6);
-    let nx = b.x + Math.cos(b.h) * b.speed * dt, ny = b.y + Math.sin(b.h) * b.speed * dt;
-    if (nr(nx, ny) > 0.965) { const k = 0.965 / nr(nx, ny); nx *= k; ny *= k; b.speed *= 0.7; }
-    const di = Math.hypot(nx - ISLAND.x, ny - ISLAND.y);
-    if (di < ISLAND.r + 2.2) { const a = Math.atan2(ny - ISLAND.y, nx - ISLAND.x); nx = ISLAND.x + Math.cos(a) * (ISLAND.r + 2.2); ny = ISLAND.y + Math.sin(a) * (ISLAND.r + 2.2); b.speed *= 0.8; }
-    b.x = nx; b.y = ny;
+    // the prototype's steerBoat() (ui.js), shared with rush and party (boat-move.ts)
+    sail(b, Q.SPEED, dt);
   }
 }
 
@@ -370,7 +358,7 @@ function mostPlace(b: Boat): PlaceId {
 // a boat this seat saw close to a patch of dead fish, around the time it appeared
 function nearPatches(s: PoachSim, b: Boat): { i: number; place: PlaceId }[] {
   const out: { i: number; place: PlaceId }[] = [];
-  for (const p of s.patches) if (p.day === s.day) for (const w of b.saw) if (w.i !== b.seat && Math.abs(w.t - p.t) < 8 && Math.hypot(w.x - p.x, w.y - p.y) < 14) out.push({ i: w.i, place: placeOf(p.x, p.y) });
+  for (const p of s.patches) if (p.day === s.day) for (const w of b.saw) if (w.i !== b.seat && Math.abs(w.t - p.t) < 8 && Math.hypot(w.x - p.x, w.y - p.y) < 14 * S) out.push({ i: w.i, place: placeOf(p.x, p.y) });
   return out;
 }
 // the lines this seat may say: what it knows, or, for the poacher, plausible lies
@@ -587,7 +575,7 @@ function bot(s: PoachSim, seat: number, r: () => number): PoachInput[] {
   if (b.insp) { const tg = s.boats[b.insp.target]; steer(tg.x, tg.y); return out; }
   if (!fisher) {
     const eyes = watchersOf(s, b).length;
-    if (b.fry > 0 && alive(s).some((o) => o !== b && dist(o, b) < 13) && r() < 0.4) return [{ k: "dump" }];
+    if (b.fry > 0 && alive(s).some((o) => o !== b && dist(o, b) < 13 * S) && r() < 0.4) return [{ k: "dump" }];
     if (b.fineCd <= 0 && el > 6 && (eyes === 0 || (eyes === 1 && r() < 0.06))) {
       const nx = b.x + Math.cos(b.h) * Q.NET_AHEAD, ny = b.y + Math.sin(b.h) * Q.NET_AHEAD;
       const nearYoung = s.fish.some((f) => !f.adult && Math.hypot(f.x - nx, f.y - ny) < 7);
@@ -596,7 +584,7 @@ function bot(s: PoachSim, seat: number, r: () => number): PoachInput[] {
     if (b.fineCd <= 3 && !b.mind.hunt) {
       // go where the young fish are and nobody else is
       const spots: [number, number][] = [[ZONES.reeds.x * 0.75, ZONES.reeds.y * 0.75], [ZONES.reeds.x * 0.65, ZONES.reeds.y * 0.85], [ZONES.lotus.x * 0.75, ZONES.lotus.y * 0.75], waterPoint(r, 0.75)];
-      b.mind.hunt = spots.map((sp) => [sp, alive(s).filter((o) => o !== b && Math.hypot(o.x - sp[0], o.y - sp[1]) < 32).length + r() * 0.5] as const).sort((p2, q) => p2[1] - q[1])[0][0];
+      b.mind.hunt = spots.map((sp) => [sp, alive(s).filter((o) => o !== b && Math.hypot(o.x - sp[0], o.y - sp[1]) < 32 * S).length + r() * 0.5] as const).sort((p2, q) => p2[1] - q[1])[0][0];
     }
     if (b.mind.hunt) { steer(b.mind.hunt[0], b.mind.hunt[1]); if (Math.hypot(b.mind.hunt[0] - b.x, b.mind.hunt[1] - b.y) < 4 || b.fineCd > 5) b.mind.hunt = null; return out; }
   } else {
@@ -615,8 +603,8 @@ function bot(s: PoachSim, seat: number, r: () => number): PoachInput[] {
 }
 // a point on open water from the bot's own stream (never the lake's)
 function waterPoint(r: () => number, maxK: number): [number, number] {
-  for (let k = 0; k < 40; k++) { const x = (r() * 2 - 1) * 88, y = (r() * 2 - 1) * 60; if (nr(x, y) < maxK && Math.hypot(x - ISLAND.x, y - ISLAND.y) > 11) return [x, y]; }
-  return [0, 20];
+  for (let k = 0; k < 40; k++) { const x = (r() * 2 - 1) * LAKE_X * 0.96, y = (r() * 2 - 1) * LAKE_Y * 0.94; if (nr(x, y) < maxK && Math.hypot(x - ISLAND.x, y - ISLAND.y) > ISLAND.r + 3.5) return [x, y]; }
+  return [0, 20 * S];
 }
 // how much a bot suspects another boat (the prototype's susOf)
 function suspicion(s: PoachSim, b: Boat, o: Boat, r: () => number): number {
@@ -625,7 +613,7 @@ function suspicion(s: PoachSim, b: Boat, o: Boat, r: () => number): number {
   sc += (b.witnessed[o.seat] ?? 0) * 10;
   const k = b.known[o.seat]; if (k) sc += k.res === "fry" ? 9 : -5;
   sc += nearPatches(s, b).filter((x) => x.i === o.seat).length * 2.6;
-  for (const bu of s.buoys) if (bu.day === s.day) for (const p of s.patches) if (p.day === s.day) for (const l of bu.log) if (l.i === o.seat && Math.abs(l.t - p.t) < 9 && Math.hypot(bu.x - p.x, bu.y - p.y) < 20) sc += 1.6;
+  for (const bu of s.buoys) if (bu.day === s.day) for (const p of s.patches) if (p.day === s.day) for (const l of bu.log) if (l.i === o.seat && Math.abs(l.t - p.t) < 9 && Math.hypot(bu.x - p.x, bu.y - p.y) < 20 * S) sc += 1.6;
   for (const sy of s.meeting?.says ?? []) {
     if (sy.seat === b.seat) continue;
     const w = sy.seat === o.seat ? 0 : 1, l = sy.line;

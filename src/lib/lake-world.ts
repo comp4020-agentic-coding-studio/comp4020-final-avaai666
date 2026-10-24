@@ -8,16 +8,22 @@
 // point at (cos a, sin a): 0 east, 90 south, 180 west, 270 north. The server
 // calls the south axis y everywhere; the prototype called it z.
 
-export const LAKE_X = 92;
-export const LAKE_Y = 64;
+// Rule change 8 (Ava, 24 Oct): the prototype's lake (92 by 64) was too big for
+// 28-45 s rounds, so every place on it is scaled by WORLD_SCALE. Speeds, nets,
+// lanterns and the fish count stay as they were: the same fish in less water,
+// and shorter trips. Hold's hexes scale with it (game-constants HOLD.HS).
+export const WORLD_SCALE = 0.5;
+const S = WORLD_SCALE;
+export const LAKE_X = 92 * S;
+export const LAKE_Y = 64 * S;
 export const K = 340; // what a full lake holds; every game's year is judged against it
 export const A0 = 230; // a new room starts with this many adults...
 export const Y0 = 50; // ...and this many young fish
 export const ALLEE = 36; // below this many adults, fish rarely find each other
 export const BREED_R = 1.55;
-export const ISLAND = { x: 10, y: -15, r: 7.5 } as const;
+export const ISLAND = { x: 10 * S, y: -15 * S, r: 7.5 * S } as const;
 export const ICE_K = 0.86; // winter ice beyond this share of the way to the shore...
-export const ICE_DOCK_OPEN = 14; // ...except within this many units of a dock
+export const ICE_DOCK_OPEN = 14 * S; // ...except within this many units of a dock
 export const DOCK_ANGLES = [66, 114, 42, 138, 90, 18] as const; // up to six docks on the south shore
 export const FLOOR_FISH = 18; // a house gains a floor for every 18 fish brought home...
 export const MAX_FLOORS = 6; // ...up to six
@@ -38,22 +44,23 @@ export function shape(aDeg: number, k: number): [number, number] {
 // ---- the named places ----
 export type PlaceId = "reeds" | "lotus" | "river" | "island" | "north" | "east" | "south" | "west";
 interface Zone { a: number; k: number; r: number; x: number; y: number }
-const zone = (a: number, k: number, r: number): Zone => { const [x, y] = shape(a, k); return { a, k, r, x, y }; };
+const zone = (a: number, k: number, r: number): Zone => { const [x, y] = shape(a, k); return { a, k, r: r * S, x, y }; };
 export const ZONES = {
   reeds: zone(195, 0.78, 19), // 芦苇荡: the nursery, where young fish live; boats move at 0.62 speed there
   lotus: zone(237, 0.7, 16), // 荷花塘
   river: zone(318, 0.86, 15), // 河口: with a stone bridge
 } as const;
-export const DEEP = { x: ISLAND.x, y: ISLAND.y, r: 22 } as const; // 深潭, the deep water round the island
+export const DEEP = { x: ISLAND.x, y: ISLAND.y, r: 22 * S } as const; // 深潭, the deep water round the island
 export const REED_SLOW = 0.62;
-export const BAYS: { id: "north" | "east" | "south" | "west"; x: number; y: number }[] = [
+type Bay = { id: "north" | "east" | "south" | "west"; x: number; y: number };
+export const BAYS: Bay[] = ([
   { id: "north", x: -14, y: -44 }, { id: "east", x: 58, y: -4 }, { id: "south", x: 4, y: 34 }, { id: "west", x: -60, y: 6 },
-];
+] as Bay[]).map((b) => ({ ...b, x: b.x * S, y: b.y * S }));
 
 // the named place a point is in (what meeting phrases and task labels use)
 export function placeOf(x: number, y: number): PlaceId {
   for (const id of ["reeds", "lotus", "river"] as const) { const z = ZONES[id]; if (Math.hypot(x - z.x, y - z.y) < z.r) return id; }
-  if (Math.hypot(x - ISLAND.x, y - ISLAND.y) < 20) return "island";
+  if (Math.hypot(x - ISLAND.x, y - ISLAND.y) < 20 * S) return "island";
   let best: PlaceId = "south", bd = Infinity;
   for (const b of BAYS) { const d = Math.hypot(x - b.x, y - b.y); if (d < bd) { bd = d; best = b.id; } }
   return best;

@@ -12,6 +12,9 @@
 //
 //   node scripts/balance.ts            all four modes, 300 seeds each
 //   node scripts/balance.ts rush 60    one mode, fewer seeds (a quick look)
+//   BALANCE_SET='{"RUSH":{"NET_R":3}}' node scripts/balance.ts rush 60
+//                                      a parameter sweep: the same matches with these
+//                                      game constants instead; prints, writes no file
 import { writeFileSync, readFileSync, existsSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
@@ -20,7 +23,12 @@ import { BOT_KINDS, hold, type HoldInput } from "../src/lib/modes/hold.ts";
 import { party, type PartyInput, type PartySim } from "../src/lib/modes/party.ts";
 import { health, poach, type PoachInput } from "../src/lib/modes/poach.ts";
 import { tierOf, type TierId } from "../src/lib/lake-world.ts";
+import { HOLD, PARTY, POACH, RUSH } from "../src/lib/game-constants.ts";
 import { DEFAULT_BOT_KINDS, makeWithOpts as rushMakeWithOpts, rush, type RushInput } from "../src/lib/modes/rush.ts";
+
+// a sweep's numbers, set before any match in this thread (a worker reads the same env)
+const SET: Record<string, Record<string, unknown>> | null = process.env.BALANCE_SET ? JSON.parse(process.env.BALANCE_SET) : null;
+if (SET) for (const [name, v] of Object.entries(SET)) Object.assign(({ RUSH, PARTY, POACH, HOLD } as Record<string, object>)[name], v);
 
 type Strat = { name: string; shape: (s: any, seat: number, ins: any[], r: () => number) => any[] };
 
@@ -251,6 +259,7 @@ if (!isMainThread) {
     continue;
     sections[m] = `## ${m === "party" ? "Fishing Party" : "Lake Holdings"} (4 bots per match; ${strats.length} strategies drawn by a seeded shuffle each match)\n\n| Strategy | Matches it sat in | Won (incl. shared first) | Rate | 95% interval |\n|---|---|---|---|---|\n${lines.map((l) => l.line).join("\n")}\n\n${over.length ? `Over the 40% target: ${over.join(", ")}.` : "No strategy over the 40% target."}\n`;
   }
+  if (!SET) {
   // the 2026-10-15 file is rush 1.0's history; rush 2.0's report is a new
   // file and never touches it. party/hold/poach keep writing there.
   const file = "docs/checks/balance-2026-10-15.md";
@@ -281,6 +290,7 @@ if (!isMainThread) {
     const pfile = "docs/checks/balance-poach2-2026-10-23.md";
     const phead = `# Balance, Who's Poaching 2.0, 2026-10-23 (bots only)\n\nWritten by \`node scripts/balance.ts poach\`. Every match here is six bots (src/lib/modes/poach.ts's own bot()) on a fresh room's lake, on the seeds \`balance-poach-<table>-1\` to \`-${N}\`. These are claims about these bots and seeds, not about how people play: the bots read evidence more carefully, and lie less well, than a table of people. 95% intervals are Wilson intervals.\n\n`;
     writeFileSync(pfile, phead + sections.poach.trimEnd() + "\n");
+  }
   }
   for (const m of modes) console.log(sections[m]);
   console.log(`(${jobs.length} matches in ${Math.round((performance.now() - t0) / 1000)} s on ${W} workers)`);

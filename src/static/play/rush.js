@@ -184,9 +184,9 @@ export function mount({ world, sound, ui, send, view, post }) {
   const touch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
   function startPractice(onDone) {
     const bootEl = document.getElementById("boot");
-    const P = (bootEl ? JSON.parse(bootEl.textContent).rushPractice : null) ?? { speed: 15, loadSlow: 0.35, hold: 12, netR: 4.5, netAhead: 4, castCd: 0.7, dockR: 6.5 };
+    const P = (bootEl ? JSON.parse(bootEl.textContent).rushPractice : null) ?? { speed: 15, loadSlow: 0.35, hold: 12, netR: 4.5, netAhead: 4, castCd: 0.7, dockR: 6.5, ring: 24 };
     const seat = 0, d = world.docks[seat % world.docks.length], ix = Math.cos(d.inward), iy = Math.sin(d.inward);
-    const ring = [d.x + ix * 24, d.z + iy * 24];
+    const ring = [d.x + ix * P.ring, d.z + iy * P.ring]; // the prototype's 24, at the lake's scale
     practice = { P, seat, step: 1, hold: 0, banked: 0, castCd: 0, x: d.x + ix * 6, y: d.z + iy * 6, h: d.inward, v: 0, tx: d.x + ix * 6, ty: d.z + iy * 6,
       dock: [d.x + ix * 3, d.z + iy * 3], ring, fish: [], ringT: 0, onDone, t: 0 };
     const mine = view().players?.[view().me];
@@ -234,7 +234,7 @@ export function mount({ world, sound, ui, send, view, post }) {
     // the school circles just ahead of your bow (it keeps there while you sail), so NET is the next thing to press
     if (p.step === 2) { const bx = p.x + Math.cos(p.h) * (p.P.netAhead + 0.5), by = p.y + Math.sin(p.h) * (p.P.netAhead + 0.5), k = Math.min(1, dt * 3); p.ring[0] += (bx - p.ring[0]) * k; p.ring[1] += (by - p.ring[1]) * k; }
     for (const f of p.fish) { f.a += dt * 0.9; const nx = p.ring[0] + Math.cos(f.a) * f.r, ny = p.ring[1] + Math.sin(f.a) * f.r * 0.7; f.h = Math.atan2(ny - f.y, nx - f.x); f.x = nx; f.y = ny; }
-    if (p.step === 1 && Math.hypot(p.x - p.ring[0], p.y - p.ring[1]) < 6) {
+    if (p.step === 1 && Math.hypot(p.x - p.ring[0], p.y - p.ring[1]) < 5) {
       // the school surfaces just ahead of your bow and the boat drifts to a stop: one NET takes it
       p.step = 2; p.tx = p.x; p.ty = p.y;
       p.ring = [p.x + Math.cos(p.h) * (p.P.netAhead + 1), p.y + Math.sin(p.h) * (p.P.netAhead + 1)];

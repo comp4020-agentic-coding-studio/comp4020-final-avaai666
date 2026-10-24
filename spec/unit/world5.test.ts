@@ -50,7 +50,7 @@ describe("createWorld5()", () => {
     const stage = document.getElementById("stage")!, canvas = document.getElementById("gl5")! as HTMLCanvasElement;
     const api = createWorld5(canvas, stage, worldForPage());
     expect(api.docks.length).toBe(6);
-    for (const d of api.docks) expect(Math.hypot(d.wx, d.wz)).toBeGreaterThan(40); // well out from the centre, on the shore
+    for (const d of api.docks) expect(Math.hypot(d.wx, d.wz)).toBeGreaterThan(20); // well out from the centre, on the shore (40 at the prototype's scale; rule change 10: x 0.5)
     api.end();
   });
 

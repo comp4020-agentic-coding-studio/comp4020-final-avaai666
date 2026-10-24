@@ -15,6 +15,8 @@ export function mount({ world, sound, ui, send, view, post }) {
   const bootEl = document.getElementById("boot");
   const boot = bootEl ? JSON.parse(bootEl.textContent) : { lang: "en", world: {} };
   // the lake's outline, bays and places for the meeting's map, from the page's boot JSON (src/lib/lake-world)
+  // the lantern's circle and a buoy's logging circle, in lake units (game-constants POACH, via the boot JSON)
+  const SIGHT = { view: 12, buoyR: 7.5, ...(boot.poachSight ?? {}) };
   const W = { lake: { x: 92, y: 64 }, outline: [], bays: [], zones: {}, island: { x: 10, y: -15, r: 7.5 }, tiers: [], k: 340, ...(boot.world ?? {}) };
   let prev = null, cur = null, curAt = 0, seats = null, lastPhase = null, lastMeetKey = "", sel = null, typedFor = null;
   const me = () => view().mySeat;
@@ -144,8 +146,10 @@ export function mount({ world, sound, ui, send, view, post }) {
     const lit = cur.phase === "day" && myB && !cur.out.includes(me());
     fog.hidden = !lit; seenEl.hidden = true;
     if (lit) {
-      const x = myB[1] / 10, y = myB[2] / 10, [sx, sy] = toScreen(x, y), [qx] = toScreen(x + 24, y);
-      fog.style.setProperty("--fx", `${sx}px`); fog.style.setProperty("--fy", `${sy}px`); fog.style.setProperty("--fr", `${Math.max(60, Math.abs(qx - sx) * 0.92)}px`);
+      // the fog's hole: the lantern's circle on screen, along whichever lake axis runs across it (the camera turns on a tall phone)
+      const x = myB[1] / 10, y = myB[2] / 10, [sx, sy] = toScreen(x, y), [ax, ay] = toScreen(x + SIGHT.view, y), [bx, by] = toScreen(x, y + SIGHT.view);
+      const fr = Math.max(Math.hypot(ax - sx, ay - sy), Math.hypot(bx - sx, by - sy));
+      fog.style.setProperty("--fx", `${sx}px`); fog.style.setProperty("--fy", `${sy}px`); fog.style.setProperty("--fr", `${Math.max(40, fr * 0.92)}px`);
       world.setCameraMode("follow", { x: world.toWorld(x, y)[0], z: world.toWorld(x, y)[1], h: myB[3] / 100, speed: 4 });
     }
     world.setNight(cur.phase === "day" ? 0.08 + 0.35 * Math.min(1, 1 - cur.left / 70) : 0.45);
@@ -250,7 +254,7 @@ export function mount({ world, sound, ui, send, view, post }) {
     const m = f.m;
     ctx.strokeStyle = "rgba(232,184,77,.9)"; ctx.lineWidth = 3; ctx.beginPath(); m.path.forEach(([x, y], i) => (i ? ctx.lineTo(mx(x / 10), my(y / 10)) : ctx.moveTo(mx(x / 10), my(y / 10)))); ctx.stroke();
     for (const [i, x, y, s] of m.seen) { ctx.fillStyle = colorOf(i); ctx.beginPath(); ctx.arc(mx(x / 10), my(y / 10), 8, 0, 6.28); ctx.fill(); ctx.fillStyle = "#f5ead6"; ctx.fillText(`${nameOf(i)} ${fmt(s)}`, mx(x / 10), my(y / 10) - 12); }
-    for (const bu of m.buoys) { ctx.fillStyle = "#ffb45a"; ctx.beginPath(); ctx.arc(mx(bu.x / 10), my(bu.y / 10), 8, 0, 6.28); ctx.fill(); ctx.strokeStyle = "rgba(255,180,90,.45)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(mx(bu.x / 10), my(bu.y / 10), (15 / (L.x * 1.12)) * (w / 2), 0, 6.28); ctx.stroke(); }
+    for (const bu of m.buoys) { ctx.fillStyle = "#ffb45a"; ctx.beginPath(); ctx.arc(mx(bu.x / 10), my(bu.y / 10), 8, 0, 6.28); ctx.fill(); ctx.strokeStyle = "rgba(255,180,90,.45)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(mx(bu.x / 10), my(bu.y / 10), (SIGHT.buoyR / (L.x * 1.12)) * (w / 2), 0, 6.28); ctx.stroke(); }
     for (const [x, y, s] of m.patches) { cross(ctx, mx(x / 10), my(y / 10), "#ff8a7a"); ctx.fillStyle = "#ff8a7a"; ctx.fillText(fmt(s), mx(x / 10), my(y / 10) + 24); }
     const meB = f.b?.find((x) => x[0] === me()); if (meB) { ctx.fillStyle = colorOf(me()); ctx.strokeStyle = "#fff"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(mx(meB[1] / 10), my(meB[2] / 10), 9, 0, 6.28); ctx.fill(); ctx.stroke(); }
   }

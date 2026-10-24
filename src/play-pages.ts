@@ -6,7 +6,7 @@ import { esc } from "./pages.ts";
 import type { RoomView } from "./lib/game-hub.ts";
 import { DICT, t, type Lang } from "./lib/i18n.ts";
 import { worldForPage } from "./lib/lake-world.ts";
-import { RUSH } from "./lib/game-constants.ts";
+import { POACH, RUSH } from "./lib/game-constants.ts";
 import { CREW, portrait } from "./static/play/art.js";
 import { WORLD5_MODES } from "./static/play/world-select.js";
 
@@ -111,7 +111,9 @@ export function roomPage(view: RoomView, error?: string, lang: Lang = "en"): str
     world: worldForPage(),
     // Boat Rush's practice runs in the browser alone (DESIGN.md "Practice runs in the browser only"); it sails
     // and nets with the match's own numbers, sent here so the page keeps no copy
-    rushPractice: { speed: RUSH.SPEED, loadSlow: RUSH.LOAD_SLOW, hold: RUSH.HOLD, netR: RUSH.NET_R, netAhead: RUSH.NET_AHEAD, castCd: RUSH.CAST_CD, dockR: RUSH.DOCK_R },
+    rushPractice: { speed: RUSH.SPEED, loadSlow: RUSH.LOAD_SLOW, hold: RUSH.HOLD, netR: RUSH.NET_R, netAhead: RUSH.NET_AHEAD, castCd: RUSH.CAST_CD, dockR: RUSH.DOCK_R, ring: RUSH.PRACTICE_RING },
+    // Who's Poaching draws its fog and the meeting's buoy circles at the server's own distances
+    poachSight: { view: POACH.VIEW, buoyR: POACH.BUOY_R },
   }).replace(/</g, "\\u003c")}</script>`;
   return page(`${t(lang, "room_title", { code: view.code })} · ${t(lang, `${card.id}_name`)}`, shell, "play in-room", `<script type="module" src="/static/play/room.js"></script>`, lang);
 }

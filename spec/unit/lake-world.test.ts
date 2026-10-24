@@ -10,9 +10,10 @@ import {
 // shows up here.
 
 describe("the shape", () => {
-  it("is 92 by 64, with K = 340 and the island at (10, -15), radius 7.5", () => {
-    expect([LAKE_X, LAKE_Y, K]).toEqual([92, 64, 340]);
-    expect(ISLAND).toEqual({ x: 10, y: -15, r: 7.5 });
+  // rule change 10 (Ava, 24 Oct: the whole lake on one screen): the prototype's 92 by 64 lake, island (10, -15) r 7.5, scaled by 0.5
+  it("is 46 by 32 (the prototype's 92 by 64 at 0.5), with K = 340 and the island at (5, -7.5), radius 3.75", () => {
+    expect(LAKE_X).toBeCloseTo(46, 9); expect(LAKE_Y).toBeCloseTo(32, 9); expect(K).toBe(340);
+    expect(ISLAND.x).toBeCloseTo(5, 9); expect(ISLAND.y).toBeCloseTo(-7.5, 9); expect(ISLAND.r).toBeCloseTo(3.75, 9);
   });
 
   it("the shore's radius at eight angles is 1 + .09 sin(2a+.6) + .06 sin(3a+2.1) + .035 sin(5a+.3)", () => {
@@ -53,7 +54,7 @@ describe("the island and the ice", () => {
     expect(blockedAt(ISLAND.x + ISLAND.r + 8, ISLAND.y, 0)).toBe(false);
   });
 
-  it("winter ice blocks water beyond 0.86 of the shore, except within 14 units of a dock", () => {
+  it("winter ice blocks water beyond 0.86 of the shore, except within 7 units of a dock (14 at the prototype's scale)", () => {
     expect(ICE_K).toBe(0.86);
     const [fx, fy] = shape(200, 0.95); // far from every dock, out near the shore
     expect(iceBlocks(fx, fy, 3)).toBe(true); // winter
@@ -62,21 +63,21 @@ describe("the island and the ice", () => {
     expect(iceBlocks(fx, fy, 2)).toBe(false); // autumn
     const [mx, my] = shape(200, 0.5); // deep water in winter
     expect(iceBlocks(mx, my, 3)).toBe(false);
-    // the exception: beyond 0.86 but within 14 units of a dock stays open; just past 14 it freezes.
+    // the exception: beyond 0.86 but within 7 units of a dock stays open; just past 7 it freezes (rule change 10: 14 x 0.5).
     // (Along the line from the dock toward the middle, where the shore distance shrinks, so move
     // sideways along the shore instead: that keeps the point beyond 0.86.)
     const d = dockPos(0, 4); // the first seat's dock, on the shore (nr = 1)
     expect(nr(d.x, d.y)).toBeCloseTo(1, 6);
     expect(iceBlocks(d.x, d.y, 3)).toBe(false); // the dock's own water is kept open
     const side = d.inward + Math.PI / 2; // along the shore
-    const near = [d.x + Math.cos(side) * 8, d.y + Math.sin(side) * 8]; // 8 units away
-    const far = [d.x + Math.cos(side) * 17, d.y + Math.sin(side) * 17]; // 17 units away: past 14 from this dock
+    const near = [d.x + Math.cos(side) * 4, d.y + Math.sin(side) * 4]; // 4 units away
+    const far = [d.x + Math.cos(side) * 8.5, d.y + Math.sin(side) * 8.5]; // 8.5 units away: past 7 from this dock
     expect(nr(near[0], near[1])).toBeGreaterThan(0.86);
     expect(nr(far[0], far[1])).toBeGreaterThan(0.86);
-    expect(Math.hypot(far[0] - d.x, far[1] - d.y)).toBeGreaterThan(14);
+    expect(Math.hypot(far[0] - d.x, far[1] - d.y)).toBeGreaterThan(7);
     expect(iceBlocks(near[0], near[1], 3)).toBe(false);
-    // the far point is 17 from this dock; it must also be 14 or more from every other dock for the test to mean anything
-    const others = [1, 2, 3, 4, 5].map((i) => dockPos(i, 6)).every((o) => Math.hypot(o.x - far[0], o.y - far[1]) >= 14);
+    // the far point is 8.5 from this dock; it must also be 7 or more from every other dock for the test to mean anything
+    const others = [1, 2, 3, 4, 5].map((i) => dockPos(i, 6)).every((o) => Math.hypot(o.x - far[0], o.y - far[1]) >= 7);
     expect(others, "pick a point away from every dock").toBe(true);
     expect(iceBlocks(far[0], far[1], 3)).toBe(true);
     expect(blockedAt(fx, fy, 3)).toBe(true);

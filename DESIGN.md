@@ -1,4 +1,4 @@
-# Next Year, No Fish (明年无鱼): design v5.5
+# Next Year, No Fish (明年无鱼): design v5.6
 
 ## What it is
 
@@ -135,10 +135,13 @@ P7. **Thumbs away from the edges.**
 
 ### The world (shared)
 
-- **The lake** is a lobed oval about twice the old size: 92 × 64 units.
-  The radius at angle a is
+- **The lake** is a lobed oval, 46 × 32 units: the prototype's 92 × 64 at
+  half the size, so that the whole lake fits on one screen (rule change 10,
+  Ava, 24 Oct: "four people do not need a lake this big"). Every place,
+  distance and sense below is the prototype's times 0.5 (`WORLD_SCALE` in
+  `lake-world.ts`), unless a mode says otherwise. The radius at angle a is
   `1 + .09 sin(2a+.6) + .06 sin(3a+2.1) + .035 sin(5a+.3)`.
-- **The island** sits at (10, -15), radius 7.5, with a pagoda. Boats and
+- **The island** sits at (5, -7.5), radius 3.75, with a pagoda. Boats and
   fish go round it. The deep water around it is the 深潭.
 - **Named places:**
   - the reed bed 芦苇荡, west-north-west: the nursery, where young fish live
@@ -155,25 +158,37 @@ P7. **Thumbs away from the edges.**
 - **Seasons change the scene:** spring blossom, summer lotus, autumn red
   leaves, winter snow. Each has its own palette and falling particles.
   Winter puts ice on the water where the shore distance is above 0.86,
-  except within 14 units of a dock. Boats cannot cross ice.
-- **The camera:**
-  - It follows your boat when you sail. The span is about 118 units wide
-    on a laptop, 64 on a phone held upright and 90 on a phone held
-    sideways. (Until session 18 a fixed 120 hid these spans on every
-    screen, so a phone saw the whole lake from far away.) It is tilted a
-    little lower than the whole-lake view, and a phone held upright looks
-    more steeply down.
+  except within 7 units of a dock. Boats cannot cross ice; a boat that
+  meets it slides along its edge.
+- **Sailing** (`src/lib/modes/boat-move.ts`, shared by Boat Rush, Who's
+  Poaching and Fishing Party; rule change 10): the prototype's steering
+  (turn towards the target, then speed up), with two changes. A steer target
+  past the shore or on the island is first moved to the nearest open water,
+  so a boat steered at the shore goes there and stops. A boat that meets the
+  shore or the island slides along it and keeps 95% of its speed on that
+  tick; the prototype kept 70% on every tick, which left a boat pushed at
+  the shore at about a tenth of its speed (Ava: "my own boat does not do
+  what I tell it").
+- **The camera** shows the whole lake, always (rule change 10). Nothing
+  moves with your boat: on the 0.7 lake a close camera that swung ahead of
+  the boat made it hard to tell where the boat was going.
+  - While you play it is tilted lower, so the lake reads as a place in 3D;
+    boards, meetings and the ceremony look a little more steeply down.
+  - The lake is fitted into the part of the screen the HUD leaves free: the
+    top bar, the pads at the bottom, and on a laptop the HUD's column on the
+    right.
+  - On a phone held upright the camera turns a quarter, so the lake's long
+    east-west side runs up the screen and the village is on the right. Up
+    on the screen (W, the arrow, the stick pushed up) is always away from
+    the camera, whichever way it faces.
+  - There is no minimap: the whole lake is on the screen.
   - The water is calm: no moving light streaks on it (Ava, 24 Oct: they
     were dazzling).
-  - It shows the whole lake for boards, meetings and the ceremony.
 - **Sound** (sound.js, Web Audio, no files): a calm pentatonic tune on a
   plucked string over a soft drone and the sound of water; it quickens for
   Boat Rush's last 10 s and calms for the end. Effects for a catch, coins,
   home, a ram, a miss, the gong, a splash. On unless the player turns it
   off; the button says which ("Sound: on").
-  - A minimap in the top-right corner shows the whole lake. Each mode
-    decides what the minimap shows: in Who's Poaching it shows only what
-    you know.
 - **The lake remembers.**
   - A room's lake is stored as adults and young fish. A new room starts
     with 230 adults and 50 young fish.
@@ -261,7 +276,7 @@ and the match is shown.
 
 ### Boat Rush 开船抢鱼 (2.0)
 
-2 to 4 boats, with bots filling empty seats. About 4 minutes.
+2 to 4 boats, with bots filling empty seats. About 3 minutes.
 
 **Flow:**
 1. The rules card, with "Start" and "Practise first: 3 steps, about 30 s"
@@ -272,7 +287,8 @@ and the match is shown.
    3. take the fish home and unload.
 
    Then "You're ready".
-3. Four seasons of 45 s each, in the order spring, summer, autumn, winter.
+3. Four seasons of 30 s each (45 s until rule change 10), in the order
+   spring, summer, autumn, winter.
    Each season opens with a banner naming its twist:
    - spring: schools gather at the river mouth and the reeds;
    - summer: the lotus pond and the deep water, with two golden carp;
@@ -291,17 +307,22 @@ and the match is shown.
 8. After winter, the ceremony.
 
 **Numbers:**
-- hold 12; speed 15, 35% slower when full;
+- hold 8; speed 16, 35% slower when full (rule change 10: 12 and 15 on
+  the old lake; with the same fish in a quarter of the water, 45 s seasons
+  and a hold of 12 let every bot table fish the lake out, and Ava chose
+  30 s seasons, a hold of 8 and a slightly faster boat:
+  docs/checks/balance-lake05-2026-10-24.md);
 - net radius 4.5, cast 4 units ahead of the bow, cooldown 0.7 s, at most
   6 fish a cast;
 - dash 0.4 s at ×2.4, cooldown 4 s;
-- a ram spills at most 3 fish; shield 3 s; no ram within 11 units of a
-  dock;
+- a ram spills at most 3 fish; shield 3 s; no ram within 8 units of a
+  dock; unloading starts within 5 units of your dock;
 - the golden carp is worth 5 and lasts 10 s;
 - 8% of adults are big fish worth 2;
 - a chain of 3+ fish within 2.6 s adds 1;
-- a steer target outside the lake is clamped to the shore on purpose, so a
-  tap near the edge still sails the boat there instead of doing nothing.
+- a steer target outside the lake is moved to the nearest open water on
+  purpose (boat-move.ts), so a tap near the edge still sails the boat there
+  instead of doing nothing.
 
 **Cards** (11): Big Hold, Fast Hull, Wide Net, Quick Hands, Iron Bow and
 Golden Hook (plain); Fine Mesh and Trawl (greedy: they take young fish); Fish
@@ -330,26 +351,28 @@ ending in a meeting of at most 55 s. About 7 minutes.
 
    A second poacher (at 7 or more) also sees their partner.
 3. **Day**, 70 s, from morning light to dusk:
-   - **Your lantern's circle.** You see only within 24 units of your boat
-     (the fog). Beyond that, the server does not send boats, fish or dead
+   - **Your lantern's circle.** You see only within 12 units of your boat
+     (24 on the prototype's lake; rule change 10)
+     — the fog. Beyond that, the server does not send boats, fish or dead
      fish. Your own buoy also lights a circle for you.
    - **Tasks.** Each player gets 3 tasks a day at named places, for
      example 收网·北湾 or 数鱼苗·芦苇荡. Stay inside the ring for 2.5 s.
      Each task adds 2 fish to the village for fishers. The poacher's
-     tasks are a cover: they count nothing. The task list is on the left
-     and the rings are on the minimap.
+     tasks are a cover: they count nothing. The task list is in the HUD
+     and the rings are on the lake.
    - **Net**, for everyone: adults only, at most 3, cooldown 2 s.
-   - **Inspect** (查船): stay within 8 units of a boat for 1.5 s. Only
+   - **Inspect** (查船): stay within 6 units of a boat for 1.5 s (a boat
+     is about 6 long, so this is alongside, not half of 8). Only
      you learn "clean" or "N young fish". The target is told someone
      inspected them.
-   - **Buoy** (浮标): one a day. It logs every boat that passes within 15
+   - **Buoy** (浮标): one a day. It logs every boat that passes within 7.5
      units, with the time, and is shown at the meeting.
-   - **Report** (报告): within 11 units of dead young fish nobody has
+   - **Report** (报告): within 7 units of dead young fish nobody has
      reported, call the meeting now.
    - **Poacher only:**
      - **Fine net** (绝户网): cooldown 13 s, radius 5.2, up to 22 fish. It
        leaves a floating patch of dead young fish, the evidence. Every
-       boat within 24 units at that moment witnessed it.
+       boat within 12 units at that moment witnessed it.
      - **Dump** (倒掉): empty the young fish from your boat. That leaves a
        patch too.
    - "👁 N boats can see you" is shown to everyone. It matters most to the
@@ -396,8 +419,10 @@ An exiled player becomes a ghost: they see everything and cannot act.
 - a tie exiles nobody, except at the last meeting, where the tied seats are
   drawn from the match's own stream (and if nobody voted at all, any seat
   still in);
-- a buoy lights a circle of 10.5 units for its owner (the prototype's
-  0.7 × 15);
+- a buoy lights a circle of 5.25 units for its owner (the prototype's
+  0.7 × 15, at half the size);
+- boats sail at 12.5, as before, so a crossing of the smaller lake takes
+  half the time (rule change 10);
 - the room's lake keeps the match's health as a share of what the room
   brought (the 40 extra young fish were the match's own), then
   `nextSpring()`;
@@ -423,7 +448,8 @@ Ava decides on these: see "Decisions".
 seasons with 3 moves each, then the harvest. About 5 minutes.
 
 **The board:**
-- Hex tiles of size 8.4 over the lake: every tile whose centre has a shore
+- Hex tiles of size 4.2 (the prototype's 8.4, at the lake's half size, so the
+  board keeps its 61 tiles) over the lake: every tile whose centre has a shore
   distance up to 0.8, and none on the island.
 - Each tile has a cap of `max(4, round(K × w / Σw))`, where w is 1.35 for
   deep water, 1.15 for the reeds and 1 otherwise.
@@ -517,7 +543,7 @@ pays the player who is greedy; this is for Ava's balance pass.
 
 **The rounds:**
 1. **Shoal Scramble** (tap). Gold rings warn for 0.8 s, then fish jump for
-   1.5 s. The first tap within 8 units (11 with Big Net) takes the school:
+   1.5 s. The first tap within 4 units (5.5 with Big Net) takes the school:
    2 coins, 2 fish out of the lake.
 2. **Koi Chase** (steer). Eight lantern gates in order: 1 coin and 1 fish
    each. Touching the golden carp: 5 coins and 2 fish, and it jumps two
@@ -527,9 +553,10 @@ pays the player who is greedy; this is for Ava's balance pass.
    REEL inside the zone: +9%. Outside: −6% and a 0.35 s stun. Finish
    places pay 6, 4, 2 and 1. No fish leave the lake.
 4. **Lantern Night** (steer, net, light).
-   - It is dark, and you see fish only within 16 units of your boat.
+   - It is dark, and you see fish only within 8 units of your boat.
    - A dropped lantern lights a spot for everyone for 10 s (cooldown 8 s).
-   - A net takes up to 2 adults, 1 coin each, cooldown 1.6 s.
+   - A net takes up to 2 adults, 1 coin each, cooldown 2 s (1.6 s on the
+     old lake; the fish are denser now).
 5. **The Last Net** (choose, in secret).
    - The school is round(fish left ÷ 7). Before round 5 the screen says
      "You fished hard early; this is what is left" if the lake lost more
@@ -545,11 +572,16 @@ pays the player who is greedy; this is for Ava's balance pass.
 **How party 2.0 settles what the text above leaves open** (session 18):
 - the brush verb is the Chinese word on both pages; an English page adds
   its own word under it (TAP! CHASE! REEL! LIGHT! PICK!);
-- Big Net in each round: taps reach 11 instead of 8; the green zone is
-  0.04 wider each side; at night you see 18 instead of 16 and the net is 5
-  wide instead of 3.6;
-- at night a seat's frame holds only the fish it may see (16 of its boat,
-  or 14 of any dropped lantern) and the boats within 20; the dark itself is
+- Big Net in each round: taps reach 5.5 instead of 4; the green zone is
+  0.04 wider each side; at night you see 9 instead of 8 and the net is 5
+  wide instead of 3.6 (the nets keep the prototype's size: they decide how
+  many fish a cast takes, and that is held by the cooldown);
+- rule change 10: every place and distance is the prototype's at half the
+  size, and boats sail at 10 (14 on the old lake; at 14 a lap of the gates
+  took half the time, so Koi Chase paid twice the gates and took twice the
+  fish);
+- at night a seat's frame holds only the fish it may see (8 of its boat,
+  or 7 of any dropped lantern) and the boats within 10; the dark itself is
   drawn by the page from the view radius the frame carries;
 - the shop: a person with fewer than 3 coins is done already, so if nobody
   can buy the shop is skipped; bots always visit it;
@@ -567,7 +599,9 @@ docs/checks/balance-party2-2026-10-24.md): next spring is Fair in 99.3% of
 matches; the bots' Last Net held in 24.3%. Over shop habits, Fast Boat
 always wins 35.7% (30.5%-41.2%), never buying 28.7%, Big Net 21.3%, Bait
 15.0%: none is over the 40% target. These are claims about party.ts's bots,
-not about people.
+not about people. On the half-size lake (rule change 10,
+docs/checks/balance-lake05-2026-10-24.md): Fair in 99.7%, the Last Net held
+in 25.3%, never buying 31.0%, Big Net 26.7%, Fast Boat 26.3%, Bait 19.0%.
 
 **Removed from v4:**
 - the last-placed player's variant pick;
@@ -588,7 +622,7 @@ cards); state and scoring (fish, coins, suspicion and roles, tiles); pace
 
 The move to the v5 world is one mode at a time, not a rescale of the old
 scene. `src/static/play/world.js` (the 1000 × 700 ellipse) and
-`src/static/play/world5.js` (the 92 × 64 lobed lake of "The world (shared)",
+`src/static/play/world5.js` (the lobed lake of "The world (shared)",
 built from `lake-world.ts`'s boot JSON) run side by side while the four
 modes move: Who's Poaching, Lake Holdings and Fishing Party send sim
 coordinates straight into `world.js`'s drawing calls, so rescaling its
@@ -715,13 +749,16 @@ docs/design-history/four-games-v4.0.md.)
    [remove: one hidden role is clearer].
 2. Remove the party's variant pick and Muddy Water [remove].
 3. Lake Holdings is turn-based [yes].
-4. Season length 45 s and four seasons in Boat Rush [yes].
+4. Season length 45 s and four seasons in Boat Rush [yes]. Changed by Ava on
+   24 October (rule change 10): 30 s, on the half-size lake.
 
 All four defaults were accepted: the Warden, planting fry and the quota bar
 leave Who's Poaching; the variant pick and Muddy Water leave Fishing Party;
 Lake Holdings becomes turn-based; Boat Rush has four seasons of 45 s.
 
 ## Changelog
+
+- v5.6 (24 Oct, session 18): rule change 10, the whole lake on one screen. The lake is the prototype's at 0.5 (46 × 32): every place, distance and sense scales with it (`WORLD_SCALE`), Who's Poaching's lantern is 12 (CLAUDE.md changed with Ava's yes). The camera shows the whole lake always, fitted beside the HUD and turned a quarter on an upright phone; no minimap. Sailing is shared (boat-move.ts): steer targets past the shore are moved onto the water, and a boat slides along the shore instead of sticking. Boat Rush: 30 s seasons (Ava's choice; 45 s fished every lake out), hold 8, speed 16. Fishing Party: boats at 10, the night net waits 2 s. Measured in docs/checks/balance-lake05-2026-10-24.md.
 
 - v5.5 (24 Oct, session 18): rule change 9, Who's Poaching's role card waits for "I understand"; Tug of Line's needle is slower; the camera's follow spans now apply (a fixed 120 had hidden them) with a lower tilt, and the water has no light streaks; sound and music (sound.js); the practice's label says "3 steps, about 30 s". A smaller lake (0.7) was tried the same day and taken back: Ava judged the old size and handling right, and the boats wandered on the small lake (what was measured: docs/checks/balance-lake07-2026-10-24.md).
 

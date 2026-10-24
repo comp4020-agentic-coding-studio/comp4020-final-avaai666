@@ -5,7 +5,7 @@
 // Who's Poaching 2.0 uses the very same lake; every draw still comes from
 // the caller's own s.rng, in the same order, so a rush replay is unchanged.
 import { LIFE as L } from "../game-constants.ts";
-import { blockedAt, DEEP, ISLAND, nr, ZONES } from "../lake-world.ts";
+import { blockedAt, DEEP, ICE_K, iceBlocks, ISLAND, LAKE_X, LAKE_Y, nr, WORLD_SCALE, ZONES } from "../lake-world.ts";
 
 // sp: one bit per seat whose net already let this young fish go, so a
 // young fish is "spared" once per boat however many casts land on it
@@ -35,16 +35,16 @@ export function nearZone(s: Life, zone: { x: number; y: number; r: number }, spr
   for (let k = 0; k < 40; k++) {
     const a = s.rng() * Math.PI * 2, d = Math.sqrt(s.rng()) * zone.r * spread;
     const x = zone.x + Math.cos(a) * d, y = zone.y + Math.sin(a) * d;
-    if (nr(x, y) < 0.93 && Math.hypot(x - ISLAND.x, y - ISLAND.y) > 10) return [x, y];
+    if (nr(x, y) < 0.93 && Math.hypot(x - ISLAND.x, y - ISLAND.y) > ISLAND.r + 2.5 && !iceBlocks(x, y, s.season)) return [x, y];
   }
   return randomWater(s, 0.82);
 }
 export function randomWater(s: Life, maxK: number): [number, number] {
   for (let k = 0; k < 60; k++) {
-    const x = (s.rng() * 2 - 1) * 92, y = (s.rng() * 2 - 1) * 64;
-    if (nr(x, y) < maxK && Math.hypot(x - ISLAND.x, y - ISLAND.y) > 11) return [x, y];
+    const x = (s.rng() * 2 - 1) * LAKE_X, y = (s.rng() * 2 - 1) * LAKE_Y;
+    if (nr(x, y) < maxK && Math.hypot(x - ISLAND.x, y - ISLAND.y) > ISLAND.r + 3.5) return [x, y];
   }
-  return [0, 20];
+  return [0, 20 * WORLD_SCALE];
 }
 // season -> [[placeId|null, weight], ...], a weighted pick (null: open water)
 const SEASON_PULL: [("river" | "reeds" | "lotus" | "deep" | null), number][][] = [
@@ -60,7 +60,7 @@ export function schoolTarget(s: Life, school: School): [number, number] {
     r -= w;
     if (r > 0) continue;
     if (id === null) return randomWater(s, s.season === 3 ? 0.78 : 0.84);
-    if (id === "deep") { const a = s.rng() * Math.PI * 2, d = 12 + s.rng() * 9; return [DEEP.x + Math.cos(a) * d, DEEP.y + Math.sin(a) * d]; }
+    if (id === "deep") { const a = s.rng() * Math.PI * 2, d = ISLAND.r + 6.5 + s.rng() * Math.max(2, DEEP.r - ISLAND.r - 6.5); return [DEEP.x + Math.cos(a) * d, DEEP.y + Math.sin(a) * d]; }
     return nearZone(s, ZONES[id], 0.9);
   }
   return randomWater(s, 0.84);
@@ -106,14 +106,18 @@ export function updateSchools(s: Life): void {
     school.vx += ((school.tx - school.x) / d * sp - school.vx) * dt;
     school.vy += ((school.ty - school.y) / d * sp - school.vy) * dt;
     school.x += school.vx * dt; school.y += school.vy * dt;
-    if (Math.hypot(school.x - ISLAND.x, school.y - ISLAND.y) < ISLAND.r + 3) {
+    // a school keeps far enough off the island that none of its fish (each within ~5.7 of the centre) is pushed onto it
+    const clear = ISLAND.r + 6;
+    if (Math.hypot(school.x - ISLAND.x, school.y - ISLAND.y) < clear) {
       const a = Math.atan2(school.y - ISLAND.y, school.x - ISLAND.x);
-      school.x = ISLAND.x + Math.cos(a) * (ISLAND.r + 3); school.y = ISLAND.y + Math.sin(a) * (ISLAND.r + 3);
+      school.x = ISLAND.x + Math.cos(a) * clear; school.y = ISLAND.y + Math.sin(a) * clear;
     }
+    // in winter a school never sits in the ice: one that was out there when it froze slides back to its edge
+    if (iceBlocks(school.x, school.y, s.season)) { const k = (ICE_K * 0.99) / nr(school.x, school.y); school.x *= k; school.y *= k; }
   }
 }
-// a grid cell key that never collides: lake coordinates are bounded (+/- 92,
-// +/- 64), so an offset well past that bound keeps every (gx, gy) pair
+// a grid cell key that never collides: lake coordinates are bounded (+/- LAKE_X,
+// +/- LAKE_Y), so an offset well past that bound keeps every (gx, gy) pair
 // unique (rush 1.0's `gx*1000+gy` relied on coordinates always being
 // positive; this lake's are not, so that scheme silently collided two
 // distant cells into one bucket and made every fish check every other).
@@ -152,7 +156,7 @@ export function moveFish(s: Life): void {
       }
     }
     let dx = tx - f.x, dy = ty - f.y;
-    if (!f.adult && nr(f.x, f.y) < L.SHALLOW) { dx += (f.x / 92) * 10; dy += (f.y / 64) * 10; }
+    if (!f.adult && nr(f.x, f.y) < L.SHALLOW) { dx += (f.x / LAKE_X) * 10; dy += (f.y / LAKE_Y) * 10; }
     const inReeds = Math.hypot(f.x - ZONES.reeds.x, f.y - ZONES.reeds.y) < ZONES.reeds.r;
     if (f.scare > 0) { dx += f.sx * 6; dy += f.sy * 6; f.scare -= L.DT; }
     const followSpeed = Math.min(1, L.DT * 1.6);

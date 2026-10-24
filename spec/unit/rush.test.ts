@@ -37,7 +37,7 @@ function skipMarket(s: RushSim): void {
 describe("inputs are validated by the server", () => {
   it("only steer, cast, dash, pick and reroll are accepted, steers are clamped and rounded, and a charge is between 0 and 1", () => {
     const s = make();
-    expect(rush.input(s, 0, { k: "steer", x: 5000.4, y: -3000 })).toEqual({ k: "steer", x: 92, y: -64 });
+    expect(rush.input(s, 0, { k: "steer", x: 5000.4, y: -3000 })).toEqual({ k: "steer", x: 46, y: -32 }); // the lake's edge (rule change 10: 92 x 64 at 0.5)
     expect(rush.input(s, 0, { k: "cast", charge: 7 })).toEqual({ k: "cast", charge: 1 });
     expect(rush.input(s, 0, { k: "cast" })).toEqual({ k: "cast", charge: 0 });
     expect(rush.input(s, 0, { k: "dash" })).toEqual({ k: "dash" });
@@ -246,7 +246,9 @@ describe("the charge cast and the schools", () => {
   it("a school scatters after a net hits it", () => {
     const s = make("scatter"); clearFish(s); put(s, 0, 0, 0);
     const bx = Math.cos(s.boats[0].h) * RUSH.NET_AHEAD, by = Math.sin(s.boats[0].h) * RUSH.NET_AHEAD;
-    addFish(s, bx + RUSH.NET_R * 1.5, by, 6, 0.2);
+    // 20 fish, not 6: each one scares with chance 1/2, and with 6 one seed of the 0.5 lake drew six misses in a
+    // row (a 1-in-64 chance); with 20 a test that fails by luck is about one in a million (Ava, 24 Oct)
+    addFish(s, bx + RUSH.NET_R * 1.5, by, 20, 0.2);
     step(s, [{ seat: 0, i: { k: "cast", charge: 0 } }]);
     for (const f of s.fish) f.scare = 0;
     until(s, s.t + RUSH.SINK + 0.1);
@@ -648,7 +650,8 @@ describe("boats, unloading and schools, as the prototype (port fidelity)", () =>
 
   it("Wide Net and Fine Mesh each add 2 to a cast's cap", () => {
     const s = make("net-cap"); clearFish(s); put(s, 0, 0, 0);
-    s.boats[0].cards = ["wideNet", "fineMesh"];
+    // Big Hold too, so the hold (8 since rule change 10, 12 with Big Hold) has room for the 10 (Ava, 24 Oct)
+    s.boats[0].cards = ["wideNet", "fineMesh", "bigHold"];
     const bx = Math.cos(s.boats[0].h) * RUSH.NET_AHEAD, by = Math.sin(s.boats[0].h) * RUSH.NET_AHEAD;
     addFish(s, bx, by, RUSH.NET_MAX + 4, 0.15); // more than the base cap, to see the +2+2 bonus land
     step(s, [{ seat: 0, i: { k: "cast", charge: 0 } }]);

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { botStream, eventsFor, type GameEvent, replay, type Seat } from "../../src/lib/game-platform.ts";
 import { canSee, health, linesFor, poach, type PoachInput, type PoachSim } from "../../src/lib/modes/poach.ts";
 import { POACH as Q } from "../../src/lib/game-constants.ts";
-import { nextSpring, tierOf } from "../../src/lib/lake-world.ts";
+import { nextSpring, tierOf, WORLD_SCALE as S } from "../../src/lib/lake-world.ts";
 
 // Who's Poaching 2.0 (DESIGN.md "Who's Poaching 谁在偷鱼 (2.0)"), pure logic.
 const people = (n: number): Seat[] => Array.from({ length: n }, (_, i) => ({ seat: i, name: `P${i}`, bot: null, character: "mei" }));
@@ -93,7 +93,8 @@ describe("the day's flow", () => {
 describe("the lantern's circle (CLAUDE.md: no boat, fish or evidence outside it)", () => {
   it("a seat's day frame holds only boats, fish and dead fish within VIEW of its boat or its own buoy", () => {
     const s = make("fog", 6); toDay(s);
-    put(s, 0, -60, 10); put(s, 1, -50, 10); put(s, 2, 50, -10); put(s, 3, 60, 20); put(s, 4, 0, 30); put(s, 5, -10, -40);
+    // places in the prototype's units, at the lake's scale (rule change 10 made the lake 0.5 and VIEW 24 x 0.5)
+    put(s, 0, -60 * S, 10 * S); put(s, 1, -50 * S, 10 * S); put(s, 2, 50 * S, -10 * S); put(s, 3, 60 * S, 20 * S); put(s, 4, 0, 30 * S); put(s, 5, -10 * S, -40 * S);
     step(s);
     const f = poach.frameFor(s, 0) as { b: number[][]; f: number[][] };
     expect(f.b.map((x) => x[0]).sort()).toEqual([0, 1]);
@@ -101,9 +102,9 @@ describe("the lantern's circle (CLAUDE.md: no boat, fish or evidence outside it)
     expect(f.f.length).toBeLessThan(s.fish.length);
     // its buoy lights a second circle
     step(s, [{ seat: 0, i: { k: "buoy" } }]);
-    put(s, 0, 40, 30); put(s, 1, -58, 12); step(s);
+    put(s, 0, 40 * S, 30 * S); put(s, 1, -58 * S, 12 * S); step(s);
     expect((poach.frameFor(s, 0) as { b: number[][] }).b.map((x) => x[0])).toContain(1);
-    expect(canSee(s, 0, -60, 10)).toBe(true); expect(canSee(s, 0, -10, -40)).toBe(false);
+    expect(canSee(s, 0, -60 * S, 10 * S)).toBe(true); expect(canSee(s, 0, -10 * S, -40 * S)).toBe(false);
   });
   it("an exiled player, and a watcher, see everything", () => {
     const s = make("ghost", 4); toDay(s); s.out[1] = true;
