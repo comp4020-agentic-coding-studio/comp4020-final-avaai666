@@ -15,7 +15,9 @@ export interface Seat { seat: number; name: string; bot: string | null; characte
 // 2.0 onward). The hub always fills in both from the room's stored total
 // (adultsYoungFromNext); they default to 0 for a mode or test that never
 // reads them.
-export interface LakeMemory { fish: number; adults?: number; young?: number }
+// boats: how many boats the match has, people and bots; a mode's lake is sized for them (rule change 11).
+// Left out, a mode uses the four-boat lake.
+export interface LakeMemory { fish: number; adults?: number; young?: number; boats?: number }
 
 // An event goes to every seat unless `to` lists the seats that may see it.
 export interface GameEvent { k: string; to?: number[]; [key: string]: unknown }

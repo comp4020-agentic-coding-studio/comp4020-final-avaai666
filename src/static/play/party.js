@@ -48,7 +48,7 @@ export function mount({ world, sound, ui, send, view, post }) {
     const dir = world.wantDir(); if (!dir) return;
     const b = cur.b?.find((x) => x[0] === me()); if (!b) return;
     send({ k: "steer", x: Math.round((b[1] / 10 + dir.x * 12) * 10) / 10, y: Math.round((b[2] / 10 + dir.z * 12) * 10) / 10 }); ui.did("sail");
-  }, 150);
+  }, 100); // ten a second while you steer (the input limit is 30)
   const act = (k) => { if (live()) { send({ k }); ui.did(k); } };
   const onKey = (e) => {
     if (e.target.closest?.("input,textarea") || e.repeat || !cur) return;
@@ -242,6 +242,7 @@ export function mount({ world, sound, ui, send, view, post }) {
 
   function onFrame(f, ev) {
     seats = view().seats ?? seats; prev = cur ?? f; cur = f; curAt = performance.now();
+    world.setLake?.(f.lk); if (me() !== null) world.setHome?.(me(), colorOf(me()), t("g_your_home"));
     events(ev ?? []); render(f);
     ui.setClock(f.left, f.phase === "shop" ? t("y2_shop_h") : f.round === 5 ? t("y2_g_last") : t("y2_clock", { n: f.round }));
     ui.goalEl.textContent = t("party_hud");
@@ -281,7 +282,7 @@ export function mount({ world, sound, ui, send, view, post }) {
   world.onFrame(draw);
   return {
     room(v) { seats = v.seats; },
-    start(frame, v) { seats = v.seats; prev = cur = null; lastKey = ""; lastPhase = ""; trying = false; world.clearBoats?.(); world.clearProps?.(); world.setDocks(seats.map((s, i) => ({ x: world.docks[i]?.x ?? 0, y: world.docks[i]?.z ?? 0, color: COLORS[s.character] }))); onFrame(frame, []); },
+    start(frame, v) { seats = v.seats; prev = cur = null; lastKey = ""; lastPhase = ""; trying = false; world.clearBoats?.(); world.clearProps?.(); world.setLake?.(frame.lk); world.setDocks(seats.map((s, i) => ({ x: world.docks[i]?.x ?? 0, y: world.docks[i]?.z ?? 0, color: COLORS[s.character] }))); onFrame(frame, []); },
     frame(f, ev) { onFrame(f, ev); },
     results(v, overlayEl) { renderResults(v, overlayEl); },
     end() { clearInterval(wasdId); removeEventListener("keydown", onKey); revealT.forEach(clearTimeout); tugEl.remove(); fog.remove(); world.setNight(0); world.pointAt(null); world.setSteerMode(true); },

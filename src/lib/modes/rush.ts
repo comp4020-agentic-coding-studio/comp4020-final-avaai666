@@ -13,7 +13,7 @@
 // lakeAfterMatch), never running it through nextSpring() again.
 import { RUSH as Q, RUSH_MODEL } from "../game-constants.ts";
 import { type GameEvent, type Highlight, type Mode, type Results, type Seat, streamOf } from "../game-platform.ts";
-import { breed as breedLake, dockPos, forecast, ICE_K, iceBlocks, ISLAND, K, LAKE_X, LAKE_Y, nr, tierOf, WORLD_SCALE, ZONES } from "../lake-world.ts";
+import { breed as breedLake, forecast, ICE_K, K, type Lake, makeLake, tierOf } from "../lake-world.ts";
 import { keepOnWater, SLIDE, steer } from "./boat-move.ts";
 import { counts, type Fish, moveFish, newFish, placeSchools, type School, seedFish, updateSchools } from "./lake-life.ts";
 
@@ -35,6 +35,7 @@ interface Loose { id: number; x: number; y: number; vx: number; vy: number; valu
 interface Koi { x: number; y: number; h: number; until: number }
 interface Stats { caught: number; home: number; trips: number; bestTrip: number; lost: number; rams: number; rammed: number; scooped: number; koi: number; youngKilled: number; youngSpared: number }
 interface Boat {
+  holdBase: number; // HOLD for this many boats (holdFor)
   seat: number; x: number; y: number; h: number; speed: number; vx: number; vy: number; tx: number; ty: number;
   hold: number[]; castCd: number; dashT: number; dashCd: number; stun: number; shield: number; unloadT: number; trawlT: number;
   docked: boolean; tripValue: number; banked: number; cards: CardId[]; combo: number; lastCatch: number;
@@ -58,6 +59,7 @@ interface Market { offer: CardId[]; botPicks: (CardId | null)[]; picked: (CardId
 // forecasts once instead, with no bonus (forecast()'s own plain meaning).
 export interface SeasonHistory { startA: number; startY: number; caught: number; young: number; gongA: number; gongY: number; bred: boolean; bonus: number; reedsExtra: number }
 export interface RushSim {
+  lake: Lake;
   tick: number; t: number; season: Season; phase: "play" | "rest" | "market" | "end"; phaseT: number;
   players: number; bots: boolean[]; botKinds: string[]; rng: () => number;
   boats: Boat[]; fish: Fish[]; nets: Net[]; loose: Loose[]; koi: Koi | null; koiSpawned: number;
@@ -66,7 +68,10 @@ export interface RushSim {
 }
 
 const has = (b: Boat, id: CardId): boolean => b.cards.includes(id);
-const holdMax = (b: Boat): number => Q.HOLD + (has(b, "bigHold") ? Q.CARDS.bigHold.hold! : 0);
+// a boat's hold: HOLD for four boats; the lake's fish are the same whatever the number of boats, so with
+// fewer boats each carries more (rule change 11: HOLD x 4 / boats, so 16 for two and 11 for three)
+export const holdFor = (boats: number): number => Math.round((Q.HOLD * 4) / Math.max(2, Math.min(4, boats)));
+const holdMax = (b: Boat): number => b.holdBase + (has(b, "bigHold") ? Q.CARDS.bigHold.hold! : 0);
 const netR = (b: Boat, charge: number): number => Q.NET_R * (has(b, "wideNet") ? Q.CARDS.wideNet.net! : 1) * (1 + 0.3 * charge);
 const castCdOf = (b: Boat): number => Q.CAST_CD * (has(b, "quickHands") ? Q.CARDS.quickHands.castCd! : 1);
 const koiValue = (b: Boat): number => (has(b, "goldHook") ? Q.CARDS.goldHook.koiValue! : Q.KOI_VALUE);
@@ -85,7 +90,7 @@ const holdValue = (b: Boat): number => b.hold.reduce((n, v) => n + v, 0);
 // calls mode.make(seed, seats, lake) with exactly three arguments.
 // scripts/balance.ts uses it to run a table of one kind (all-greedy, etc.)
 // for a target that seat % 3 alone cannot measure.
-function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number; young?: number }, opts?: { botKinds?: string[] }): RushSim {
+function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number; young?: number; boats?: number }, opts?: { botKinds?: string[] }): RushSim {
   const players = seats.length;
   const s: RushSim = {
     tick: 0, t: 0, season: 0, phase: "play", phaseT: 0, players, bots: seats.map((x) => x.bot !== null),
@@ -93,14 +98,15 @@ function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number
     rng: streamOf(seed, "lake"),
     boats: [], fish: [], nets: [], loose: [], koi: null, koiSpawned: 0, schools: [],
     nextId: 1, cap: Math.round(K * 1.3), market: null, history: [],
+    lake: makeLake(lake.boats), // the lake for this many boats (rule change 11); the four-boat lake if the room did not say
   };
   const a0 = lake.adults ?? Math.round(lake.fish * 0.8), y0 = lake.young ?? Math.round(lake.fish * 0.2);
   seedFish(s, a0, y0);
   s.history.push({ startA: a0, startY: y0, caught: 0, young: 0, gongA: 0, gongY: 0, bred: false, bonus: 0, reedsExtra: 0 });
   seats.forEach((_, seat) => {
-    const d = dockPos(seat, players), x = d.x - Math.cos(d.inward) * 2, y = d.y - Math.sin(d.inward) * 2;
+    const d = s.lake.dockPos(seat), x = d.x - Math.cos(d.inward) * 2, y = d.y - Math.sin(d.inward) * 2;
     s.boats.push({
-      seat, x, y, h: d.inward + Math.PI, speed: 0, vx: 0, vy: 0, tx: x, ty: y, hold: [], castCd: 0, dashT: 0, dashCd: 0, stun: 0, shield: 0, unloadT: 0, trawlT: 0,
+      seat, x, y, h: d.inward + Math.PI, speed: 0, vx: 0, vy: 0, tx: x, ty: y, hold: [], holdBase: holdFor(s.lake.boats), castCd: 0, dashT: 0, dashCd: 0, stun: 0, shield: 0, unloadT: 0, trawlT: 0,
       docked: true, tripValue: 0, banked: 0, cards: [], combo: 0, lastCatch: -9, firstScoreAt: null,
       stats: { caught: 0, home: 0, trips: 0, bestTrip: 0, lost: 0, rams: 0, rammed: 0, scooped: 0, koi: 0, youngKilled: 0, youngSpared: 0 },
     });
@@ -108,14 +114,14 @@ function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number
   return s;
 }
 
-function input(_s: RushSim, _seat: number, raw: unknown): RushInput | null {
+function input(s: RushSim, _seat: number, raw: unknown): RushInput | null {
   const o = raw as Record<string, unknown> | null;
   if (!o || typeof o !== "object") return null;
   if (o.k === "steer") {
     const x = Number(o.x), y = Number(o.y);
     if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
     // one decimal place: a whole-unit round loses too much on a 92 x 64 lake
-    return { k: "steer", x: Math.round(Math.max(-LAKE_X, Math.min(LAKE_X, x)) * 10) / 10, y: Math.round(Math.max(-LAKE_Y, Math.min(LAKE_Y, y)) * 10) / 10 };
+    return { k: "steer", x: Math.round(Math.max(-s.lake.x, Math.min(s.lake.x, x)) * 10) / 10, y: Math.round(Math.max(-s.lake.y, Math.min(s.lake.y, y)) * 10) / 10 };
   }
   if (o.k === "cast") { const c = Number(o.charge ?? 0); return { k: "cast", charge: Number.isFinite(c) ? Math.round(Math.max(0, Math.min(1, c)) * 100) / 100 : 0 }; }
   if (o.k === "dash") return { k: "dash" };
@@ -260,7 +266,7 @@ function endSeason(s: RushSim, ev: GameEvent[]): void {
   for (const f of s.fish) f.adult = true;
   for (let i = 0; i < born; i++) {
     const owner = reedOwners.length && i < reedsExtra ? reedOwners[i % reedOwners.length] : null;
-    if (owner) { const d = dockPos(owner.seat, s.players); s.fish.push(newFish(s, d.x + (s.rng() - 0.5) * 4, d.y + (s.rng() - 0.5) * 4, false)); }
+    if (owner) { const d = s.lake.dockPos(owner.seat); s.fish.push(newFish(s, d.x + (s.rng() - 0.5) * 4, d.y + (s.rng() - 0.5) * 4, false)); }
     else s.fish.push(newFish(s, null, null, false));
   }
   if (ladders) for (const b of s.boats) if (has(b, "ladder")) { const gift = Math.floor(born / Q.LADDER_PER); b.banked += gift; b.stats.home += gift; }
@@ -279,7 +285,7 @@ export const DEFAULT_BOT_KINDS = ["steady", "keeper", "greedy"];
 export function botKindOf(i: number): string { return DEFAULT_BOT_KINDS[i % 3]; }
 function startSeason(s: RushSim, ev: GameEvent[]): void {
   s.season = (s.season + 1) as Season; s.phase = "play"; s.phaseT = 0; s.market = null;
-  for (const b of s.boats) { const d = dockPos(b.seat, s.players); b.x = d.x; b.y = d.y; b.h = d.inward + Math.PI; b.docked = true; b.combo = 0; }
+  for (const b of s.boats) { const d = s.lake.dockPos(b.seat); b.x = d.x; b.y = d.y; b.h = d.inward + Math.PI; b.docked = true; b.combo = 0; }
   placeSchools(s); // fresh targets for the new season's places (prototype's rNextSeason())
   const [a, y] = counts(s);
   s.history.push({ startA: a, startY: y, caught: 0, young: 0, gongA: 0, gongY: 0, bred: false, bonus: 0, reedsExtra: 0 });
@@ -303,15 +309,15 @@ function moveBoats(s: RushSim, ev: GameEvent[]): void {
       // the prototype's steerBoat() (ui.js), the tx/ty branch only: the
       // client always resolves keys/stick into a target point before
       // sending steer. Shared with poach and party (boat-move.ts).
-      steer(b, speedOf(b), dt);
+      steer(b, speedOf(b), dt, s.lake);
       nx = b.x + Math.cos(b.h) * b.speed * dt; ny = b.y + Math.sin(b.h) * b.speed * dt;
     }
-    [nx, ny] = keepOnWater(b, nx, ny);
+    [nx, ny] = keepOnWater(b, nx, ny, s.lake);
     // winter ice: slide along its edge, as along the shore (rule change 10); stop only where that is ice too
-    if (iceBlocks(nx, ny, s.season)) {
+    if (s.lake.iceBlocks(nx, ny, s.season)) {
       // (a boat already in the ice, which froze round it, stays where it is)
-      const k = (ICE_K * 0.995) / nr(nx, ny), px = nx * k, py = ny * k;
-      if (!iceBlocks(b.x, b.y, s.season) && !iceBlocks(px, py, s.season)) { nx = px; ny = py; b.speed *= SLIDE; } else { nx = b.x; ny = b.y; b.speed *= 0.3; }
+      const k = (ICE_K * 0.995) / s.lake.nr(nx, ny), px = nx * k, py = ny * k;
+      if (!s.lake.iceBlocks(b.x, b.y, s.season) && !s.lake.iceBlocks(px, py, s.season)) { nx = px; ny = py; b.speed *= SLIDE; } else { nx = b.x; ny = b.y; b.speed *= 0.3; }
     }
     b.x = nx; b.y = ny;
     if (b.dashT > 0) for (const f of s.fish) { const fx = f.x - b.x, fy = f.y - b.y, fd = Math.hypot(fx, fy); if (fd < 4 && fd > 0) { f.scare = 0.4; f.sx = fx / fd; f.sy = fy / fd; } }
@@ -319,7 +325,7 @@ function moveBoats(s: RushSim, ev: GameEvent[]): void {
       b.trawlT += dt;
       if (b.trawlT >= 0.35) { b.trawlT = 0; trawlPickup(s, b, ev); }
     }
-    const d = dockPos(b.seat, s.players);
+    const d = s.lake.dockPos(b.seat);
     const wasDocked = b.docked;
     b.docked = Math.hypot(b.x - d.x, b.y - d.y) < Q.DOCK_R;
     if (b.docked && !wasDocked) { b.unloadT = Q.UNLOAD_EVERY; b.tripValue = 0; }
@@ -408,7 +414,7 @@ function rams(s: RushSim, ev: GameEvent[]): void {
     }
   }
 }
-const nearAnyDock = (s: RushSim, x: number, y: number, r: number): boolean => s.boats.some((b) => { const d = dockPos(b.seat, s.players); return Math.hypot(x - d.x, y - d.y) < r; });
+const nearAnyDock = (s: RushSim, x: number, y: number, r: number): boolean => s.boats.some((b) => { const d = s.lake.dockPos(b.seat); return Math.hypot(x - d.x, y - d.y) < r; });
 
 // an un-scooped value-1 fish respawns live after LOOSE_S: population change
 // nobody caught, so the caller records it in the season's history too
@@ -447,10 +453,10 @@ function koiTick(s: RushSim, ev: GameEvent[]): void {
   let fx = 0, fy = 0;
   for (const b of s.boats) {
     const pull = has(b, "goldHook") ? 1.6 : 0;
-    const dx = k.x - b.x, dy = k.y - b.y, d = Math.hypot(dx, dy); if (pull && d < 14 * WORLD_SCALE && d > 0) { fx += (dx / d) * pull; fy += (dy / d) * pull; }
+    const dx = k.x - b.x, dy = k.y - b.y, d = Math.hypot(dx, dy); if (pull && d < 14 * s.lake.scale && d > 0) { fx += (dx / d) * pull; fy += (dy / d) * pull; }
   }
   k.h = Math.atan2(Math.sin(k.h) + fy, Math.cos(k.h) + fx) + (s.rng() - 0.5) * 0.4;
-  if (nr(k.x, k.y) > 0.7) k.h = Math.atan2(-k.y, -k.x);
+  if (s.lake.nr(k.x, k.y) > 0.7) k.h = Math.atan2(-k.y, -k.x);
   k.x += Math.cos(k.h) * 4.5 * Q.DT; k.y += Math.sin(k.h) * 4.5 * Q.DT;
 }
 
@@ -466,20 +472,20 @@ function bot(s: RushSim, seat: number, r: () => number): RushInput[] {
   if (s.phase !== "play" || r() > 0.2) return [];
   const b = s.boats[seat];
   const out: RushInput[] = [];
-  const d = dockPos(seat, s.players), left = Q.SEASON_S - s.phaseT, n = b.hold.length, max = holdMax(b);
+  const d = s.lake.dockPos(seat), left = Q.SEASON_S - s.phaseT, n = b.hold.length, max = holdMax(b);
   const homeAt = kind === "greedy" ? 0.95 : kind === "keeper" ? 0.6 : 0.75;
   // rThink: not "time left" alone, but time left against the trip home,
   // at this boat's actual (load-slowed) speed
   const tripHome = Math.hypot(d.x - b.x, d.y - b.y) / Math.max(4, speedOf(b));
   const goHome = n >= max * homeAt || left < tripHome + (kind === "greedy" ? 2.5 : 4.5);
   if (goHome) { out.push({ k: "steer", x: Math.round(d.x), y: Math.round(d.y) }); return out; }
-  if (s.koi && n < max && Math.hypot(s.koi.x - b.x, s.koi.y - b.y) < 26 * WORLD_SCALE) {
+  if (s.koi && n < max && Math.hypot(s.koi.x - b.x, s.koi.y - b.y) < 26 * s.lake.scale) {
     out.push({ k: "steer", x: Math.round(s.koi.x), y: Math.round(s.koi.y) });
     if (Math.hypot(s.koi.x - b.x, s.koi.y - b.y) < 10 && b.dashCd <= 0) out.push({ k: "dash" });
     return out;
   }
   if (kind === "greedy" && b.dashCd <= 0) {
-    const prey = s.boats.filter((o) => o !== b && o.hold.length >= 5 && o.shield <= 0 && Math.hypot(o.x - b.x, o.y - b.y) < 14 * WORLD_SCALE && !nearAnyDock(s, o.x, o.y, Q.SAFE_R))[0];
+    const prey = s.boats.filter((o) => o !== b && o.hold.length >= 5 && o.shield <= 0 && Math.hypot(o.x - b.x, o.y - b.y) < 14 * s.lake.scale && !nearAnyDock(s, o.x, o.y, Q.SAFE_R))[0];
     if (prey) {
       out.push({ k: "steer", x: Math.round(prey.x), y: Math.round(prey.y) });
       if (Math.hypot(prey.x - b.x, prey.y - b.y) < 8) out.push({ k: "dash" });
@@ -492,7 +498,7 @@ function bot(s: RushSim, seat: number, r: () => number): RushInput[] {
   for (const f of s.fish) if (f.adult || takesYoung(b)) cnt[f.school]++;
   let best: { x: number; y: number } | null = null, bestScore = -1;
   s.schools.forEach((school, i) => {
-    if (iceBlocks(school.x, school.y, s.season)) return;
+    if (s.lake.iceBlocks(school.x, school.y, s.season)) return;
     const score = cnt[i] / (8 + Math.hypot(school.x - b.x, school.y - b.y));
     if (score > bestScore) { bestScore = score; best = { x: school.x, y: school.y }; }
   });
@@ -520,6 +526,7 @@ const FLAG = { DASH: 1, STUN: 2, SHIELD: 4, DOCKED: 8, KOI: 16 } as const;
 function frameFor(s: RushSim, seat: number) {
   const m = s.market;
   return {
+    lk: s.lake.meta(), // which lake this match has, for the page to draw (rule change 11)
     t: s.t, season: s.season, phase: s.phase, phaseT: Math.round(s.phaseT * 10) / 10,
     left: s.phase === "play" ? Math.max(0, Q.SEASON_S - s.phaseT) : s.phase === "rest" ? Math.max(0, Q.REST_S - s.phaseT) : Math.max(0, Q.MARKET_S - s.phaseT),
     fishN: s.fish.length, players: s.players,

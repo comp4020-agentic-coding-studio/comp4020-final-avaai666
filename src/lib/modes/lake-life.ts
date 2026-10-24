@@ -5,7 +5,7 @@
 // Who's Poaching 2.0 uses the very same lake; every draw still comes from
 // the caller's own s.rng, in the same order, so a rush replay is unchanged.
 import { LIFE as L } from "../game-constants.ts";
-import { blockedAt, DEEP, ICE_K, iceBlocks, ISLAND, LAKE_X, LAKE_Y, nr, WORLD_SCALE, ZONES } from "../lake-world.ts";
+import { ICE_K, type Lake } from "../lake-world.ts";
 
 // sp: one bit per seat whose net already let this young fish go, so a
 // young fish is "spared" once per boat however many casts land on it
@@ -22,7 +22,7 @@ export interface School { x: number; y: number; tx: number; ty: number; vx: numb
 
 // what a mode's state needs for its lake: its own random stream, its clock
 // (fish sway on it), the season (places and ice), and its fish and schools
-export interface Life { rng: () => number; t: number; season: number; schools: School[]; fish: Fish[]; nextId: number }
+export interface Life { rng: () => number; t: number; season: number; schools: School[]; fish: Fish[]; nextId: number; lake: Lake }
 
 export const NURSERY_FIRST = 12; // schools 0-11 are adult schools, 12-15 nursery
 // a target for school `i`: nursery schools stay in the reed bed; adult
@@ -35,16 +35,16 @@ export function nearZone(s: Life, zone: { x: number; y: number; r: number }, spr
   for (let k = 0; k < 40; k++) {
     const a = s.rng() * Math.PI * 2, d = Math.sqrt(s.rng()) * zone.r * spread;
     const x = zone.x + Math.cos(a) * d, y = zone.y + Math.sin(a) * d;
-    if (nr(x, y) < 0.93 && Math.hypot(x - ISLAND.x, y - ISLAND.y) > ISLAND.r + 2.5 && !iceBlocks(x, y, s.season)) return [x, y];
+    if (s.lake.nr(x, y) < 0.93 && Math.hypot(x - s.lake.island.x, y - s.lake.island.y) > s.lake.island.r + 2.5 && !s.lake.iceBlocks(x, y, s.season)) return [x, y];
   }
   return randomWater(s, 0.82);
 }
 export function randomWater(s: Life, maxK: number): [number, number] {
   for (let k = 0; k < 60; k++) {
-    const x = (s.rng() * 2 - 1) * LAKE_X, y = (s.rng() * 2 - 1) * LAKE_Y;
-    if (nr(x, y) < maxK && Math.hypot(x - ISLAND.x, y - ISLAND.y) > ISLAND.r + 3.5) return [x, y];
+    const x = (s.rng() * 2 - 1) * s.lake.x, y = (s.rng() * 2 - 1) * s.lake.y;
+    if (s.lake.nr(x, y) < maxK && Math.hypot(x - s.lake.island.x, y - s.lake.island.y) > s.lake.island.r + 3.5) return [x, y];
   }
-  return [0, 20 * WORLD_SCALE];
+  return [0, 20 * s.lake.scale];
 }
 // season -> [[placeId|null, weight], ...], a weighted pick (null: open water)
 const SEASON_PULL: [("river" | "reeds" | "lotus" | "deep" | null), number][][] = [
@@ -54,14 +54,14 @@ const SEASON_PULL: [("river" | "reeds" | "lotus" | "deep" | null), number][][] =
   [["deep", 0.7], [null, 0.3]],
 ];
 export function schoolTarget(s: Life, school: School): [number, number] {
-  if (school.nursery) return nearZone(s, ZONES.reeds, 0.8);
+  if (school.nursery) return nearZone(s, s.lake.zones.reeds, 0.8);
   let r = s.rng();
   for (const [id, w] of SEASON_PULL[s.season]) {
     r -= w;
     if (r > 0) continue;
     if (id === null) return randomWater(s, s.season === 3 ? 0.78 : 0.84);
-    if (id === "deep") { const a = s.rng() * Math.PI * 2, d = ISLAND.r + 6.5 + s.rng() * Math.max(2, DEEP.r - ISLAND.r - 6.5); return [DEEP.x + Math.cos(a) * d, DEEP.y + Math.sin(a) * d]; }
-    return nearZone(s, ZONES[id], 0.9);
+    if (id === "deep") { const a = s.rng() * Math.PI * 2, d = s.lake.island.r + 6.5 + s.rng() * Math.max(2, s.lake.deep.r - s.lake.island.r - 6.5); return [s.lake.deep.x + Math.cos(a) * d, s.lake.deep.y + Math.sin(a) * d]; }
+    return nearZone(s, s.lake.zones[id], 0.9);
   }
   return randomWater(s, 0.84);
 }
@@ -107,13 +107,13 @@ export function updateSchools(s: Life): void {
     school.vy += ((school.ty - school.y) / d * sp - school.vy) * dt;
     school.x += school.vx * dt; school.y += school.vy * dt;
     // a school keeps far enough off the island that none of its fish (each within ~5.7 of the centre) is pushed onto it
-    const clear = ISLAND.r + 6;
-    if (Math.hypot(school.x - ISLAND.x, school.y - ISLAND.y) < clear) {
-      const a = Math.atan2(school.y - ISLAND.y, school.x - ISLAND.x);
-      school.x = ISLAND.x + Math.cos(a) * clear; school.y = ISLAND.y + Math.sin(a) * clear;
+    const clear = s.lake.island.r + 6;
+    if (Math.hypot(school.x - s.lake.island.x, school.y - s.lake.island.y) < clear) {
+      const a = Math.atan2(school.y - s.lake.island.y, school.x - s.lake.island.x);
+      school.x = s.lake.island.x + Math.cos(a) * clear; school.y = s.lake.island.y + Math.sin(a) * clear;
     }
     // in winter a school never sits in the ice: one that was out there when it froze slides back to its edge
-    if (iceBlocks(school.x, school.y, s.season)) { const k = (ICE_K * 0.99) / nr(school.x, school.y); school.x *= k; school.y *= k; }
+    if (s.lake.iceBlocks(school.x, school.y, s.season)) { const k = (ICE_K * 0.99) / s.lake.nr(school.x, school.y); school.x *= k; school.y *= k; }
   }
 }
 // a grid cell key that never collides: lake coordinates are bounded (+/- LAKE_X,
@@ -156,13 +156,13 @@ export function moveFish(s: Life): void {
       }
     }
     let dx = tx - f.x, dy = ty - f.y;
-    if (!f.adult && nr(f.x, f.y) < L.SHALLOW) { dx += (f.x / LAKE_X) * 10; dy += (f.y / LAKE_Y) * 10; }
-    const inReeds = Math.hypot(f.x - ZONES.reeds.x, f.y - ZONES.reeds.y) < ZONES.reeds.r;
+    if (!f.adult && s.lake.nr(f.x, f.y) < L.SHALLOW) { dx += (f.x / s.lake.x) * 10; dy += (f.y / s.lake.y) * 10; }
+    const inReeds = Math.hypot(f.x - s.lake.zones.reeds.x, f.y - s.lake.zones.reeds.y) < s.lake.zones.reeds.r;
     if (f.scare > 0) { dx += f.sx * 6; dy += f.sy * 6; f.scare -= L.DT; }
     const followSpeed = Math.min(1, L.DT * 1.6);
     let nx = f.x + (dx + sepx * 0.5) * followSpeed, ny = f.y + (dy + sepy * 0.5) * followSpeed;
     if (f.scare > 0) { const v = (f.adult ? L.V_ADULT : L.V_FRY) * 2.2 * (inReeds ? 0.6 : 1); nx = f.x + f.sx * v * L.DT; ny = f.y + f.sy * v * L.DT; }
-    if (blockedAt(nx, ny, s.season)) { nx = f.x; ny = f.y; }
+    if (s.lake.blockedAt(nx, ny, s.season)) { nx = f.x; ny = f.y; }
     if (Math.abs(nx - f.x) + Math.abs(ny - f.y) > 0.02) { const nh = Math.atan2(ny - f.y, nx - f.x); f.h += Math.atan2(Math.sin(nh - f.h), Math.cos(nh - f.h)) * Math.min(1, L.DT * 5); }
     f.x = nx; f.y = ny;
   }

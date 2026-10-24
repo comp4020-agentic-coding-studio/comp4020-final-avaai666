@@ -206,6 +206,7 @@ export function mount({ world, sound, ui, send, view, post }) {
 
   function onFrame(f, ev) {
     seats = view().seats ?? seats; cur = f;
+    world.setLake?.(f.lk);
     ensureBoard(f.t);
     if (f.phase !== lastPhase) { if (f.phase === "pick") { sent = f.me?.pick !== null && f.me?.pick !== undefined; card = null; armed = null; } lastPhase = f.phase; }
     if (f.phase === "pick" && f.me && f.me.pick) sent = true;

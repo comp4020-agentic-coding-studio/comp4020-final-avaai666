@@ -16,7 +16,7 @@
 // it for that tick. Secret: a seat's hand and its pick, until the reveal.
 import { HOLD as Q, HOLD_MODEL } from "../game-constants.ts";
 import { type GameEvent, type Highlight, type Mode, type Results, type Seat, streamOf } from "../game-platform.ts";
-import { DEEP, dockPos, ISLAND, K, nr, tierOf, WORLD_SCALE, ZONES } from "../lake-world.ts";
+import { K, type Lake, makeLake, tierOf } from "../lake-world.ts";
 
 export type Card = "claim" | "net" | "pond" | "fence" | "corm" | "lantern";
 export const CARDS: Card[] = ["claim", "net", "pond", "fence", "corm", "lantern"];
@@ -27,6 +27,7 @@ export type HoldInput = { k: "place"; card: Card; tile: number } | { k: "pass" }
 export interface Tile { ix: number; q: number; r: number; x: number; y: number; zone: Zone; w: number; cap: number; fish: number; owner: number; build: Exclude<Card, "claim"> | null; dry: boolean; paid: number }
 interface Player { seat: number; fish: number; hand: Card[]; pick: { card: Card; tile: number } | null | undefined; kind: string; stolen: number; best: number }
 export interface HoldSim {
+  lake: Lake;
   tick: number; t: number; phase: "pick" | "reveal" | "harvest" | "end"; phaseT: number; season: number; action: number;
   n: number; rng: () => number; bots: boolean[];
   tiles: Tile[]; byKey: Map<string, number>; players: Player[]; start: number;
@@ -35,7 +36,8 @@ export interface HoldSim {
 
 const SQ3 = Math.sqrt(3);
 const DIRS: [number, number][] = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
-export const hexAt = (q: number, r: number): [number, number] => [Q.HS * SQ3 * (q + r / 2), Q.HS * 1.5 * r + 4 * WORLD_SCALE];
+// a hex's centre; the hexes scale with the match's lake, so every lake has the same 61 tiles
+export const hexAt = (q: number, r: number, lake: Lake = makeLake()): [number, number] => [Q.HS * lake.k * SQ3 * (q + r / 2), Q.HS * lake.k * 1.5 * r + 4 * lake.scale];
 export function nbrs(s: HoldSim, tl: Tile): Tile[] { return DIRS.map(([dq, dr]) => s.byKey.get(`${tl.q + dq},${tl.r + dr}`)).filter((i): i is number => i !== undefined).map((i) => s.tiles[i]); }
 const hexDist = (a: Tile, b: Tile): number => (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(a.q + a.r - b.q - b.r)) / 2;
 const within2 = (s: HoldSim, tl: Tile): Tile[] => s.tiles.filter((o) => o !== tl && hexDist(o, tl) <= 2);
@@ -44,17 +46,18 @@ const tilesOf = (s: HoldSim, seat: number): number => s.tiles.filter((tl) => tl.
 const inZone = (z: { x: number; y: number; r: number }, x: number, y: number): boolean => Math.hypot(x - z.x, y - z.y) < z.r;
 export const BOT_KINDS = ["steady", "keeper", "greedy"];
 
-function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number; young?: number }): HoldSim {
+function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number; young?: number; boats?: number }): HoldSim {
   const n = seats.length;
   const s: HoldSim = {
     tick: 0, t: 0, phase: "pick", phaseT: 0, season: 1, action: 1, n, rng: streamOf(seed, "lake"), bots: seats.map((x) => x.bot !== null),
     tiles: [], byKey: new Map(), players: [], start: 0, reveal: [], harvestStep: 0, log: [],
+    lake: makeLake(lake.boats), // the lake for this many boats (rule change 11)
   };
   // the board: every hex whose centre is within 0.8 of the way to the shore, none on the island
   for (let q = -5; q <= 5; q++) for (let r = -4; r <= 4; r++) {
-    const [x, y] = hexAt(q, r);
-    if (nr(x, y) > Q.IN_LAKE || Math.hypot(x - ISLAND.x, y - ISLAND.y) < ISLAND.r + 2) continue;
-    const zone: Zone = inZone(ZONES.reeds, x, y) ? "reeds" : inZone(ZONES.lotus, x, y) ? "lotus" : Math.hypot(x - ISLAND.x, y - ISLAND.y) < DEEP.r ? "deep" : "open";
+    const [x, y] = hexAt(q, r, s.lake);
+    if (s.lake.nr(x, y) > Q.IN_LAKE || Math.hypot(x - s.lake.island.x, y - s.lake.island.y) < s.lake.island.r + 2) continue;
+    const zone: Zone = inZone(s.lake.zones.reeds, x, y) ? "reeds" : inZone(s.lake.zones.lotus, x, y) ? "lotus" : Math.hypot(x - s.lake.island.x, y - s.lake.island.y) < s.lake.deep.r ? "deep" : "open";
     s.byKey.set(`${q},${r}`, s.tiles.length);
     s.tiles.push({ ix: s.tiles.length, q, r, x, y, zone, w: zone === "deep" ? 1.35 : zone === "reeds" ? 1.15 : 1, cap: 0, fish: 0, owner: -1, build: null, dry: false, paid: 0 });
   }
@@ -66,7 +69,7 @@ function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number
   s.players = seats.map((st, i) => ({ seat: st.seat, fish: 0, hand: [], pick: undefined, kind: BOT_KINDS[i % 3], stolen: 0, best: 0 }));
   // two tiles to start, the closest to each player's dock
   for (const p of s.players) {
-    const d = dockPos(p.seat, n);
+    const d = s.lake.dockPos(p.seat);
     const near = s.tiles.filter((tl) => tl.owner < 0).sort((a, b) => Math.hypot(a.x - d.x, a.y - d.y) - Math.hypot(b.x - d.x, b.y - d.y));
     const a = near[0]; a.owner = p.seat;
     const b = nbrs(s, a).filter((x) => x.owner < 0).sort((u, v) => Math.hypot(u.x - d.x, u.y - d.y) - Math.hypot(v.x - d.x, v.y - d.y))[0] ?? near[1];
@@ -270,6 +273,7 @@ function frameFor(s: HoldSim, seat: number) {
   const me = seat >= 0 ? s.players[seat] : undefined;
   const next = holdForecast(s);
   return {
+    lk: s.lake.meta(), // which lake this match has, for the page to draw (rule change 11)
     phase: s.phase, season: s.season, seasons: Q.SEASONS, action: s.action, actions: Q.ACTIONS,
     left: s.phase === "pick" ? Math.max(0, Math.ceil(Q.PICK_S - s.phaseT)) : 0,
     // tiles: [ix, q, r, x*10, y*10, zone, cap, fish, owner, build, dry, paid]

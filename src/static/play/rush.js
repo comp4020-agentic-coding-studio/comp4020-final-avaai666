@@ -32,8 +32,8 @@ export function mount({ world, sound, ui, send, view, post }) {
     if (me() === null || practice) return;
     const dir = world.wantDir(); if (!dir) return;
     const b = cur?.b.find((x) => x[0] === me()); if (!b) return;
-    send({ k: "steer", x: Math.round(b[1] / 10 + dir.x * 12), y: Math.round(b[2] / 10 + dir.z * 12) }); ui.did("sail");
-  }, 150);
+    send({ k: "steer", x: Math.round((b[1] / 10 + dir.x * 12) * 10) / 10, y: Math.round((b[2] / 10 + dir.z * 12) * 10) / 10 }); ui.did("sail");
+  }, 100); // ten a second while you steer (the input limit is 30)
   let chargeFrom = 0;
   const castDown = () => { chargeFrom = performance.now(); $("r-cast").classList.add("held"); };
   const castUp = () => {
@@ -113,7 +113,11 @@ export function mount({ world, sound, ui, send, view, post }) {
   }
 
   function hudFrom(f) {
+    // the match's lake (its size and docks, rule change 11) and your home on it
+    if (!practice) { world.setLake?.(f.lk); if (me() !== null) world.setHome?.(me(), colorOf(me()), t("g_your_home")); }
     const mine = me() !== null ? f.b.find((b) => b[0] === me()) : null;
+    // an arrow home when your boat is half full, or in the Rush with fish aboard (DESIGN.md: "an arrow home if you carry fish")
+    if (!practice) { const d = mine ? world.docks?.[me()] : null; const go = d && f.phase === "play" && (mine[4] >= mine[5] * 0.5 || (f.left <= 10 && mine[4] > 0)); world.pointAt(go ? d.wx : null, go ? d.wz : null); }
     ui.setClock(f.left, t(`r_season_${f.season}`));
     ui.goalEl.textContent = t("rush_hud");
     // the last 10 s of a season is the Rush (DESIGN.md): faster music
@@ -267,6 +271,7 @@ export function mount({ world, sound, ui, send, view, post }) {
     start(frame, v) {
       endPractice();
       seats = v.seats; prev = cur = frame; curAt = performance.now();
+      world.setLake?.(frame.lk);
       world.setDocks(seats.map((s, i) => ({ x: world.docks[i]?.x ?? 0, y: world.docks[i]?.z ?? 0, color: COLORS[s.character] })));
       for (const b of frame.b) world.boat(b[0], colorOf(b[0]), nameOf(b[0]));
       world.onFrame(draw); hudFrom(frame);

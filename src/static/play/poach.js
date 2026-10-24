@@ -45,7 +45,7 @@ export function mount({ world, sound, ui, send, view, post }) {
     const dir = world.wantDir(); if (!dir) return;
     const b = cur?.b.find((x) => x[0] === me()); if (!b) return;
     send({ k: "steer", x: Math.round((b[1] / 10 + dir.x * 12) * 10) / 10, y: Math.round((b[2] / 10 + dir.z * 12) * 10) / 10 }); ui.did("sail");
-  }, 150);
+  }, 100); // ten a second while you steer (the input limit is 30)
   const canAct = () => cur && cur.phase === "day" && me() !== null && !cur.out.includes(me());
   // only what this seat can do right now is sent (the server checks again)
   const can = (k) => { const m = cur?.me; if (!m) return false; return { net: m.netCd <= 0, inspect: m.canInspect, buoy: !m.buoy, report: m.canReport, fine: cur.role === "poacher" && m.fineCd <= 0, dump: cur.role === "poacher" && m.fry > 0 }[k] ?? false; };
@@ -147,7 +147,8 @@ export function mount({ world, sound, ui, send, view, post }) {
     fog.hidden = !lit; seenEl.hidden = true;
     if (lit) {
       // the fog's hole: the lantern's circle on screen, along whichever lake axis runs across it (the camera turns on a tall phone)
-      const x = myB[1] / 10, y = myB[2] / 10, [sx, sy] = toScreen(x, y), [ax, ay] = toScreen(x + SIGHT.view, y), [bx, by] = toScreen(x, y + SIGHT.view);
+      const view = cur.sight?.[0] ?? SIGHT.view;
+      const x = myB[1] / 10, y = myB[2] / 10, [sx, sy] = toScreen(x, y), [ax, ay] = toScreen(x + view, y), [bx, by] = toScreen(x, y + view);
       const fr = Math.max(Math.hypot(ax - sx, ay - sy), Math.hypot(bx - sx, by - sy));
       fog.style.setProperty("--fx", `${sx}px`); fog.style.setProperty("--fy", `${sy}px`); fog.style.setProperty("--fr", `${Math.max(40, fr * 0.92)}px`);
       world.setCameraMode("follow", { x: world.toWorld(x, y)[0], z: world.toWorld(x, y)[1], h: myB[3] / 100, speed: 4 });
@@ -239,6 +240,8 @@ export function mount({ world, sound, ui, send, view, post }) {
     if (!cv) return;
     const ctx = cv.getContext("2d"), w = cv.width, h = cv.height, L = W.lake;
     const mx = (x) => w / 2 + (x / (L.x * 1.12)) * (w / 2), my = (y) => h / 2 + (y / (L.y * 1.16)) * (h / 2);
+    // the map is drawn from the page's lake; a match on a bigger or smaller lake (rule change 11) is that lake times kk
+    const kk = f.lk?.k ?? cur?.lk?.k ?? 1, sx = (x) => mx(x / kk), sy = (y) => my(y / kk);
     ctx.clearRect(0, 0, w, h);
     ctx.beginPath(); W.outline.forEach(([x, y], i) => (i ? ctx.lineTo(mx(x), my(y)) : ctx.moveTo(mx(x), my(y)))); ctx.closePath();
     ctx.fillStyle = "#1f5e66"; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = "#d9c08a"; ctx.stroke();
@@ -247,16 +250,16 @@ export function mount({ world, sound, ui, send, view, post }) {
     for (const bp of W.bays) ctx.fillText(place(bp.id), mx(bp.x), my(bp.y));
     const z = W.zones; for (const id of ["reeds", "lotus", "river"]) if (z[id]) ctx.fillText(place(id), mx(z[id].x), my(z[id].y));
     if (opts.replay) {
-      ctx.strokeStyle = "#ff8a7a"; ctx.lineWidth = 3; ctx.beginPath(); opts.replay.path.forEach(([x, y], i) => (i ? ctx.lineTo(mx(x), my(y)) : ctx.moveTo(mx(x), my(y)))); ctx.stroke();
-      for (const [x, y] of opts.replay.nets) cross(ctx, mx(x), my(y), "#fff");
+      ctx.strokeStyle = "#ff8a7a"; ctx.lineWidth = 3; ctx.beginPath(); opts.replay.path.forEach(([x, y], i) => (i ? ctx.lineTo(sx(x), sy(y)) : ctx.moveTo(sx(x), sy(y)))); ctx.stroke();
+      for (const [x, y] of opts.replay.nets) cross(ctx, sx(x), sy(y), "#fff");
       return;
     }
     const m = f.m;
-    ctx.strokeStyle = "rgba(232,184,77,.9)"; ctx.lineWidth = 3; ctx.beginPath(); m.path.forEach(([x, y], i) => (i ? ctx.lineTo(mx(x / 10), my(y / 10)) : ctx.moveTo(mx(x / 10), my(y / 10)))); ctx.stroke();
-    for (const [i, x, y, s] of m.seen) { ctx.fillStyle = colorOf(i); ctx.beginPath(); ctx.arc(mx(x / 10), my(y / 10), 8, 0, 6.28); ctx.fill(); ctx.fillStyle = "#f5ead6"; ctx.fillText(`${nameOf(i)} ${fmt(s)}`, mx(x / 10), my(y / 10) - 12); }
-    for (const bu of m.buoys) { ctx.fillStyle = "#ffb45a"; ctx.beginPath(); ctx.arc(mx(bu.x / 10), my(bu.y / 10), 8, 0, 6.28); ctx.fill(); ctx.strokeStyle = "rgba(255,180,90,.45)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(mx(bu.x / 10), my(bu.y / 10), (SIGHT.buoyR / (L.x * 1.12)) * (w / 2), 0, 6.28); ctx.stroke(); }
-    for (const [x, y, s] of m.patches) { cross(ctx, mx(x / 10), my(y / 10), "#ff8a7a"); ctx.fillStyle = "#ff8a7a"; ctx.fillText(fmt(s), mx(x / 10), my(y / 10) + 24); }
-    const meB = f.b?.find((x) => x[0] === me()); if (meB) { ctx.fillStyle = colorOf(me()); ctx.strokeStyle = "#fff"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(mx(meB[1] / 10), my(meB[2] / 10), 9, 0, 6.28); ctx.fill(); ctx.stroke(); }
+    ctx.strokeStyle = "rgba(232,184,77,.9)"; ctx.lineWidth = 3; ctx.beginPath(); m.path.forEach(([x, y], i) => (i ? ctx.lineTo(sx(x / 10), sy(y / 10)) : ctx.moveTo(sx(x / 10), sy(y / 10)))); ctx.stroke();
+    for (const [i, x, y, s] of m.seen) { ctx.fillStyle = colorOf(i); ctx.beginPath(); ctx.arc(sx(x / 10), sy(y / 10), 8, 0, 6.28); ctx.fill(); ctx.fillStyle = "#f5ead6"; ctx.fillText(`${nameOf(i)} ${fmt(s)}`, sx(x / 10), sy(y / 10) - 12); }
+    for (const bu of m.buoys) { ctx.fillStyle = "#ffb45a"; ctx.beginPath(); ctx.arc(sx(bu.x / 10), sy(bu.y / 10), 8, 0, 6.28); ctx.fill(); ctx.strokeStyle = "rgba(255,180,90,.45)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(sx(bu.x / 10), sy(bu.y / 10), ((f.sight?.[1] ?? SIGHT.buoyR) / kk / (L.x * 1.12)) * (w / 2), 0, 6.28); ctx.stroke(); }
+    for (const [x, y, s] of m.patches) { cross(ctx, sx(x / 10), sy(y / 10), "#ff8a7a"); ctx.fillStyle = "#ff8a7a"; ctx.fillText(fmt(s), sx(x / 10), sy(y / 10) + 24); }
+    const meB = f.b?.find((x) => x[0] === me()); if (meB) { ctx.fillStyle = colorOf(me()); ctx.strokeStyle = "#fff"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(sx(meB[1] / 10), sy(meB[2] / 10), 9, 0, 6.28); ctx.fill(); ctx.stroke(); }
   }
   const cross = (ctx, X, Y, c) => { ctx.strokeStyle = c; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(X - 8, Y - 8); ctx.lineTo(X + 8, Y + 8); ctx.moveTo(X + 8, Y - 8); ctx.lineTo(X - 8, Y + 8); ctx.stroke(); };
   function tallyScreen(f) {
@@ -347,11 +350,11 @@ export function mount({ world, sound, ui, send, view, post }) {
     room(v) { seats = v.seats; },
     start(frame, v) {
       seats = v.seats; prev = cur = frame; curAt = performance.now(); lastPhase = null; typedFor = null;
-      world.clearBoats?.(); world.clearProps?.();
+      world.clearBoats?.(); world.clearProps?.(); world.setLake?.(frame.lk);
       world.setDocks(seats.map((s, i) => ({ x: world.docks[i]?.x ?? 0, y: world.docks[i]?.z ?? 0, color: COLORS[s.character] })));
       world.onFrame(draw); renderPhase(frame);
     },
-    frame(f, ev) { seats = view().seats ?? seats; prev = cur ?? f; cur = f; curAt = performance.now(); events(ev); renderPhase(f); },
+    frame(f, ev) { seats = view().seats ?? seats; prev = cur ?? f; cur = f; curAt = performance.now(); world.setLake?.(f.lk); if (me() !== null) world.setHome?.(me(), colorOf(me()), t("g_your_home")); events(ev); renderPhase(f); },
     results(v, overlayEl) { renderResults(v, overlayEl); },
     end() { clearInterval(wasdId); removeEventListener("keydown", onKey); fog.remove(); seenEl.remove(); world.setLabels([]); },
   };

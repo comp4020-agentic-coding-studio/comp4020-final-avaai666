@@ -163,7 +163,9 @@ export const RUSH = {
   NET_R: 4.5, NET_AHEAD: 4, SINK: 0.38, CAST_CD: 0.7, NET_MAX: 6, SCATTER_R: 2.2, // the net closes 0.38 s after a cast (prototype's rCloseNet); at most 6 fish a cast; a closing net scares fish within this many net radii; net 4.5 and cooldown 0.7 since rule change 7 (balance-rush2-2026-10-23.md)
   DASH_S: 0.4, DASH_MULT: 2.4, DASH_CD: 4,
   RAM_R: 3.4, RAM_DROP: 3, STUN: 0.6, SHIELD: 3,
-  DOCK_R: 5, SAFE_R: 8, UNLOAD_EVERY: 0.1, // unloading starts within 6.5 of the dock (prototype's UNLOAD_R), one fish every 0.1 s; no ram within 11 of a dock
+  // rule change 11: unloading takes 0.33 s a fish (0.1 before): with the homes spread round the lake every school
+  // is near someone's dock, and the walk home no longer held the catch (docs/checks/balance-lake11-2026-10-24.md)
+  DOCK_R: 6.5, SAFE_R: 11, UNLOAD_EVERY: 0.33, // unloading starts within 6.5 of the dock (prototype's UNLOAD_R); no ram within 11 of a dock
   PRACTICE_RING: 24 * WS, // the practice's gold ring, this far out from your dock (the prototype's 24)
   LOOSE_S: 8, PICK_R: 2.6,
   KOI_VALUE: 5, KOI_FOR: 10, KOI_STOP: 12, // no golden carp in the last 12 s of a season

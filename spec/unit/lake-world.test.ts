@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  ALLEE, DOCK_ANGLES, ICE_K, ISLAND, K, LAKE_X, LAKE_Y, TIERS, adultsYoungFromNext, blockedAt, breed, dockPos, forecast, iceBlocks, nextSpring, nr, outline, shapeR, shape, tierOf, worldForPage,
+  ALLEE, DOCK_ANGLES, ICE_K, ISLAND, K, LAKE_X, LAKE_Y, TIERS, adultsYoungFromNext, dockAngles, lakeScale, makeLake, blockedAt, breed, dockPos, forecast, iceBlocks, nextSpring, nr, outline, shapeR, shape, tierOf, worldForPage,
 } from "../../src/lib/lake-world.ts";
 
 // The lake every /play mode shares (DESIGN.md v5.0, "The world"): its outline,
@@ -83,13 +83,30 @@ describe("the island and the ice", () => {
     expect(blockedAt(fx, fy, 3)).toBe(true);
   });
 
-  it("docks sit at 66, 114, 42, 138, 90 and 18 degrees, on the shore, facing in", () => {
-    expect(DOCK_ANGLES).toEqual([66, 114, 42, 138, 90, 18]);
-    for (let i = 0; i < 6; i++) {
-      const d = dockPos(i, 6);
-      expect(nr(d.x, d.y), `dock ${i}`).toBeCloseTo(1, 6);
-      expect(d.inward).toBeCloseTo(Math.atan2(-d.y, -d.x), 9);
+  // rule change 11 (Ava, 24 Oct: "spread everyone round the lake"): as many docks as boats, at equal angles
+  // from due south, each moved by the least it takes to keep clear of the reeds, the lotus and the river
+  it("a lake for n boats has n docks, spread round it from due south, clear of the three places, on the shore, facing in", () => {
+    expect(DOCK_ANGLES).toEqual([90, 177, 270, 0]); // the four-boat lake: south, west (moved 3 degrees off the reeds), north, east
+    for (let n = 2; n <= 8; n++) {
+      const L = makeLake(n);
+      expect(L.docks.length, `${n} boats`).toBe(n);
+      expect(dockAngles(n)[0]).toBe(90);
+      for (const d of L.docks) {
+        expect(L.nr(d.x, d.y), `dock at ${d.a} on the ${n}-boat lake`).toBeCloseTo(1, 6);
+        expect(d.inward).toBeCloseTo(Math.atan2(-d.y, -d.x), 9);
+        for (const z of Object.values(L.zones)) expect(Math.hypot(d.x - z.x, d.y - z.y), `dock at ${d.a} by a place`).toBeGreaterThan(z.r);
+      }
+      const as = L.docks.map((d) => d.a).sort((a, b) => a - b);
+      for (let i = 0; i < n; i++) { const gap = ((as[(i + 1) % n] - as[i] + 360) % 360) || 360; expect(gap, `gap on the ${n}-boat lake`).toBeGreaterThan(20); }
     }
+  });
+
+  it("a lake for n boats has the same water for each boat: its scale is 0.5 x sqrt(n / 4), from 2 to 8 boats", () => {
+    expect([2, 3, 4, 6, 8].map(lakeScale)).toEqual([0.354, 0.433, 0.5, 0.612, 0.707]);
+    expect(lakeScale(1)).toBe(lakeScale(2)); expect(lakeScale(12)).toBe(lakeScale(8));
+    const L6 = makeLake(6);
+    expect(L6.x).toBeCloseTo(92 * 0.612, 9); expect(L6.island.r).toBeCloseTo(7.5 * 0.612, 9); expect(L6.k).toBeCloseTo(0.612 / 0.5, 9);
+    expect(makeLake(4).x).toBe(LAKE_X); // the plain exports are the four-boat lake
   });
 });
 

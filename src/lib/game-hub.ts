@@ -173,7 +173,7 @@ export function createGameHub(store: GameStore, modes: Record<string, AnyMode>, 
       const startedAt = now() + PLAY_COUNTDOWN_MS;
       const rematchBy = room.last ? me.name : null;
       const id = store.startMatch(room.id, mode.id, mode.model, seed, seats, lake.fish, startedAt, rematchBy);
-      const sim = mode.make(seed, seats, lake);
+      const sim = mode.make(seed, seats, { ...lake, boats: seats.length }); // a lake for this many boats (rule change 11)
       room.match = {
         id, mode, sim, seed, seats, startedAt, tick: 0, queue: [], pending: [], humanSeat: new Map(humans.map((p, i) => [p.seat, i])),
         counts: seats.map(() => ({})), lakeBefore: lake.fish, rematchBy,

@@ -16,7 +16,7 @@
 // until everyone has picked.
 import { PARTY as Q, PARTY_MODEL } from "../game-constants.ts";
 import { type GameEvent, type Highlight, type Mode, type Results, type Seat, streamOf } from "../game-platform.ts";
-import { dockPos, ISLAND, LAKE_X, LAKE_Y, nextSpring, nr, shape, tierOf, WORLD_SCALE as S, ZONES } from "../lake-world.ts";
+import { type Lake, makeLake, nextSpring, tierOf } from "../lake-world.ts";
 import { sail } from "./boat-move.ts";
 import { counts, type Fish, moveFish, type School, seedFish, updateSchools } from "./lake-life.ts";
 
@@ -36,6 +36,7 @@ export type PartyInput =
 interface Boat { seat: number; x: number; y: number; h: number; speed: number; tx: number; ty: number; gate: number; reel: number; stun: number; castCd: number; lanT: number; finished: boolean }
 interface Spot { id: number; x: number; y: number; t: number; open: boolean; until: number; taken: number }
 export interface PartySim {
+  lake: Lake;
   tick: number; t: number; phase: Phase; phaseT: number; round: number; game: Game;
   n: number; rng: () => number; bots: boolean[]; kinds: string[];
   coins: number[]; roundCoins: number[]; ready: boolean[]; done: boolean[];
@@ -54,7 +55,7 @@ export const BOT_KINDS = ["steady", "keeper", "greedy"];
 const scoring = (s: PartySim): boolean => s.phase === "play";
 const practice = (s: PartySim): boolean => s.phase === "intro"; // "try it first": the round runs, nothing counts
 
-function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number; young?: number }): PartySim {
+function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number; young?: number; boats?: number }): PartySim {
   const n = seats.length;
   const s: PartySim = {
     tick: 0, t: 0, phase: "intro", phaseT: 0, round: 1, game: "scramble",
@@ -64,11 +65,12 @@ function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number
     boats: [], fish: [], schools: [], nextId: 1, season: 1, start: 0, tookFish: seats.map(() => 0),
     spots: [], spotT: 0.8, path: [], koi: { k: 1, x: 0, y: 0 },
     tug: { needle: 0, dir: 1, zone: 0.45, zw: 0.2, zv: 0.18, places: 0 }, lanterns: [], last: null, best: null,
+    lake: makeLake(lake.boats), // the lake for this many boats (rule change 11)
   };
   const a0 = lake.adults ?? Math.round(lake.fish * 0.8), y0 = lake.young ?? Math.round(lake.fish * 0.2);
   seedFish(s, a0, y0);
   s.start = s.fish.length;
-  for (const st of seats) { const d = dockPos(st.seat, n); s.boats.push({ seat: st.seat, x: d.x, y: d.y, h: d.inward + Math.PI, speed: 0, tx: d.x, ty: d.y, gate: 0, reel: 0, stun: 0, castCd: 0, lanT: 0, finished: false }); }
+  for (const st of seats) { const d = s.lake.dockPos(st.seat); s.boats.push({ seat: st.seat, x: d.x, y: d.y, h: d.inward + Math.PI, speed: 0, tx: d.x, ty: d.y, gate: 0, reel: 0, stun: 0, castCd: 0, lanT: 0, finished: false }); }
   setupRound(s);
   return s;
 }
@@ -76,10 +78,10 @@ function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number
 // a round's own setup: boats back at their docks, the round's props
 function setupRound(s: PartySim): void {
   s.game = GAMES[s.round - 1];
-  for (const b of s.boats) { const d = dockPos(b.seat, s.n); b.x = b.tx = d.x - Math.cos(d.inward) * 2; b.y = b.ty = d.y - Math.sin(d.inward) * 2; b.h = d.inward + Math.PI; b.speed = 0; b.gate = 0; b.reel = 0; b.stun = 0; b.castCd = 0; b.lanT = 0; b.finished = false; }
+  for (const b of s.boats) { const d = s.lake.dockPos(b.seat); b.x = b.tx = d.x - Math.cos(d.inward) * 2; b.y = b.ty = d.y - Math.sin(d.inward) * 2; b.h = d.inward + Math.PI; b.speed = 0; b.gate = 0; b.reel = 0; b.stun = 0; b.castCd = 0; b.lanT = 0; b.finished = false; }
   s.spots = []; s.spotT = 0.8; s.lanterns = []; s.tug = { needle: 0, dir: 1, zone: 0.45, zw: 0.2, zv: 0.18, places: 0 };
   if (s.game === "koi") {
-    s.path = Array.from({ length: Q.GATES }, (_, k) => shape(70 + k * 45, k % 2 ? 0.62 : 0.78)) as [number, number][];
+    s.path = Array.from({ length: Q.GATES }, (_, k) => s.lake.shape(70 + k * 45, k % 2 ? 0.62 : 0.78)) as [number, number][];
     s.koi = { k: 1, x: s.path[0][0], y: s.path[0][1] };
   }
   s.roundCoins = s.roundCoins.map(() => 0); s.ready = s.ready.map(() => false); s.done = s.done.map(() => false);
@@ -111,8 +113,8 @@ function input(s: PartySim, seat: number, raw: unknown): PartyInput | null {
   const num = (v: unknown, lo: number, hi: number) => { const x = Number(v); return Number.isFinite(x) ? Math.round(Math.max(lo, Math.min(hi, x)) * 10) / 10 : null; };
   switch (o.k) {
     case "ready": return s.phase === "intro" && !s.ready[seat] ? { k: "ready" } : null;
-    case "tap": { const x = num(o.x, -LAKE_X, LAKE_X), y = num(o.y, -LAKE_Y, LAKE_Y); return live && s.game === "scramble" && x !== null && y !== null ? { k: "tap", x, y } : null; }
-    case "steer": { const x = num(o.x, -LAKE_X, LAKE_X), y = num(o.y, -LAKE_Y, LAKE_Y); return live && (s.game === "koi" || s.game === "night") && x !== null && y !== null ? { k: "steer", x, y } : null; }
+    case "tap": { const x = num(o.x, -s.lake.x, s.lake.x), y = num(o.y, -s.lake.y, s.lake.y); return live && s.game === "scramble" && x !== null && y !== null ? { k: "tap", x, y } : null; }
+    case "steer": { const x = num(o.x, -s.lake.x, s.lake.x), y = num(o.y, -s.lake.y, s.lake.y); return live && (s.game === "koi" || s.game === "night") && x !== null && y !== null ? { k: "steer", x, y } : null; }
     case "reel": return live && s.game === "tug" ? { k: "reel" } : null;
     case "net": case "lantern": return live && s.game === "night" ? { k: o.k } : null;
     case "buy": return s.phase === "shop" && ITEMS.includes(o.item as Item) && !s.buys[seat].includes(o.item as Item) && s.coins[seat] >= Q.COST ? { k: "buy", item: o.item as Item } : null;
@@ -130,7 +132,7 @@ function apply(s: PartySim, seat: number, i: PartyInput, ev: GameEvent[]): void 
   if (i.k === "pick") { s.last!.picks[seat] = i.n; ev.push({ k: "picked", seat }); return; }
   if (i.k === "steer") { b.tx = i.x; b.ty = i.y; return; }
   if (i.k === "tap") {
-    const r = has(s, seat, "net") ? Q.TAP_R_BIG : Q.TAP_R;
+    const r = has(s, seat, "net") ? (Q.TAP_R_BIG * s.lake.k) : (Q.TAP_R * s.lake.k);
     const spot = s.spots.filter((p) => p.open && p.taken < 0).sort((p, q) => Math.hypot(p.x - i.x, p.y - i.y) - Math.hypot(q.x - i.x, q.y - i.y))[0];
     if (spot && Math.hypot(spot.x - i.x, spot.y - i.y) < r) claimSpot(s, spot, seat, ev);
     else ev.push({ k: "miss", seat, x: i.x, y: i.y, to: [seat] });
@@ -177,20 +179,20 @@ function moveBoats(s: PartySim): void {
   for (const b of s.boats) {
     b.castCd = Math.max(0, b.castCd - dt); b.lanT = Math.max(0, b.lanT - dt); b.stun = Math.max(0, b.stun - dt);
     if (s.game !== "koi" && s.game !== "night") continue;
-    sail(b, Q.SPEED * (has(s, b.seat, "fast") ? Q.FAST : 1), dt);
+    sail(b, Q.SPEED * (has(s, b.seat, "fast") ? Q.FAST : 1), dt, s.lake);
   }
 }
 function roundTick(s: PartySim, ev: GameEvent[]): void {
   moveBoats(s);
   // bait: for its first 8 s, the schools near a bait boat swim to it
-  if (scoring(s) && s.phaseT < Q.BAIT_S) for (const b of s.boats) if (has(s, b.seat, "bait")) for (const sc of s.schools) if (Math.hypot(sc.x - b.x, sc.y - b.y) < Q.BAIT_R) { sc.tx = b.x; sc.ty = b.y; sc.t = 1; }
+  if (scoring(s) && s.phaseT < Q.BAIT_S) for (const b of s.boats) if (has(s, b.seat, "bait")) for (const sc of s.schools) if (Math.hypot(sc.x - b.x, sc.y - b.y) < (Q.BAIT_R * s.lake.k)) { sc.tx = b.x; sc.ty = b.y; sc.t = 1; }
   if (s.game === "night" || s.game === "koi") { updateSchools(s); moveFish(s); }
   if (s.game === "scramble") {
     s.spotT -= Q.DT;
     if (s.spotT <= 0) {
       s.spotT = 0.9 + s.rng() * 0.6;
-      const x = (-60 + s.rng() * 100) * S, y = (-32 + s.rng() * 62) * S; // the prototype's box, at the lake's scale
-      if (nr(x, y) < 0.85 && Math.hypot(x - ISLAND.x, y - ISLAND.y) > ISLAND.r + 4.5) { s.spots.push({ id: s.nextId++, x, y, t: 0, open: false, until: 0, taken: -1 }); }
+      const x = (-60 + s.rng() * 100) * s.lake.scale, y = (-32 + s.rng() * 62) * s.lake.scale; // the prototype's box, at the lake's scale
+      if (s.lake.nr(x, y) < 0.85 && Math.hypot(x - s.lake.island.x, y - s.lake.island.y) > s.lake.island.r + 4.5) { s.spots.push({ id: s.nextId++, x, y, t: 0, open: false, until: 0, taken: -1 }); }
     }
     for (const p of s.spots) { p.t += Q.DT; if (!p.open && p.t >= Q.WARN_S) { p.open = true; p.until = p.t + Q.JUMP_S; ev.push({ k: "jump", id: p.id, x: r1(p.x), y: r1(p.y) }); } }
     s.spots = s.spots.filter((p) => (!p.open || p.t < p.until) && !(p.taken >= 0 && p.t > p.until));
@@ -201,12 +203,12 @@ function roundTick(s: PartySim, ev: GameEvent[]): void {
     if (Math.hypot(tgt[0] - k.x, tgt[1] - k.y) < 2) k.k++;
     for (const b of s.boats) {
       const gt = s.path[b.gate % s.path.length];
-      if (Math.hypot(gt[0] - b.x, gt[1] - b.y) < Q.GATE_R) {
+      if (Math.hypot(gt[0] - b.x, gt[1] - b.y) < (Q.GATE_R * s.lake.k)) {
         b.gate++;
         if (scoring(s)) { const got = takeFish(s, 1); s.tookFish[b.seat] += got; give(s, b.seat, Q.GATE_COINS, ev, gt[0], gt[1]); }
         ev.push({ k: "gate", seat: b.seat, n: b.gate, practice: practice(s) ? 1 : 0 });
       }
-      if (scoring(s) && Math.hypot(k.x - b.x, k.y - b.y) < Q.KOI_R) {
+      if (scoring(s) && Math.hypot(k.x - b.x, k.y - b.y) < (Q.KOI_R * s.lake.k)) {
         const got = takeFish(s, Q.KOI_FISH); s.tookFish[b.seat] += got; give(s, b.seat, Q.KOI_COINS, ev, k.x, k.y);
         ev.push({ k: "koi", seat: b.seat });
         k.k += 2; const p = s.path[(k.k - 1) % s.path.length]; k.x = p[0]; k.y = p[1];
@@ -286,25 +288,26 @@ function nextRound(s: PartySim, ev: GameEvent[]): void {
 const p10 = (v: number): number => Math.round(v * 10);
 export function seesFish(s: PartySim, seat: number, x: number, y: number): boolean {
   if (s.game !== "night" || seat < 0) return true;
-  const b = s.boats[seat], r = (has(s, seat, "net") ? Q.NIGHT_VIEW_BIG : Q.NIGHT_VIEW);
-  return Math.hypot(b.x - x, b.y - y) < r || s.lanterns.some((l) => Math.hypot(l.x - x, l.y - y) < Q.LANTERN_LIGHT);
+  const b = s.boats[seat], r = (has(s, seat, "net") ? (Q.NIGHT_VIEW_BIG * s.lake.k) : (Q.NIGHT_VIEW * s.lake.k));
+  return Math.hypot(b.x - x, b.y - y) < r || s.lanterns.some((l) => Math.hypot(l.x - x, l.y - y) < (Q.LANTERN_LIGHT * s.lake.k));
 }
 function frameFor(s: PartySim, seat: number) {
   const game = s.game, live = s.phase === "intro" || s.phase === "count" || s.phase === "play";
   const len: Record<Phase, number> = { intro: Q.INTRO_S, count: Q.COUNT_S, play: Q.ROUND_S, standings: Q.STANDINGS_S, shop: Q.SHOP_S, pick: Q.PICK_S, reveal: 0, end: 0 };
   const f: Record<string, unknown> = {
+    lk: s.lake.meta(), // which lake this match has, for the page to draw (rule change 11)
     phase: s.phase, round: s.round, rounds: GAMES.length, game, left: Math.max(0, Math.ceil(len[s.phase] - s.phaseT)),
     coins: s.coins, roundCoins: s.roundCoins, ready: s.ready, done: s.done, lake: s.fish.length, start: s.start,
   };
   if (live && (game === "koi" || game === "night")) {
     const me = seat >= 0 ? s.boats[seat] : null;
-    f.b = s.boats.filter((b) => game !== "night" || !me || b === me || Math.hypot(b.x - me.x, b.y - me.y) < Q.NIGHT_BOATS || s.lanterns.some((l) => Math.hypot(b.x - l.x, b.y - l.y) < Q.LANTERN_LIGHT)).map((b) => [b.seat, p10(b.x), p10(b.y), Math.round(b.h * 100), b.gate]);
+    f.b = s.boats.filter((b) => game !== "night" || !me || b === me || Math.hypot(b.x - me.x, b.y - me.y) < (Q.NIGHT_BOATS * s.lake.k) || s.lanterns.some((l) => Math.hypot(b.x - l.x, b.y - l.y) < (Q.LANTERN_LIGHT * s.lake.k))).map((b) => [b.seat, p10(b.x), p10(b.y), Math.round(b.h * 100), b.gate]);
     f.f = s.fish.filter((x) => seesFish(s, seat, x.x, x.y)).map((x) => [p10(x.x), p10(x.y), Math.round(x.h * 100), x.adult ? 1 : 0]);
   }
   if (live && game === "koi") { f.path = s.path.map(([x, y]) => [p10(x), p10(y)]); f.koi = [p10(s.koi.x), p10(s.koi.y)]; }
   if (live && game === "scramble") f.spots = s.spots.map((p) => [p.id, p10(p.x), p10(p.y), p.taken >= 0 ? 2 : p.open ? 1 : 0, p.taken]);
   if (live && game === "tug") f.tug = { needle: Math.round(s.tug.needle * 1000) / 1000, zone: Math.round(s.tug.zone * 1000) / 1000, zw: s.tug.zw, reels: s.boats.map((b) => Math.round(b.reel)) };
-  if (live && game === "night") { f.lanterns = s.lanterns.map((l) => [l.seat, p10(l.x), p10(l.y)]); f.light = Q.LANTERN_LIGHT; if (seat >= 0) f.view = (has(s, seat, "net") ? Q.NIGHT_VIEW_BIG : Q.NIGHT_VIEW); }
+  if (live && game === "night") { f.lanterns = s.lanterns.map((l) => [l.seat, p10(l.x), p10(l.y)]); f.light = (Q.LANTERN_LIGHT * s.lake.k); if (seat >= 0) f.view = (has(s, seat, "net") ? (Q.NIGHT_VIEW_BIG * s.lake.k) : (Q.NIGHT_VIEW * s.lake.k)); }
   if (s.last) f.last = { cap: s.last.cap, fished: s.last.fished, picked: s.last.picks.map((p) => p !== null), picks: s.phase === "reveal" || s.phase === "end" ? s.last.picks : null, fit: s.last.fit, mine: seat >= 0 ? s.last.picks[seat] : null };
   if (seat >= 0) { const b = s.boats[seat]; f.me = { castCd: Math.round(b.castCd * 10) / 10, lanT: Math.round(b.lanT * 10) / 10, stun: b.stun > 0 ? 1 : 0, gate: b.gate, buys: s.buys[seat], next: s.next[seat] }; }
   return f;
@@ -367,7 +370,7 @@ function bot(s: PartySim, seat: number, r: () => number): PartyInput[] {
   if (r() > 0.2) return [];
   if (s.game === "koi") {
     const gt = s.path[b.gate % s.path.length], k = s.koi;
-    const chase = Math.hypot(k.x - b.x, k.y - b.y) < 18 * S && kind !== "keeper";
+    const chase = Math.hypot(k.x - b.x, k.y - b.y) < 18 * s.lake.scale && kind !== "keeper";
     return [{ k: "steer", x: r1(chase ? k.x : gt[0]), y: r1(chase ? k.y : gt[1]) }];
   }
   if (s.game === "night") {

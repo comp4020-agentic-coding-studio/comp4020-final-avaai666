@@ -640,12 +640,12 @@ describe("boats, unloading and schools, as the prototype (port fidelity)", () =>
     expect(s.boats[0].hold.length).toBeLessThan(2); // unloading has started
   });
 
-  it("a fish unloads every 0.1 s, not 0.12", () => {
+  it("a fish unloads every UNLOAD_EVERY (0.33 s since rule change 11; 0.1 before, not the prototype's 0.12)", () => {
     const s = make("unload-rate", 2);
     s.boats[0].hold = [1, 1, 1];
     s.boats[0].unloadT = RUSH.UNLOAD_EVERY; // as if just arrived at the dock (moveBoats sets this on the docked transition)
     until(s, s.t + RUSH.UNLOAD_EVERY - RUSH.DT / 2);
-    expect(s.boats[0].hold.length).toBe(2); // exactly one fish gone by 0.1 s
+    expect(s.boats[0].hold.length).toBe(2); // exactly one fish gone by UNLOAD_EVERY
   });
 
   it("Wide Net and Fine Mesh each add 2 to a cast's cap", () => {

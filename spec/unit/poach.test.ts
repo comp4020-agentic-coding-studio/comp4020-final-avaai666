@@ -106,6 +106,18 @@ describe("the lantern's circle (CLAUDE.md: no boat, fish or evidence outside it)
     expect((poach.frameFor(s, 0) as { b: number[][] }).b.map((x) => x[0])).toContain(1);
     expect(canSee(s, 0, -60 * S, 10 * S)).toBe(true); expect(canSee(s, 0, -10 * S, -40 * S)).toBe(false);
   });
+  it("on a match's own lake (six boats: rule change 11) the circle is that lake's: VIEW x k, and the frame says so", () => {
+    const s = poach.make("fog6", people(6), { ...LAKE, boats: 6 }); toDay(s);
+    expect(s.lake.boats).toBe(6); expect(s.lake.k).toBeGreaterThan(1.2);
+    const view = Q.VIEW * s.lake.k;
+    put(s, 0, 0, 0); step(s);
+    const f = poach.frameFor(s, 0) as { f: number[][]; sight: number[]; lk: { k: number; docks: number[][] } };
+    expect(f.sight[0]).toBeCloseTo(view, 1); expect(f.lk.docks.length).toBe(6);
+    for (const [x, y] of f.f) expect(Math.hypot(x / 10 - s.boats[0].x, y / 10 - s.boats[0].y)).toBeLessThan(view + 0.2);
+    // a fish just past 12 (the four-boat circle) but inside this lake's is seen
+    expect(canSee(s, 0, s.boats[0].x + Q.VIEW + 1, s.boats[0].y)).toBe(true);
+    expect(canSee(s, 0, s.boats[0].x + view + 1, s.boats[0].y)).toBe(false);
+  });
   it("an exiled player, and a watcher, see everything", () => {
     const s = make("ghost", 4); toDay(s); s.out[1] = true;
     expect((poach.frameFor(s, 1) as { f: unknown[] }).f.length).toBe(s.fish.length);

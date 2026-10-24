@@ -577,3 +577,14 @@ body.play.in-room { overflow: hidden; }
 @media (max-width: 640px) { .y2-pick { width: 72px; height: 72px; } .y2-art { width: min(240px, 100%); } .y2-intro { gap: 8px; } }
 .y2-fog { position: absolute; inset: 0; z-index: 2; pointer-events: none; background: rgba(6,8,20,.82); -webkit-mask-composite: source-in; mask-composite: intersect; }
 .y2-fog[hidden] { display: none; }
+
+/* the camera's own controls (rule change 11): zoom, turn, the whole lake; a small column on the left edge,
+   above the stick's side of the screen and clear of the pads (P7) */
+.camctl { position: absolute; z-index: 5; left: max(10px, env(safe-area-inset-left, 0px)); top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 6px; }
+.camctl[hidden] { display: none; }
+.camctl button { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: rgba(18,14,24,.62); color: var(--paper); font-size: 20px; line-height: 1; padding: 0; cursor: pointer; }
+.camctl button[aria-pressed="true"] { background: var(--gold); color: var(--ink); }
+.tag3d.home { font-weight: 800; background: var(--c, #ffd34d); color: #120e18; }
+@media (max-height: 500px) and (orientation: landscape) { .camctl { top: auto; bottom: 12px; transform: none; flex-direction: row; left: 50%; transform: translateX(-50%); } }
+/* on a laptop the camera's buttons sit in the bottom-left corner, away from the lake's west shore */
+@media (min-width: 861px) { .camctl { top: auto; transform: none; bottom: max(22px, env(safe-area-inset-bottom, 0px)); flex-direction: row; } }

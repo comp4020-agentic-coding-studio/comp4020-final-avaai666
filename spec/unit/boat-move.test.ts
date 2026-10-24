@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { botStream, type Seat } from "../../src/lib/game-platform.ts";
 import { POACH, RUSH } from "../../src/lib/game-constants.ts";
 import { blockedAt, BAYS, ISLAND, nr, WORLD_SCALE, ZONES } from "../../src/lib/lake-world.ts";
-import { inWater, keepOnWater, sail, SHORE_K, steer, TARGET_K } from "../../src/lib/modes/boat-move.ts";
+import { inWater, keepOnWater, sail, SHORE_K, steer } from "../../src/lib/modes/boat-move.ts";
 import { party } from "../../src/lib/modes/party.ts";
 import { poach, TASKS } from "../../src/lib/modes/poach.ts";
 import { makeWithOpts, rush } from "../../src/lib/modes/rush.ts";
@@ -12,30 +12,49 @@ import { makeWithOpts, rush } from "../../src/lib/modes/rush.ts";
 // steered at the shore lost 30% of its speed on every tick it touched it (1.65 of 15 at the shore,
 // 3.2 along it), and on the 0.7 lake every place the modes named in the prototype's units was left
 // where it was, some of it past the new shore. These tests hold both.
+// Rule change 11 (Ava, 24 Oct: "the boat spins on the spot"): the first fix moved a target past the shore
+// in towards the middle of the lake, which put it beside or behind a boat at the shore, so a boat held
+// towards the shore turned round and round (230 degrees in 6 s held north, rush's sim). A target is now
+// left where it is and the shore is a wall the boat slides along.
 
 const boat = (x: number, y: number, h: number, tx: number, ty: number) => ({ x, y, h, speed: 0, tx, ty });
 
 describe("sailing (boat-move.ts)", () => {
-  it("a target past the shore or on the island is moved to open water", () => {
-    const [x, y] = inWater(500, 20);
-    expect(nr(x, y)).toBeLessThanOrEqual(TARGET_K + 1e-9);
+  it("a target on the island is moved off it; any other target, past the shore too, is left where it is", () => {
+    expect(inWater(500, 20)).toEqual([500, 20]);
     const [ix, iy] = inWater(ISLAND.x, ISLAND.y + 0.5);
     expect(Math.hypot(ix - ISLAND.x, iy - ISLAND.y)).toBeGreaterThan(ISLAND.r);
-    expect(inWater(1, 2)).toEqual([1, 2]); // open water is left alone
+    expect(inWater(1, 2)).toEqual([1, 2]);
   });
 
-  it("steered at the shore, a boat reaches it and slides along it at more than half its speed", () => {
-    // near the east shore, heading north, the stick held north-east (the client's target: 12 ahead)
-    const b = boat(40, 0, -Math.PI / 2, 0, 0);
+  it("steered along and into the south shore, a boat slides west along it at more than half its speed", () => {
+    // by the south shore, the stick held west and a little south, into the shore (the client's target: 12 ahead)
+    const b = boat(0, 28, Math.PI, 0, 0);
     let along = 0, atShore = 0, speedAtShore = 0;
     for (let t = 0; t < 4; t += RUSH.DT) {
-      b.tx = b.x + 12 * Math.SQRT1_2; b.ty = b.y - 12 * Math.SQRT1_2;
-      const y0 = b.y; sail(b, RUSH.SPEED, RUSH.DT); along += y0 - b.y;
+      b.tx = b.x - 12 * 0.94; b.ty = b.y + 12 * 0.34;
+      const x0 = b.x; sail(b, RUSH.SPEED, RUSH.DT); along += x0 - b.x;
       if (nr(b.x, b.y) > SHORE_K - 0.01) { atShore++; speedAtShore += b.speed; }
       expect(nr(b.x, b.y)).toBeLessThanOrEqual(SHORE_K + 1e-9);
     }
-    expect(along).toBeGreaterThan(15); // it got somewhere: north along the shore
-    if (atShore) expect(speedAtShore / atShore).toBeGreaterThan(RUSH.SPEED * 0.5);
+    expect(along).toBeGreaterThan(25); // it got somewhere: west along the shore
+    expect(atShore).toBeGreaterThan(0);
+    expect(speedAtShore / atShore).toBeGreaterThan(RUSH.SPEED * 0.5);
+  });
+
+  it("held towards the shore, a boat stops there facing it; it does not turn round (rule change 11)", () => {
+    // seat 0 on the four-boat lake, the stick held north for 6 s, as the page sends it (every 0.15 s, 12 ahead)
+    const seats: Seat[] = [0, 1].map((i) => ({ seat: i, name: `P${i}`, bot: null, character: "mei" }));
+    const s = makeWithOpts("hold-north", seats, { fish: 220 }, {});
+    const b = s.boats[0]; let next = 0, worst = 0;
+    for (let t = 0; t < 6; t += RUSH.DT) {
+      const ins = [];
+      if (t >= next) { next += 0.15; const i = rush.input(s, 0, { k: "steer", x: Math.round(b.x * 10) / 10, y: Math.round((b.y - 12) * 10) / 10 }); if (i) ins.push({ seat: 0, i }); }
+      rush.step(s, ins);
+      if (t > 2) worst = Math.max(worst, Math.abs(Math.atan2(Math.sin(b.h + Math.PI / 2), Math.cos(b.h + Math.PI / 2))));
+    }
+    expect(nr(b.x, b.y)).toBeGreaterThan(0.9); // it crossed to the north shore
+    expect((worst * 180) / Math.PI).toBeLessThan(30); // and kept facing north
   });
 
   it("a boat driven into the shore keeps most of its speed (the prototype kept about a quarter)", () => {

@@ -1,4 +1,4 @@
-# Next Year, No Fish (明年无鱼): design v5.6
+# Next Year, No Fish (明年无鱼): design v5.7
 
 ## What it is
 
@@ -135,11 +135,18 @@ P7. **Thumbs away from the edges.**
 
 ### The world (shared)
 
-- **The lake** is a lobed oval, 46 × 32 units: the prototype's 92 × 64 at
-  half the size, so that the whole lake fits on one screen (rule change 10,
-  Ava, 24 Oct: "four people do not need a lake this big"). Every place,
-  distance and sense below is the prototype's times 0.5 (`WORLD_SCALE` in
-  `lake-world.ts`), unless a mode says otherwise. The radius at angle a is
+- **The lake** is a lobed oval, sized for the match's boats (rule change 11,
+  Ava, 24 Oct: "decide the lake's size by how many people play"): every boat
+  gets the same water, so the lake is the prototype's 92 × 64 times
+  `0.5 × sqrt(boats / 4)`, from 2 to 8 boats: 0.354 for two, 0.5 (46 × 32)
+  for four, 0.612 for six, 0.707 for eight. Bots count: Boat Rush and Fishing
+  Party fill to four boats when bots are on. Every place, distance and sense
+  below is given for the four-boat lake and scales with the match's lake
+  (its `k`, 1 for four boats), unless a mode says otherwise; speeds, nets and
+  the fish do not scale. (Rule change 10 had made one lake of 0.5 for every
+  match.) `lake-world.ts`'s `makeLake(boats)` makes a match's lake; a frame
+  carries its scale and docks (`lk`) and the page scales its scene to it.
+  The radius at angle a is
   `1 + .09 sin(2a+.6) + .06 sin(3a+2.1) + .035 sin(5a+.3)`.
 - **The island** sits at (5, -7.5), radius 3.75, with a pagoda. Boats and
   fish go round it. The deep water around it is the 深潭.
@@ -152,36 +159,53 @@ P7. **Thumbs away from the edges.**
   - four bays: 北湾, 东湾, 南湾, 西湾.
 
   Meeting phrases and labels use these places.
-- **The village** is on the south shore: up to six docks, at 66°, 114°,
-  42°, 138°, 90° and 18°. Each dock has a house that gains a floor for
-  every 18 fish brought home, up to 6.
+- **The homes** are spread round the lake (rule change 11, Ava: "spread
+  everyone round the lake"): one dock and house per boat, at equal angles
+  from due south, each moved (3° at a time) by the least it takes to keep
+  clear of the reeds, the lotus pond and the river mouth: for four boats
+  90°, 177°, 270° and 0°. Seat i has dock i. Each house takes its player's
+  colour and gains a floor for every 18 fish brought home, up to 6. Your own
+  home has a beam of light in your colour, a lantern and a "Your home"
+  label; in Boat Rush an arrow points home when your boat is half full, and
+  in the Rush when you carry fish.
 - **Seasons change the scene:** spring blossom, summer lotus, autumn red
   leaves, winter snow. Each has its own palette and falling particles.
   Winter puts ice on the water where the shore distance is above 0.86,
   except within 7 units of a dock. Boats cannot cross ice; a boat that
   meets it slides along its edge.
 - **Sailing** (`src/lib/modes/boat-move.ts`, shared by Boat Rush, Who's
-  Poaching and Fishing Party; rule change 10): the prototype's steering
-  (turn towards the target, then speed up), with two changes. A steer target
-  past the shore or on the island is first moved to the nearest open water,
-  so a boat steered at the shore goes there and stops. A boat that meets the
-  shore or the island slides along it and keeps 95% of its speed on that
-  tick; the prototype kept 70% on every tick, which left a boat pushed at
-  the shore at about a tenth of its speed (Ava: "my own boat does not do
-  what I tell it").
-- **The camera** shows the whole lake, always (rule change 10). Nothing
-  moves with your boat: on the 0.7 lake a close camera that swung ahead of
-  the boat made it hard to tell where the boat was going.
-  - While you play it is tilted lower, so the lake reads as a place in 3D;
-    boards, meetings and the ceremony look a little more steeply down.
-  - The lake is fitted into the part of the screen the HUD leaves free: the
-    top bar, the pads at the bottom, and on a laptop the HUD's column on the
-    right.
-  - On a phone held upright the camera turns a quarter, so the lake's long
-    east-west side runs up the screen and the village is on the right. Up
-    on the screen (W, the arrow, the stick pushed up) is always away from
+  Poaching and Fishing Party; rule changes 10 and 11): the prototype's
+  steering (turn towards the target, then speed up), with the shore as a
+  wall. A boat heads for its target wherever it is (only a target on the
+  island is moved off it); where it meets the shore, the part of its move
+  that goes out through the shore is taken away, so pushed straight at the
+  shore it stays, and pushed along it, it slides at full speed. The
+  prototype kept 70% of a boat's speed on every tick it touched the shore,
+  which left it at about a tenth of its speed (Ava: "my own boat does not do
+  what I tell it"); rule change 10 then moved a target past the shore in
+  towards the middle, which put it beside or behind a boat at the shore, so
+  a boat held towards the shore turned round and round (Ava: "it spins on
+  the spot"). The page sends the stick's target ten times a second, and
+  draws each boat easing towards where the frames put it, so a late frame
+  slows it a little instead of stopping it and making it jump.
+- **The camera** (rule change 11, Ava: "let people set it themselves, with
+  a good default; the whole map more 3D"):
+  - While you sail it follows your own boat from low down (about 42°), so
+    the lake reads as a place in 3D and your boat stays in the middle. It
+    eases after the boat and does not swing ahead of it (on the 0.7 lake a
+    camera that did made it hard to tell where the boat was going). At the
+    default zoom it shows about 38 units across an upright phone, 56 on one
+    held sideways and 74 on a laptop.
+  - You can change it: the wheel, a pinch or + and - zoom; a button turns it
+    a quarter at a time; a button shows the whole lake instead. The page
+    remembers your choice (in the browser only).
+  - Boards, meetings and the ceremony show the whole lake, fitted into the
+    part of the screen the HUD leaves free (the top bar, the pads, a
+    laptop's HUD column); on a phone held upright it turns a quarter, so the
+    lake's long side runs up the screen.
+  - Up on the screen (W, the arrow, the stick pushed up) is always away from
     the camera, whichever way it faces.
-  - There is no minimap: the whole lake is on the screen.
+  - There is no minimap.
   - The water is calm: no moving light streaks on it (Ava, 24 Oct: they
     were dazzling).
 - **Sound** (sound.js, Web Audio, no files): a calm pentatonic tune on a
@@ -311,18 +335,23 @@ and the match is shown.
   the old lake; with the same fish in a quarter of the water, 45 s seasons
   and a hold of 12 let every bot table fish the lake out, and Ava chose
   30 s seasons, a hold of 8 and a slightly faster boat:
-  docs/checks/balance-lake05-2026-10-24.md);
+  docs/checks/balance-lake05-2026-10-24.md). The hold is 8 for four boats;
+  with fewer boats each carries more, as the lake's fish are the same:
+  8 × 4 / boats, so 11 for three and 16 for two (rule change 11);
 - net radius 4.5, cast 4 units ahead of the bow, cooldown 0.7 s, at most
   6 fish a cast;
 - dash 0.4 s at ×2.4, cooldown 4 s;
-- a ram spills at most 3 fish; shield 3 s; no ram within 8 units of a
-  dock; unloading starts within 5 units of your dock;
+- a ram spills at most 3 fish; shield 3 s; no ram within 11 units of a
+  dock; unloading starts within 6.5 units of your dock and takes 0.33 s a
+  fish (0.1 s until rule change 11: with the homes spread round the lake
+  every school is near a dock, and the trip home no longer held the catch;
+  docs/checks/balance-lake11-2026-10-24.md);
 - the golden carp is worth 5 and lasts 10 s;
 - 8% of adults are big fish worth 2;
 - a chain of 3+ fish within 2.6 s adds 1;
-- a steer target outside the lake is moved to the nearest open water on
-  purpose (boat-move.ts), so a tap near the edge still sails the boat there
-  instead of doing nothing.
+- a steer target outside the lake is accepted (clamped to the lake's box):
+  the boat sails to the shore and slides along it (boat-move.ts), so a tap
+  near the edge still sails the boat there instead of doing nothing.
 
 **Cards** (11): Big Hold, Fast Hull, Wide Net, Quick Hands, Iron Bow and
 Golden Hook (plain); Fine Mesh and Trawl (greedy: they take young fish); Fish
@@ -352,7 +381,8 @@ ending in a meeting of at most 55 s. About 7 minutes.
    A second poacher (at 7 or more) also sees their partner.
 3. **Day**, 70 s, from morning light to dusk:
    - **Your lantern's circle.** You see only within 12 units of your boat
-     (24 on the prototype's lake; rule change 10)
+     on the four-boat lake, scaled with the match's lake (24 on the
+     prototype's lake; rule changes 10 and 11; a frame carries it)
      — the fog. Beyond that, the server does not send boats, fish or dead
      fish. Your own buoy also lights a circle for you.
    - **Tasks.** Each player gets 3 tasks a day at named places, for
@@ -757,6 +787,8 @@ leave Who's Poaching; the variant pick and Muddy Water leave Fishing Party;
 Lake Holdings becomes turn-based; Boat Rush has four seasons of 45 s.
 
 ## Changelog
+
+- v5.7 (24 Oct, session 18): rule change 11 (Ava, after playing v5.6: "the boat spins on the spot; the lake did not change size; I cannot find my home; the 3D was better before"). Sailing: the shore is a wall a boat slides along, and a target past it is no longer moved (that made boats circle). Each match has a lake for its boats (`makeLake(boats)`, the same water per boat), and the homes are spread round it, one per boat; your home has a beam of light, a label and, in Boat Rush, an arrow. The camera follows your boat from low down by default; you can zoom, turn it or show the whole lake. Boat Rush: unloading 0.33 s a fish, a hold of 8 × 4 / boats. Measured in docs/checks/balance-lake11-2026-10-24.md. Ava also approved CC0 3D models (for a later change) and a Monopoly-style Lake Holdings (next).
 
 - v5.6 (24 Oct, session 18): rule change 10, the whole lake on one screen. The lake is the prototype's at 0.5 (46 × 32): every place, distance and sense scales with it (`WORLD_SCALE`), Who's Poaching's lantern is 12 (CLAUDE.md changed with Ava's yes). The camera shows the whole lake always, fitted beside the HUD and turned a quarter on an upright phone; no minimap. Sailing is shared (boat-move.ts): steer targets past the shore are moved onto the water, and a boat slides along the shore instead of sticking. Boat Rush: 30 s seasons (Ava's choice; 45 s fished every lake out), hold 8, speed 16. Fishing Party: boats at 10, the night net waits 2 s. Measured in docs/checks/balance-lake05-2026-10-24.md.
 

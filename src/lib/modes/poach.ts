@@ -18,7 +18,7 @@
 // never reads a bot's mind, so a replay that does not run the bots is exact.
 import { POACH as Q, POACH_MODEL } from "../game-constants.ts";
 import { type GameEvent, type Highlight, type Mode, type Results, type Seat, streamOf } from "../game-platform.ts";
-import { BAYS, dockPos, ISLAND, LAKE_X, LAKE_Y, nextSpring, nr, type PlaceId, placeOf, tierOf, WORLD_SCALE as S, ZONES } from "../lake-world.ts";
+import { type Lake, makeLake, nextSpring, type PlaceId, tierOf } from "../lake-world.ts";
 import { sail } from "./boat-move.ts";
 import { counts, type Fish, moveFish, newFish, NURSERY_FIRST, type School, seedFish, updateSchools } from "./lake-life.ts";
 
@@ -44,17 +44,22 @@ export type PoachInput =
   | { k: "ready" };
 
 // the task spots (the prototype's TASKS): a verb and a named place
-export const TASKS: { id: string; verb: string; place: PlaceId; x: number; y: number }[] = [
+export type TaskSpot = { id: string; verb: string; place: PlaceId; x: number; y: number };
+export function tasksFor(L: Lake): TaskSpot[] {
+  const S = L.scale;
+  return [
   { id: "t1", verb: "net", place: "north", x: -16 * S, y: -42 * S },
-  { id: "t2", verb: "count", place: "reeds", x: ZONES.reeds.x * 0.9, y: ZONES.reeds.y * 0.9 },
-  { id: "t3", verb: "lotus", place: "lotus", x: ZONES.lotus.x * 0.9, y: ZONES.lotus.y * 0.9 },
+  { id: "t2", verb: "count", place: "reeds", x: L.zones.reeds.x * 0.9, y: L.zones.reeds.y * 0.9 },
+  { id: "t3", verb: "lotus", place: "lotus", x: L.zones.lotus.x * 0.9, y: L.zones.lotus.y * 0.9 },
   { id: "t4", verb: "trap", place: "east", x: 60 * S, y: -2 * S },
-  { id: "t5", verb: "sluice", place: "river", x: ZONES.river.x * 0.9, y: ZONES.river.y * 0.9 },
-  { id: "t6", verb: "incense", place: "island", x: ISLAND.x - 2, y: ISLAND.y + ISLAND.r + 4.5 },
+  { id: "t5", verb: "sluice", place: "river", x: L.zones.river.x * 0.9, y: L.zones.river.y * 0.9 },
+  { id: "t6", verb: "incense", place: "island", x: L.island.x - 2, y: L.island.y + L.island.r + 4.5 },
   { id: "t7", verb: "mend", place: "south", x: 2 * S, y: 30 * S },
   { id: "t8", verb: "trap", place: "west", x: -62 * S, y: 8 * S },
   { id: "t9", verb: "net", place: "east", x: 40 * S, y: -30 * S },
-];
+  ];
+}
+export const TASKS = tasksFor(makeLake()); // on the four-boat lake
 
 interface Task { id: string; verb: string; place: PlaceId; x: number; y: number; p: number; done: boolean }
 interface Boat {
@@ -71,6 +76,7 @@ interface Patch { id: number; x: number; y: number; t: number; day: number; by: 
 interface Buoy { owner: number; x: number; y: number; place: PlaceId; day: number; log: { i: number; t: number }[]; last: Record<number, number> }
 interface Said { seat: number; line: Line; at: number }
 export interface PoachSim {
+  lake: Lake;
   tick: number; t: number; phase: Phase; phaseT: number; day: number; season: number;
   n: number; rng: () => number; roles: Role[]; out: boolean[]; bots: boolean[]; ready: boolean[];
   boats: Boat[]; fish: Fish[]; schools: School[]; nextId: number;
@@ -87,12 +93,12 @@ const dist = (a: { x: number; y: number }, b: { x: number; y: number }): number 
 const isIn = (s: PoachSim, seat: number): boolean => seat >= 0 && seat < s.n && !s.out[seat];
 export const health = (s: PoachSim): number => Math.round(((s.fish.length) / Math.max(1, s.start)) * 1000) / 10;
 const alive = (s: PoachSim): Boat[] => s.boats.filter((b) => !s.out[b.seat]);
-const watchersOf = (s: PoachSim, b: Boat): Boat[] => alive(s).filter((o) => o !== b && dist(o, b) < Q.VIEW);
+const watchersOf = (s: PoachSim, b: Boat): Boat[] => alive(s).filter((o) => o !== b && dist(o, b) < Q.VIEW * s.lake.k);
 const dayClock = (s: PoachSim): number => Math.round(s.phaseT * 10) / 10; // seconds into the day
 
 function shuffle<T>(rng: () => number, arr: T[]): T[] { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
-function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number; young?: number }): PoachSim {
+function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number; young?: number; boats?: number }): PoachSim {
   const n = seats.length, rr = streamOf(seed, "roles");
   const roles: Role[] = seats.map(() => "fisher");
   const order = shuffle(rr, seats.map((_, i) => i));
@@ -102,6 +108,7 @@ function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number
     n, rng: streamOf(seed, "lake"), roles, out: seats.map(() => false), bots: seats.map((x) => x.bot !== null), ready: seats.map((x) => x.bot !== null),
     boats: [], fish: [], schools: [], nextId: 1, start: 0, roomFish: lake.fish, patches: [], buoys: [],
     meeting: null, tally: null, exiled: [], nightLoss: [], poacherPath: [], poacherNets: [], winner: null, endReason: null,
+    lake: makeLake(lake.boats), // the lake for this many boats (rule change 11)
   };
   const a0 = lake.adults ?? Math.round(lake.fish * 0.8), y0 = lake.young ?? Math.round(lake.fish * 0.2);
   seedFish(s, a0, y0);
@@ -109,7 +116,7 @@ function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number
   for (let i = 0; i < Q.EXTRA_YOUNG; i++) s.fish.push(newFish(s, null, null, false, NURSERY_FIRST + (i % 4)));
   s.start = s.fish.length;
   for (const seat of seats) {
-    const d = dockPos(seat.seat, n), x = d.x - Math.cos(d.inward) * 2, y = d.y - Math.sin(d.inward) * 2;
+    const d = s.lake.dockPos(seat.seat), x = d.x - Math.cos(d.inward) * 2, y = d.y - Math.sin(d.inward) * 2;
     s.boats.push({
       seat: seat.seat, x, y, h: d.inward + Math.PI, speed: 0, tx: x, ty: y, netCd: 0, fineCd: 0, fry: 0, caught: 0, taskFish: 0, youngKilled: 0, fineCasts: 0,
       tasks: [], buoy: false, insp: null, known: {}, witnessed: {}, saw: [], path: [],
@@ -146,7 +153,7 @@ function input(s: PoachSim, seat: number, raw: unknown): PoachInput | null {
     case "steer": {
       const x = Number(o.x), y = Number(o.y);
       if (!day || !Number.isFinite(x) || !Number.isFinite(y)) return null;
-      return { k: "steer", x: Math.round(Math.max(-LAKE_X, Math.min(LAKE_X, x)) * 10) / 10, y: Math.round(Math.max(-LAKE_Y, Math.min(LAKE_Y, y)) * 10) / 10 };
+      return { k: "steer", x: Math.round(Math.max(-s.lake.x, Math.min(s.lake.x, x)) * 10) / 10, y: Math.round(Math.max(-s.lake.y, Math.min(s.lake.y, y)) * 10) / 10 };
     }
     case "net": case "inspect": case "buoy": case "report": return day ? { k: o.k } : null;
     case "fine": case "dump": return day && poacher ? { k: o.k } : null;
@@ -202,7 +209,7 @@ function apply(s: PoachSim, seat: number, i: PoachInput, ev: GameEvent[]): void 
       n++; if (!f.adult) young++; return false;
     });
     // a fine net in the reeds or the lotus always finds young fish: the nursery
-    if (Math.hypot(x - ZONES.reeds.x, y - ZONES.reeds.y) < ZONES.reeds.r || Math.hypot(x - ZONES.lotus.x, y - ZONES.lotus.y) < ZONES.lotus.r) {
+    if (Math.hypot(x - s.lake.zones.reeds.x, y - s.lake.zones.reeds.y) < s.lake.zones.reeds.r || Math.hypot(x - s.lake.zones.lotus.x, y - s.lake.zones.lotus.y) < s.lake.zones.lotus.r) {
       let extra = Math.min(Q.FINE_MAX - n, Q.NURSERY_EXTRA);
       const order = s.fish.map((f, k) => [k, f.adult ? 1e9 : Math.hypot(f.x - x, f.y - y)] as const).filter((e) => e[1] < 1e9).sort((p, q) => p[1] - q[1]);
       const gone = new Set<number>();
@@ -234,7 +241,7 @@ function apply(s: PoachSim, seat: number, i: PoachInput, ev: GameEvent[]): void 
   }
   if (i.k === "buoy" && !b.buoy) {
     b.buoy = true;
-    s.buoys.push({ owner: seat, x: r1(b.x), y: r1(b.y), place: placeOf(b.x, b.y), day: s.day, log: [], last: {} });
+    s.buoys.push({ owner: seat, x: r1(b.x), y: r1(b.y), place: s.lake.placeOf(b.x, b.y), day: s.day, log: [], last: {} });
     ev.push({ k: "buoy", seat, to: [seat] });
     return;
   }
@@ -249,8 +256,8 @@ const r1 = (v: number): number => Math.round(v * 10) / 10;
 // the seats that can see a point right now (their boat or their buoy within VIEW), plus `also`
 function viewersOf(s: PoachSim, x: number, y: number, also: number): number[] {
   const out = new Set<number>([also]);
-  for (const o of alive(s)) if (Math.hypot(o.x - x, o.y - y) < Q.VIEW) out.add(o.seat);
-  for (const bu of s.buoys) if (bu.day === s.day && Math.hypot(bu.x - x, bu.y - y) < Q.BUOY_VIEW) out.add(bu.owner);
+  for (const o of alive(s)) if (Math.hypot(o.x - x, o.y - y) < (Q.VIEW * s.lake.k)) out.add(o.seat);
+  for (const bu of s.buoys) if (bu.day === s.day && Math.hypot(bu.x - x, bu.y - y) < (Q.BUOY_VIEW * s.lake.k)) out.add(bu.owner);
   for (let k = 0; k < s.n; k++) if (s.out[k]) out.add(k); // the exiled watch everything
   return [...out];
 }
@@ -261,7 +268,7 @@ function moveBoats(s: PoachSim): void {
     if (b.netCd > 0) b.netCd -= dt;
     if (b.fineCd > 0) b.fineCd -= dt;
     // the prototype's steerBoat() (ui.js), shared with rush and party (boat-move.ts)
-    sail(b, Q.SPEED, dt);
+    sail(b, Q.SPEED, dt, s.lake);
   }
 }
 
@@ -301,14 +308,14 @@ function dayTick(s: PoachSim, ev: GameEvent[]): void {
   if (Math.round(s.phaseT / Q.DT) % Math.round(Q.SIGHT_S / Q.DT) === 0) {
     for (const b of alive(s)) {
       b.path.push([r1(b.x), r1(b.y)]);
-      for (const o of alive(s)) if (o !== b && dist(o, b) < Q.VIEW) b.saw.push({ i: o.seat, x: r1(o.x), y: r1(o.y), t: el });
+      for (const o of alive(s)) if (o !== b && dist(o, b) < (Q.VIEW * s.lake.k)) b.saw.push({ i: o.seat, x: r1(o.x), y: r1(o.y), t: el });
       if (s.roles[b.seat] === "poacher") s.poacherPath.push([r1(b.x), r1(b.y)]);
     }
     for (const bu of s.buoys) {
       if (bu.day !== s.day) continue;
-      for (const o of alive(s)) if (Math.hypot(o.x - bu.x, o.y - bu.y) < Q.BUOY_R && (bu.last[o.seat] ?? -99) < el - 8) { bu.last[o.seat] = el; bu.log.push({ i: o.seat, t: el }); }
+      for (const o of alive(s)) if (Math.hypot(o.x - bu.x, o.y - bu.y) < (Q.BUOY_R * s.lake.k) && (bu.last[o.seat] ?? -99) < el - 8) { bu.last[o.seat] = el; bu.log.push({ i: o.seat, t: el }); }
     }
-    for (const p of s.patches) if (p.day === s.day) for (const b of alive(s)) if (!p.seenBy.includes(b.seat) && dist(p, b) < Q.VIEW) p.seenBy.push(b.seat);
+    for (const p of s.patches) if (p.day === s.day) for (const b of alive(s)) if (!p.seenBy.includes(b.seat) && dist(p, b) < (Q.VIEW * s.lake.k)) p.seenBy.push(b.seat);
   }
   if (health(s) < Q.LINE) { endMatch(s, ev, "poacher", "lake"); return; }
   if (s.phaseT >= Q.DAY_S - 1e-9) startMeeting(s, ev, "dusk", null, null);
@@ -316,9 +323,9 @@ function dayTick(s: PoachSim, ev: GameEvent[]): void {
 
 function startDay(s: PoachSim, ev: GameEvent[]): void {
   s.day++; s.phase = "day"; s.phaseT = 0; s.meeting = null; s.tally = null;
-  const spots = shuffle(s.rng, TASKS);
+  const spots = shuffle(s.rng, tasksFor(s.lake));
   for (const b of s.boats) {
-    const d = dockPos(b.seat, s.n);
+    const d = s.lake.dockPos(b.seat);
     b.x = d.x - Math.cos(d.inward) * 2; b.y = d.y - Math.sin(d.inward) * 2; b.h = d.inward + Math.PI; b.tx = b.x; b.ty = b.y; b.speed = 0;
     b.fry = 0; b.buoy = false; b.insp = null; b.saw = []; b.path = []; b.netCd = 0;
     b.fineCd = Q.FINE_FIRST + s.rng() * Q.FINE_FIRST;
@@ -332,7 +339,7 @@ function startMeeting(s: PoachSim, ev: GameEvent[], reason: "dusk" | "report", b
   s.phase = "meeting"; s.phaseT = 0;
   for (const b of s.boats) b.insp = null;
   s.meeting = { n: (s.meeting?.n ?? 0) + 1, reason, by, patch, says: [], votes: s.boats.map(() => undefined), final: s.day >= Q.DAYS };
-  ev.push({ k: "meeting", day: s.day, reason, by, place: patch !== null ? placeOf(s.patches.find((p) => p.id === patch)!.x, s.patches.find((p) => p.id === patch)!.y) : null });
+  ev.push({ k: "meeting", day: s.day, reason, by, place: patch !== null ? s.lake.placeOf(s.patches.find((p) => p.id === patch)!.x, s.patches.find((p) => p.id === patch)!.y) : null });
 }
 function applyMeeting(s: PoachSim, seat: number, i: PoachInput, ev: GameEvent[]): void {
   const m = s.meeting!;
@@ -350,15 +357,15 @@ function applyMeeting(s: PoachSim, seat: number, i: PoachInput, ev: GameEvent[])
   }
 }
 // the place a boat spent most of today
-function mostPlace(b: Boat): PlaceId {
+function mostPlace(s: PoachSim, b: Boat): PlaceId {
   const c: Partial<Record<PlaceId, number>> = {};
-  for (const [x, y] of b.path) { const p = placeOf(x, y); c[p] = (c[p] ?? 0) + 1; }
+  for (const [x, y] of b.path) { const p = s.lake.placeOf(x, y); c[p] = (c[p] ?? 0) + 1; }
   return (Object.entries(c).sort((p, q) => (q[1] as number) - (p[1] as number))[0]?.[0] as PlaceId) ?? "south";
 }
 // a boat this seat saw close to a patch of dead fish, around the time it appeared
 function nearPatches(s: PoachSim, b: Boat): { i: number; place: PlaceId }[] {
   const out: { i: number; place: PlaceId }[] = [];
-  for (const p of s.patches) if (p.day === s.day) for (const w of b.saw) if (w.i !== b.seat && Math.abs(w.t - p.t) < 8 && Math.hypot(w.x - p.x, w.y - p.y) < 14 * S) out.push({ i: w.i, place: placeOf(p.x, p.y) });
+  for (const p of s.patches) if (p.day === s.day) for (const w of b.saw) if (w.i !== b.seat && Math.abs(w.t - p.t) < 8 && Math.hypot(w.x - p.x, w.y - p.y) < 14 * s.lake.scale) out.push({ i: w.i, place: s.lake.placeOf(p.x, p.y) });
   return out;
 }
 // the lines this seat may say: what it knows, or, for the poacher, plausible lies
@@ -367,7 +374,7 @@ export function linesFor(s: PoachSim, seat: number): Line[] {
   const out: Line[] = [];
   const others = alive(s).filter((o) => o.seat !== seat);
   if (s.roles[seat] === "fisher") {
-    out.push({ k: "was", place: mostPlace(b) });
+    out.push({ k: "was", place: mostPlace(s, b) });
     for (const [i, k] of Object.entries(b.known)) if (k.day === s.day) out.push({ k: "insp", i: +i, res: k.res });
     for (const i of Object.keys(b.witnessed)) out.push({ k: "sawnet", i: +i });
     for (const n of nearPatches(s, b).slice(0, 2)) out.push({ k: "saw", i: n.i, place: n.place });
@@ -376,14 +383,14 @@ export function linesFor(s: PoachSim, seat: number): Line[] {
     if (bu && ids.length) out.push({ k: "buoy", place: bu.place, ids });
   } else {
     // the poacher: somewhere away from today's dead fish, and someone who was near them
-    const evPlaces = new Set(s.patches.filter((p) => p.day === s.day).map((p) => placeOf(p.x, p.y)));
-    for (const place of BAYS.map((x) => x.id).filter((id) => !evPlaces.has(id)).slice(0, 2)) out.push({ k: "was", place });
+    const evPlaces = new Set(s.patches.filter((p) => p.day === s.day).map((p) => s.lake.placeOf(p.x, p.y)));
+    for (const place of s.lake.bays.map((x) => x.id).filter((id) => !evPlaces.has(id)).slice(0, 2)) out.push({ k: "was", place });
     // a scapegoat: someone seen near the dead fish, else someone fixed by the day (not a fresh draw per frame)
     const near = nearPatches(s, b).find((x) => s.roles[x.i] !== "poacher");
     const today = s.patches.find((p) => p.day === s.day);
     const fallback = others.filter((o) => s.roles[o.seat] !== "poacher")[(s.day * 7 + seat) % Math.max(1, others.filter((o) => s.roles[o.seat] !== "poacher").length)];
     if (near) out.push({ k: "saw", i: near.i, place: near.place });
-    else if (today && fallback) out.push({ k: "saw", i: fallback.seat, place: placeOf(today.x, today.y) });
+    else if (today && fallback) out.push({ k: "saw", i: fallback.seat, place: s.lake.placeOf(today.x, today.y) });
     if (fallback) out.push({ k: "insp", i: fallback.seat, res: "clean" });
   }
   const seen = new Set<string>();
@@ -462,8 +469,8 @@ const p10 = (v: number): number => Math.round(v * 10);
 export function canSee(s: PoachSim, seat: number, x: number, y: number): boolean {
   if (seat < 0 || s.out[seat] || s.phase === "end") return true; // a watcher, the exiled and the end see everything
   const me = s.boats[seat];
-  if (Math.hypot(me.x - x, me.y - y) < Q.VIEW) return true;
-  return s.buoys.some((bu) => bu.owner === seat && bu.day === s.day && Math.hypot(bu.x - x, bu.y - y) < Q.BUOY_VIEW);
+  if (Math.hypot(me.x - x, me.y - y) < (Q.VIEW * s.lake.k)) return true;
+  return s.buoys.some((bu) => bu.owner === seat && bu.day === s.day && Math.hypot(bu.x - x, bu.y - y) < (Q.BUOY_VIEW * s.lake.k));
 }
 function frameFor(s: PoachSim, seat: number) {
   const ghost = seat < 0 || s.out[seat] === true;
@@ -474,6 +481,8 @@ function frameFor(s: PoachSim, seat: number) {
   const day = s.phase === "day";
   const boatsSeen = s.boats.filter((b) => !s.out[b.seat] && (b.seat === seat || showAll || !day || canSee(s, seat, b.x, b.y)));
   const f: Record<string, unknown> = {
+    lk: s.lake.meta(), // which lake this match has, for the page to draw (rule change 11)
+    sight: [Math.round(Q.VIEW * s.lake.k * 100) / 100, Math.round(Q.BUOY_R * s.lake.k * 100) / 100], // the lantern's circle and a buoy's, on this lake
     phase: s.phase, day: s.day, days: Q.DAYS, left: Math.max(0, Math.ceil(phaseLength(s) - s.phaseT)),
     health: health(s), line: Q.LINE, role, partners, ready: s.ready, out: s.out.map((o, i) => (o ? i : -1)).filter((i) => i >= 0),
     // boats: [seat, x*10, y*10, h*100, inspecting]
@@ -514,7 +523,7 @@ function meetingFor(s: PoachSim, seat: number) {
   for (const w of me?.saw ?? []) last[w.i] = w;
   const reported = m.patch !== null ? s.patches.find((p) => p.id === m.patch) : null;
   return {
-    n: m.n, reason: m.reason, by: m.by, place: reported ? placeOf(reported.x, reported.y) : null, final: m.final,
+    n: m.n, reason: m.reason, by: m.by, place: reported ? s.lake.placeOf(reported.x, reported.y) : null, final: m.final,
     says: m.says.map((x) => ({ seat: x.seat, line: x.line })),
     voted: m.votes.map((v, i) => (v !== undefined ? i : -1)).filter((i) => i >= 0),
     myVote: seat >= 0 ? m.votes[seat] ?? undefined : undefined,
@@ -570,12 +579,12 @@ function bot(s: PoachSim, seat: number, r: () => number): PoachInput[] {
   const steer = (x: number, y: number) => { if (Math.hypot(x - b.tx, y - b.ty) > 1) out.push({ k: "steer", x: r1(x), y: r1(y) }); };
   const el = s.phaseT, fisher = s.roles[seat] === "fisher";
   // fishers: go to dead fish they can see, and report them
-  const p = s.patches.find((x) => x.day === s.day && !x.reported && dist(x, b) < Q.VIEW);
+  const p = s.patches.find((x) => x.day === s.day && !x.reported && dist(x, b) < (Q.VIEW * s.lake.k));
   if (p && fisher) { if (dist(p, b) < Q.REPORT_R - 1) { if (r() < 0.5) return [{ k: "report" }]; } else { steer(p.x, p.y); return out; } }
   if (b.insp) { const tg = s.boats[b.insp.target]; steer(tg.x, tg.y); return out; }
   if (!fisher) {
     const eyes = watchersOf(s, b).length;
-    if (b.fry > 0 && alive(s).some((o) => o !== b && dist(o, b) < 13 * S) && r() < 0.4) return [{ k: "dump" }];
+    if (b.fry > 0 && alive(s).some((o) => o !== b && dist(o, b) < 13 * s.lake.scale) && r() < 0.4) return [{ k: "dump" }];
     if (b.fineCd <= 0 && el > 6 && (eyes === 0 || (eyes === 1 && r() < 0.06))) {
       const nx = b.x + Math.cos(b.h) * Q.NET_AHEAD, ny = b.y + Math.sin(b.h) * Q.NET_AHEAD;
       const nearYoung = s.fish.some((f) => !f.adult && Math.hypot(f.x - nx, f.y - ny) < 7);
@@ -583,8 +592,8 @@ function bot(s: PoachSim, seat: number, r: () => number): PoachInput[] {
     }
     if (b.fineCd <= 3 && !b.mind.hunt) {
       // go where the young fish are and nobody else is
-      const spots: [number, number][] = [[ZONES.reeds.x * 0.75, ZONES.reeds.y * 0.75], [ZONES.reeds.x * 0.65, ZONES.reeds.y * 0.85], [ZONES.lotus.x * 0.75, ZONES.lotus.y * 0.75], waterPoint(r, 0.75)];
-      b.mind.hunt = spots.map((sp) => [sp, alive(s).filter((o) => o !== b && Math.hypot(o.x - sp[0], o.y - sp[1]) < 32 * S).length + r() * 0.5] as const).sort((p2, q) => p2[1] - q[1])[0][0];
+      const spots: [number, number][] = [[s.lake.zones.reeds.x * 0.75, s.lake.zones.reeds.y * 0.75], [s.lake.zones.reeds.x * 0.65, s.lake.zones.reeds.y * 0.85], [s.lake.zones.lotus.x * 0.75, s.lake.zones.lotus.y * 0.75], waterPoint(s, r, 0.75)];
+      b.mind.hunt = spots.map((sp) => [sp, alive(s).filter((o) => o !== b && Math.hypot(o.x - sp[0], o.y - sp[1]) < 32 * s.lake.scale).length + r() * 0.5] as const).sort((p2, q) => p2[1] - q[1])[0][0];
     }
     if (b.mind.hunt) { steer(b.mind.hunt[0], b.mind.hunt[1]); if (Math.hypot(b.mind.hunt[0] - b.x, b.mind.hunt[1] - b.y) < 4 || b.fineCd > 5) b.mind.hunt = null; return out; }
   } else {
@@ -596,15 +605,15 @@ function bot(s: PoachSim, seat: number, r: () => number): PoachInput[] {
   const tk = b.tasks.find((x) => !x.done);
   if (tk) steer(tk.x + ((seat % 3) - 1) * 1.5, tk.y + (seat % 2) * 1.5);
   else {
-    if (!b.mind.wander || Math.hypot(b.mind.wander[0] - b.x, b.mind.wander[1] - b.y) < 4) b.mind.wander = waterPoint(r, 0.8);
+    if (!b.mind.wander || Math.hypot(b.mind.wander[0] - b.x, b.mind.wander[1] - b.y) < 4) b.mind.wander = waterPoint(s, r, 0.8);
     if (b.mind.wander) steer(b.mind.wander[0], b.mind.wander[1]);
   }
   return out;
 }
 // a point on open water from the bot's own stream (never the lake's)
-function waterPoint(r: () => number, maxK: number): [number, number] {
-  for (let k = 0; k < 40; k++) { const x = (r() * 2 - 1) * LAKE_X * 0.96, y = (r() * 2 - 1) * LAKE_Y * 0.94; if (nr(x, y) < maxK && Math.hypot(x - ISLAND.x, y - ISLAND.y) > ISLAND.r + 3.5) return [x, y]; }
-  return [0, 20 * S];
+function waterPoint(s: PoachSim, r: () => number, maxK: number): [number, number] {
+  for (let k = 0; k < 40; k++) { const x = (r() * 2 - 1) * s.lake.x * 0.96, y = (r() * 2 - 1) * s.lake.y * 0.94; if (s.lake.nr(x, y) < maxK && Math.hypot(x - s.lake.island.x, y - s.lake.island.y) > s.lake.island.r + 3.5) return [x, y]; }
+  return [0, 20 * s.lake.scale];
 }
 // how much a bot suspects another boat (the prototype's susOf)
 function suspicion(s: PoachSim, b: Boat, o: Boat, r: () => number): number {
@@ -613,7 +622,7 @@ function suspicion(s: PoachSim, b: Boat, o: Boat, r: () => number): number {
   sc += (b.witnessed[o.seat] ?? 0) * 10;
   const k = b.known[o.seat]; if (k) sc += k.res === "fry" ? 9 : -5;
   sc += nearPatches(s, b).filter((x) => x.i === o.seat).length * 2.6;
-  for (const bu of s.buoys) if (bu.day === s.day) for (const p of s.patches) if (p.day === s.day) for (const l of bu.log) if (l.i === o.seat && Math.abs(l.t - p.t) < 9 && Math.hypot(bu.x - p.x, bu.y - p.y) < 20 * S) sc += 1.6;
+  for (const bu of s.buoys) if (bu.day === s.day) for (const p of s.patches) if (p.day === s.day) for (const l of bu.log) if (l.i === o.seat && Math.abs(l.t - p.t) < 9 && Math.hypot(bu.x - p.x, bu.y - p.y) < 20 * s.lake.scale) sc += 1.6;
   for (const sy of s.meeting?.says ?? []) {
     if (sy.seat === b.seat) continue;
     const w = sy.seat === o.seat ? 0 : 1, l = sy.line;

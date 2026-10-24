@@ -55,20 +55,21 @@ Enforced, by checks that fail if the claim breaks:
   page of the current site renders in both languages
   (`spec/unit/site-pages.test.ts`).
 
-Measured, not enforced, in 300 bot matches per table (the 2.0 modes on the
-half-size lake of rule change 10, `docs/checks/balance-lake05-2026-10-24.md`;
-the old lake's numbers stay in the files named there, the v4 numbers in
-`docs/checks/balance-2026-10-15.md`). These are claims about the modes' own
-bots and seeds, not about people:
-- Boat Rush: no bot kind won over 41% of random-mix tables (keeper 29.9%);
-  all-keeper tables ended Fair or better in 97.7%, all-greedy in 42.3%;
-  all-greedy tables replayed at 80% of their catch ended Fair or better in
-  71.0%.
-- Fishing Party: no shop habit won over 40% (never buy 31.0%); the last net
-  held in 25.3%.
-- Who's Poaching: fishers won 66.0%, and 48.7% if they always skip the vote.
-- Lake Holdings: the greedy bot won 44.3% of random-mix tables, over the 41%
-  target; not yet tuned.
+Measured, not enforced, in 300 bot matches per table (the 2.0 modes, each
+match on the lake for its boats with the homes round it, rule change 11:
+`docs/checks/balance-lake11-2026-10-24.md`; the earlier reports are named
+there, the v4 numbers stay in `docs/checks/balance-2026-10-15.md`). These are
+claims about the modes' own bots and seeds, not about people:
+- Boat Rush, four boats: no bot kind won over 41% of random-mix tables
+  (keeper 26.3%); all-greedy tables ended Lean or No fish in 70.3%, and
+  replayed at 80% of their catch ended Fair or better in 65.0%. With two or
+  three boats (60 matches) the lake was not fished down.
+- Fishing Party, four boats: no shop habit won over 40% (never buy 29.0%);
+  the last net held in 19.0%.
+- Who's Poaching, six boats: fishers won 68.3%, and 50.3% if they always skip
+  the vote.
+- Lake Holdings: the greedy bot won 41.9% of random-mix tables, over the 41%
+  target; the mode is being redesigned.
 
 Judged, by watching people: whether they name the choice untold, change plans
 for others, and want a rematch.

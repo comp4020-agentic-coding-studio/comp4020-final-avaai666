@@ -44,13 +44,29 @@ describe("createWorld5()", () => {
     api.end();
   });
 
-  it("places all six docks on the shore (nr close to 1) and the island is inside the lake", async () => {
+  it("places the page's four docks on the shore (nr close to 1) and the island is inside the lake (rule change 11: a dock per boat)", async () => {
     dom();
     const { createWorld5 } = await importJs("../../src/static/play/world5.js");
     const stage = document.getElementById("stage")!, canvas = document.getElementById("gl5")! as HTMLCanvasElement;
     const api = createWorld5(canvas, stage, worldForPage());
-    expect(api.docks.length).toBe(6);
+    expect(api.docks.length).toBe(4); // the page's lake is the four-boat lake; a match's frame brings its own (setLake)
     for (const d of api.docks) expect(Math.hypot(d.wx, d.wz)).toBeGreaterThan(20); // well out from the centre, on the shore (40 at the prototype's scale; rule change 10: x 0.5)
+    api.end();
+  });
+
+  it("setLake() takes a match's lake from its frame: the scene scales by k, the docks move to the frame's, the island grows (rule change 11)", async () => {
+    dom();
+    const { createWorld5 } = await importJs("../../src/static/play/world5.js");
+    const { makeLake } = await import("../../src/lib/lake-world.ts");
+    const stage = document.getElementById("stage")!, canvas = document.getElementById("gl5")! as HTMLCanvasElement;
+    const api = createWorld5(canvas, stage, worldForPage());
+    const L6 = makeLake(6), r0 = api.island.r;
+    api.setLake(L6.meta());
+    expect(api.docks.length).toBe(6);
+    api.docks.forEach((d: { x: number; z: number }, i: number) => { expect(d.x).toBeCloseTo(L6.docks[i].x, 1); expect(d.z).toBeCloseTo(L6.docks[i].y, 1); });
+    expect(api.island.r).toBeCloseTo(r0 * L6.k, 6);
+    expect(api.shoreShare(L6.docks[0].x, L6.docks[0].y)).toBeCloseTo(1, 1); // the page's shore, scaled, is the match's shore
+    api.setHome(2, "#d6473a", "Your home"); // and your home can be marked on it
     api.end();
   });
 

@@ -98,6 +98,7 @@ export function roomPage(view: RoomView, error?: string, lang: Lang = "en"): str
     <div class="topbar" id="topbar"><a class="mini-seal" href="/play/${esc(view.code)}?stay=1" aria-label="${w("g_back_room")}">${seal}</a><div class="goalclock"><b id="goal">${w(`${view.mode}_hud`)}</b><span id="clock"></span></div><span class="conn" id="conn">${w("g_connecting")}</span><button class="tiny" id="sound" type="button">${w("g_sound_off")}</button>
       <div class="hostmenu" id="hostmenu" hidden><button class="tiny" id="hostbtn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="${w("g_host_menu")}">⋯</button><div class="menu-list" id="hostlist" hidden><button type="button" class="danger" data-stop>${w("g_stop")}</button></div></div></div>
     <button class="hudtoggle" id="hudtoggle" type="button" aria-expanded="false" aria-controls="hud">${w("g_details")}</button>
+    <div class="camctl" id="camctl"${WORLD5_MODES.includes(view.mode) ? "" : " hidden"}><button type="button" id="cam-in" aria-label="${w("cam_in")}" title="${w("cam_in")}">+</button><button type="button" id="cam-out" aria-label="${w("cam_out")}" title="${w("cam_out")}">−</button><button type="button" id="cam-turn" aria-label="${w("cam_turn")}" title="${w("cam_turn")}">↻</button><button type="button" id="cam-whole" aria-label="${w("cam_whole")}" title="${w("cam_whole")}" aria-pressed="false">⛶</button></div>
     <div class="hud" id="hud"></div>
     <p class="coach" id="coach" hidden></p>
     <div class="banner" id="banner" hidden role="status"></div>

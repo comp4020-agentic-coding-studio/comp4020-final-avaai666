@@ -12,6 +12,8 @@
 //
 //   node scripts/balance.ts            all four modes, 300 seeds each
 //   node scripts/balance.ts rush 60    one mode, fewer seeds (a quick look)
+//   node scripts/balance.ts rush 60 2  Boat Rush or Fishing Party with 2 boats (3, 4), on the lake for 2 boats
+//                                      (every match is on its own lake for its boats, as in a room: rule change 11)
 //   BALANCE_SET='{"RUSH":{"NET_R":3}}' node scripts/balance.ts rush 60
 //                                      a parameter sweep: the same matches with these
 //                                      game constants instead; prints, writes no file
@@ -29,6 +31,9 @@ import { DEFAULT_BOT_KINDS, makeWithOpts as rushMakeWithOpts, rush, type RushInp
 // a sweep's numbers, set before any match in this thread (a worker reads the same env)
 const SET: Record<string, Record<string, unknown>> | null = process.env.BALANCE_SET ? JSON.parse(process.env.BALANCE_SET) : null;
 if (SET) for (const [name, v] of Object.entries(SET)) Object.assign(({ RUSH, PARTY, POACH, HOLD } as Record<string, object>)[name], v);
+// how many boats a Boat Rush or Fishing Party match has (the 4th argument; 4 when left out)
+if (isMainThread && process.argv[4]) process.env.BALANCE_BOATS = process.argv[4]; // a worker reads the env
+const BOATS = Math.max(2, Math.min(4, Number(process.env.BALANCE_BOATS ?? 4) || 4));
 
 type Strat = { name: string; shape: (s: any, seat: number, ins: any[], r: () => number) => any[] };
 
@@ -74,7 +79,7 @@ type HoldTable = "all-greedy" | "all-keeper" | "all-steady" | "random mix";
 const HOLD_TABLES: HoldTable[] = ["all-greedy", "all-keeper", "all-steady", "random mix"];
 function playHold(table: HoldTable, seed: number): { kinds: string[]; places: number[]; tier: TierId; next: number; dry: number } {
   const n = 4, seats = seatsOf(n), secret = `balance-hold-${table}-${seed}`;
-  const s = hold.make(secret, seats, { fish: 280, adults: 224, young: 56 });
+  const s = hold.make(secret, seats, { fish: 280, adults: 224, young: 56, boats: seats.length });
   const pickKind = (i: number) => { if (table !== "random mix") return table.slice(4); let x = (seed * 2654435761 + i * 40503) >>> 0; x ^= x << 13; x >>>= 0; x ^= x >>> 17; x ^= x << 5; x >>>= 0; return BOT_KINDS[x % 3]; };
   s.players.forEach((p, i) => { p.kind = pickKind(i); }); // script-only: a real room keeps seat % 3
   for (let tick = 0; !hold.over(s) && tick < 40000; tick++) {
@@ -107,7 +112,7 @@ export function lineup(nStrats: number, seed: number, n: number): number[] {
 function playRotating(mode: any, strats: Strat[], seed: number, n: number): { winners: string[]; sat: string[]; tier?: string; fit?: boolean | null } {
   const seatStrat = lineup(strats.length, seed, n).map((i) => strats[i]);
   const seats = seatsOf(n), secret = `balance-${mode.id}-${seed}`;
-  const s = mode.make(secret, seats, { fish: 280, adults: 224, young: 56 });
+  const s = mode.make(secret, seats, { fish: 280, adults: 224, young: 56, boats: seats.length });
   for (let tick = 0; !mode.over(s) && tick < 40000; tick++) {
     const applied: any[] = [];
     for (const st of seats) {
@@ -127,7 +132,7 @@ function playRotating(mode: any, strats: Strat[], seed: number, n: number): { wi
 function playRush(table: RushTable, seed: number, n: number): { seats: { kind: string; place: number }[]; tier: TierId; altTier: TierId } {
   const seats = seatsOf(n), secret = `balance-rush-${table}-${seed}`;
   const botKinds = kindsFor(table, seed, n);
-  const s = rushMakeWithOpts(secret, seats, { fish: 220 }, { botKinds });
+  const s = rushMakeWithOpts(secret, seats, { fish: 220, boats: seats.length }, { botKinds });
   for (let tick = 0; !rush.over(s) && tick < 20000; tick++) {
     const applied: { seat: number; i: RushInput }[] = [];
     for (const st of seats) {
@@ -143,7 +148,7 @@ function playRush(table: RushTable, seed: number, n: number): { seats: { kind: s
 
 function playPoach(table: Table, seed: number): { fishers: boolean; health: number; day: number; caughtDay: number | null } {
   const n = 6, seats = seatsOf(n), secret = `balance-poach-${table}-${seed}`;
-  const s = poach.make(secret, seats, { fish: 280, adults: 224, young: 56 });
+  const s = poach.make(secret, seats, { fish: 280, adults: 224, young: 56, boats: seats.length });
   for (let tick = 0; !poach.over(s) && tick < 60000; tick++) {
     const applied: { seat: number; i: PoachInput }[] = [];
     for (const st of seats) {
@@ -163,8 +168,8 @@ type Job = { mode: string; seed: number; table?: Table; rushTable?: RushTable; h
 if (!isMainThread) {
   const out: unknown[] = [];
   for (const j of workerData as Job[]) {
-    if (j.mode === "rush") out.push(playRush(j.rushTable!, j.seed, 4));
-    if (j.mode === "party") out.push(playRotating(party, PARTY_STRATS, j.seed, 4));
+    if (j.mode === "rush") out.push(playRush(j.rushTable!, j.seed, BOATS));
+    if (j.mode === "party") out.push(playRotating(party, PARTY_STRATS, j.seed, BOATS));
     if (j.mode === "hold") out.push({ table: j.holdTable, ...playHold(j.holdTable!, j.seed) });
     if (j.mode === "poach") out.push({ table: j.table, ...playPoach(j.table!, j.seed) });
   }
