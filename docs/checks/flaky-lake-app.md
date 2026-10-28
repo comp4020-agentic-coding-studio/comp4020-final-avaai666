@@ -107,6 +107,80 @@ has `testTimeout: 30_000`. In a loaded full run `lake-runner`'s "throwNet
 refusals" took 6.45 s against vitest's 5 s default; alone it takes 2.9-3.9 s.
 No assertion changed.
 
+## A second flake of the same kind: `rules.test.ts`'s 180 s budget, 29 October
+
+Written by Claude in a session fixing five Boat Rush bugs, 29 October 2026.
+`spec/unit/rules.test.ts`'s only test (`"reproduces sim/rules_output.txt
+exactly"`) runs `simulateSeason()` 96 times (2 fine-net counts × 4 rules × 12
+seeds), a CPU-bound pure simulation with no server, timed out against its own
+`180_000` budget in one `pnpm test:unit` run alongside the rest of the `unit`
+project's other files (which `vitest.config.ts` runs with file parallelism
+on, unlike `unit-play`). Real output from that run:
+
+```
+ ❯ |unit| spec/unit/rules.test.ts (1 test | 1 failed) 203870ms
+   ❯ the rules (1)
+     × reproduces sim/rules_output.txt exactly 203868ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| spec/unit/rules.test.ts > the rules > reproduces sim/rules_output.txt exactly
+Error: Test timed out in 180000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ spec/unit/rules.test.ts:15:3
+     13|
+     14| describe("the rules", { timeout: 180_000 }, () => {
+     15|   it("reproduces sim/rules_output.txt exactly", () => {
+       |   ^
+     16|     const lines: string[] = [];
+     17|     for (const k of [2, 4]) {
+
+ Test Files  1 failed | 30 passed (31)
+      Tests  1 passed | 493 passed (494)
+   Start at  04:48:06
+   Duration  250.32s (tests 96%, import 3%, transform 1%)
+```
+
+(The printed assertion summary above read `1 failed | 493 passed`, meaning
+one test file failed; the suite as a whole was otherwise green.) Run alone,
+immediately after, it took 114.6 s, well under its budget:
+
+```
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  04:52:44
+   Duration  114.62s (tests 100%)
+```
+
+Rerunning the full `pnpm test:unit` suite twice more, back to back, both
+passed clean (31 files, 494 and 496 tests respectively; the test count
+differs by two because `spec/unit/rush.test.ts` and
+`spec/unit/play-client.test.ts` gained new tests in the same session).
+
+This is the same class this file already documents for `lake-app.test.ts`'s
+frame-count test: a CPU-bound check sharing the machine with the rest of a
+`pnpm test:unit` run can occasionally run far slower than alone, and
+`rules.test.ts` is explicitly named above (under "What the caught failures
+show") as one of the files whose presence this report already treats as a
+contention source for other tests' timing. The mechanism here is more
+legible than the frame-count flake: `rules.test.ts` is in the `unit` project,
+which (unlike `unit-play`) has no `fileParallelism: false`, so its 96
+simulated seasons run concurrently with whichever other `unit` files vitest
+schedules alongside it on this 8-core machine; enough contention from the
+rest of that project pushed one run from ~115 s past 180 s. This is not a
+bug in `simulateSeason()`, `lake-sim.ts` or the rules model: the printed
+output itself (the `lines` array) is identical between runs, only the
+wall-clock time changes, and the test is deterministic (seeded, no randomness
+outside `sim/lakesim.mjs`'s seeded streams). It is treated as environmental
+for the same reason the frame-count flake is: not reproduced on an otherwise
+idle run (two full reruns both green), and the one failure came on a machine
+that had just finished a different, separately CPU-heavy `pnpm check` run
+moments before.
+
+No code or test changed for this. If it recurs, the fix is almost certainly
+to give `rules.test.ts` its own higher timeout margin or move it beside
+`unit-play`'s non-parallel files, not to touch `simulateSeason()`.
+
 ## A known edge, fixed
 
 Starting a 13th live lake on one server used to answer an unhandled `500`

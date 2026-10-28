@@ -224,6 +224,38 @@ describe("Boat Rush's practice", () => {
   });
 });
 
+describe("Boat Rush's top bar during the market", () => {
+  beforeEach(() => { dom(); });
+
+  it("says 'Market' while the market is open, not the season that just ended", async () => {
+    const rush = await importJs("../../src/static/play/rush.js");
+    const { api } = ui("en");
+    const clocks: [number | null, string][] = [];
+    const apiWithClock = { ...api, setClock: (left: number | null, label: string) => clocks.push([left, label]) };
+    const world = Object.assign(fakeWorld5(), { boats: new Map(), wantDir: () => null });
+    const mode = rush.mount({ world, sound: apiWithClock.sound, ui: apiWithClock, send: () => {}, post: () => {}, view: () => ({ mySeat: 0, seats: [{ name: "Ava", character: "mei" }] }) });
+    const playFrame = { phase: "play", season: 0, left: 1, market: null, n: [], l: [], k: null, f: [], b: [[0, 0, 100, 0, 0, 8, 0, 0, 0, 0, [], 0, 100]] };
+    mode.start(playFrame, { seats: [{ name: "Ava", character: "mei" }] });
+    expect(clocks.at(-1)![1]).toBe(t("en", "r_season_0"));
+    const marketFrame = { ...playFrame, phase: "market", market: { offer: ["bigHold", "fineMesh", "ladder"], closed: false, picks: [undefined] } };
+    mode.frame(marketFrame, []);
+    expect(clocks.at(-1)![1]).toBe(t("en", "r_clock_market")); // not r_season_1 ("Summer"), the season that is next, not now
+    mode.end();
+  });
+});
+
+describe("Boat Rush's hold HUD before the first frame", () => {
+  beforeEach(() => { dom(); });
+
+  it("shows no placeholder count before any frame arrives (not '0 / 12', a hold a four-boat lake never has)", async () => {
+    const rush = await importJs("../../src/static/play/rush.js");
+    const { api } = ui("en");
+    const world = Object.assign(fakeWorld5(), { boats: new Map(), wantDir: () => null });
+    rush.mount({ world, sound: api.sound, ui: api, send: () => {}, post: () => {}, view: () => ({ mySeat: 0, seats: [{ name: "Ava", character: "mei" }] }) });
+    expect(document.getElementById("r-hold")!.textContent).not.toBe("0 / 12");
+  });
+});
+
 describe("Boat Rush's keys", () => {
   beforeEach(() => { dom(); });
   afterEach(() => { vi.useRealTimers(); });

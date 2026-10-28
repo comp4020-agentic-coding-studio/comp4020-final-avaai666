@@ -23,7 +23,7 @@ export function mount({ world, sound, ui, send, view, post }) {
   world.setSteerMode(true);
 
   ui.hud.innerHTML = `
-    <div class="card mine"><div class="row"><div><h4>${t("r_hold")}</h4><div class="big" id="r-hold">0 / 12</div></div><div style="text-align:right"><h4>${t("r_banked")}</h4><div class="big" id="r-bank">0</div></div></div>
+    <div class="card mine"><div class="row"><div><h4>${t("r_hold")}</h4><div class="big" id="r-hold"></div></div><div style="text-align:right"><h4>${t("r_banked")}</h4><div class="big" id="r-bank">0</div></div></div>
       <div class="bar" style="margin-top:6px"><i id="r-holdbar" style="width:0%"></i></div><p class="small" id="r-tip">${t("r_tip")}</p></div>
     <div class="card hide-sm"><h4>${t("r_board")}</h4><div class="board" id="r-board"></div></div>
     <div class="pads dock"><button class="pad" type="button" id="r-cast">${t("r_cast")}<br><small>${t("r_cast_s")}</small></button><button class="pad red" type="button" id="r-dash">${t("r_dash")}</button></div>`;
@@ -120,7 +120,7 @@ export function mount({ world, sound, ui, send, view, post }) {
     const mine = me() !== null ? f.b.find((b) => b[0] === me()) : null;
     // an arrow home when your boat is half full, or in the Rush with fish aboard (DESIGN.md: "an arrow home if you carry fish")
     if (!practice) { const d = mine ? world.docks?.[me()] : null; const go = d && f.phase === "play" && (mine[4] >= mine[5] * 0.5 || (f.left <= 10 && mine[4] > 0)); world.pointAt(go ? d.wx : null, go ? d.wz : null); }
-    ui.setClock(f.left, t(`r_season_${f.season}`));
+    ui.setClock(f.left, f.phase === "market" ? t("r_clock_market") : t(`r_season_${f.season}`));
     ui.goalEl.textContent = t("rush_hud");
     // the last 10 s of a season is the Rush (DESIGN.md): faster music
     if (!practice) sound.music?.(f.phase === "play" && f.left <= 10 ? "rush" : "play");

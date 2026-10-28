@@ -188,12 +188,12 @@ export const RUSH = {
     quickHands: { kind: "plain", castCd: 0.7, name: "Quick Hands", text: "Cast again 30% sooner." },
     ironBow: { kind: "plain", dealt: 1, taken: 1, name: "Iron Bow", text: "Your rams knock out 1 more fish; rams on you, 1 fewer." },
     goldHook: { kind: "plain", koiValue: 8, koiPull: true, name: "Golden Hook", text: "Golden carp are worth 8, and swim toward you." },
-    fineMesh: { kind: "greedy", youngShare: 0.4, name: "Fine Mesh", text: "Your net keeps the young fish too: about +40% catch. They were next year's fish." },
-    trawl: { kind: "greedy", trawl: true, name: "Trawl", text: "While you sail, you scoop up every fish you pass over, young ones included." },
+    fineMesh: { kind: "greedy", name: "Fine Mesh", text: "Your net keeps the young fish too: about +40% catch. They were next year's fish." },
+    trawl: { kind: "greedy", trawl: true, name: "Trawl", text: "While you sail, you scoop up every fish you pass over (unless Let Them Go spares the young ones)." },
     ladder: { kind: "keeper", name: "Fish Ladder", text: "The whole lake breeds 15% better. You get 1 fish for every 8 born." },
-    release: { kind: "keeper", name: "Let Them Go", text: "Young fish in your net go free; each one you spare scores ½ a fish if next year is Fair or better." },
+    release: { kind: "keeper", name: "Let Them Go", text: "Young fish go free from your net and your trawl; each one you spare scores ½ a fish if next year is Fair or better." },
     reeds: { kind: "keeper", name: "Reed Bed", text: "Plant reeds by your dock: 10 more young fish hatch there each time the lake breeds." },
-  } as Record<string, { kind: "plain" | "greedy" | "keeper"; name: string; text: string; hold?: number; speed?: number; net?: number; castCd?: number; dealt?: number; taken?: number; koiValue?: number; koiPull?: boolean; youngShare?: number; trawl?: boolean }>,
+  } as Record<string, { kind: "plain" | "greedy" | "keeper"; name: string; text: string; hold?: number; speed?: number; net?: number; castCd?: number; dealt?: number; taken?: number; koiValue?: number; koiPull?: boolean; trawl?: boolean }>,
   SEATS: { min: 2, max: 4, botFill: 4 },
 } as const;
 export const RUSH_MODEL = "rush 2.2"; // 2.2: the lake at 0.5 (rule change 10)

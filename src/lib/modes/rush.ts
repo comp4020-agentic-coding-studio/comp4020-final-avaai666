@@ -64,7 +64,7 @@ export interface RushSim {
   players: number; bots: boolean[]; botKinds: string[]; rng: () => number;
   boats: Boat[]; fish: Fish[]; nets: Net[]; loose: Loose[]; koi: Koi | null; koiSpawned: number;
   schools: School[];
-  nextId: number; cap: number; market: Market | null; history: SeasonHistory[];
+  nextId: number; market: Market | null; history: SeasonHistory[];
 }
 
 const has = (b: Boat, id: CardId): boolean => b.cards.includes(id);
@@ -97,7 +97,7 @@ function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number
     botKinds: seats.map((_, i) => opts?.botKinds?.[i] ?? DEFAULT_BOT_KINDS[i % 3]),
     rng: streamOf(seed, "lake"),
     boats: [], fish: [], nets: [], loose: [], koi: null, koiSpawned: 0, schools: [],
-    nextId: 1, cap: Math.round(K * 1.3), market: null, history: [],
+    nextId: 1, market: null, history: [],
     lake: makeLake(lake.boats), // the lake for this many boats (rule change 11); the four-boat lake if the room did not say
   };
   const a0 = lake.adults ?? Math.round(lake.fish * 0.8), y0 = lake.young ?? Math.round(lake.fish * 0.2);
@@ -292,7 +292,7 @@ export const DEFAULT_BOT_KINDS = ["steady", "keeper", "greedy"];
 export function botKindOf(i: number): string { return DEFAULT_BOT_KINDS[i % 3]; }
 function startSeason(s: RushSim, ev: GameEvent[]): void {
   s.season = (s.season + 1) as Season; s.phase = "play"; s.phaseT = 0; s.market = null;
-  for (const b of s.boats) { const d = s.lake.dockPos(b.seat); b.x = d.x; b.y = d.y; b.h = d.inward + Math.PI; b.docked = true; b.combo = 0; }
+  for (const b of s.boats) { const d = s.lake.dockPos(b.seat); b.x = d.x; b.y = d.y; b.h = d.inward + Math.PI; b.tx = b.x; b.ty = b.y; b.speed = 0; b.docked = true; b.combo = 0; }
   placeSchools(s, true); // the new season's places (prototype's rNextSeason()), with the fish carried to them
   const [a, y] = counts(s);
   s.history.push({ startA: a, startY: y, caught: 0, young: 0, gongA: 0, gongY: 0, bred: false, bonus: 0, reedsExtra: 0 });
@@ -300,7 +300,7 @@ function startSeason(s: RushSim, ev: GameEvent[]): void {
 }
 
 function moveBoats(s: RushSim, ev: GameEvent[]): void {
-  const dt = Q.DT, rushOn = s.phaseT >= Q.SEASON_S - Q.RUSH_S;
+  const dt = Q.DT;
   for (const b of s.boats) {
     if (b.castCd > 0) b.castCd -= dt;
     if (b.dashCd > 0) b.dashCd -= dt;
@@ -347,13 +347,13 @@ function moveBoats(s: RushSim, ev: GameEvent[]): void {
         ev.push({ k: "bank", seat: b.seat, v, banked: b.banked });
       }
     }
-    void rushOn;
   }
 }
 function trawlPickup(s: RushSim, b: Boat, ev: GameEvent[]): void {
   for (let i = s.fish.length - 1; i >= 0; i--) {
     const f = s.fish[i];
     if (Math.hypot(f.x - b.x, f.y - b.y) > 2.6) continue;
+    if (!f.adult && !takesYoung(b)) continue; // Let Them Go: this one goes free, as closeNets() already lets it
     s.fish.splice(i, 1);
     const val = s.season === 2 ? Q.BIG_MULT : f.big ? Q.BIG_MULT : 1;
     b.hold.push(val); b.stats.caught += val;
@@ -378,7 +378,7 @@ function closeNets(s: RushSim, ev: GameEvent[]): void {
       const dx = f.x - net.x, dy = f.y - net.y, d = Math.hypot(dx, dy);
       if (d > net.r) return true;
       if (!f.adult) {
-        if (takesYoung(b)) { if (room > 0) { room--; n++; youngKilled++; b.hold.push(val * (has(b, "fineMesh") ? 1 : 1)); return false; } full++; return true; }
+        if (takesYoung(b)) { if (room > 0) { room--; n++; youngKilled++; b.hold.push(val); return false; } full++; return true; }
         fry++; // this cast let it go, and the page says so (youngSpared, below, counts each fish once a match)
         if (!((f.sp ?? 0) & (1 << b.seat))) { f.sp = (f.sp ?? 0) | (1 << b.seat); youngSpared++; } f.scare = 0.6; f.sx = dx / (d || 1); f.sy = dy / (d || 1); return true;
       }

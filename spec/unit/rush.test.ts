@@ -373,6 +373,24 @@ describe("the four seasonal twists", () => {
   });
 });
 
+describe("a new season puts a boat back at its dock, steer target included", () => {
+  // bug: startSeason() reset x/y/h but not tx/ty, so a boat kept aiming at
+  // wherever it was last steered the season before, and sailed off on its
+  // own the moment the new season started, untouched
+  it("a boat steered once in spring, then left alone, stays at its dock at the start of every later season", () => {
+    const s = make("season-stale-steer", 2);
+    step(s, [{ seat: 0, i: { k: "steer", x: 20, y: -18 } }]);
+    for (let season = 0; season < RUSH.SEASONS - 1; season++) {
+      skipMarket(s);
+      expect(s.season).toBe(season + 1);
+      const d = dockPos(0, 2);
+      expect(Math.hypot(s.boats[0].x - d.x, s.boats[0].y - d.y)).toBeLessThan(2);
+      until(s, s.t + 3); // three seconds, untouched: a stale steer target used to sail it 35+ units away
+      expect(Math.hypot(s.boats[0].x - d.x, s.boats[0].y - d.y)).toBeLessThan(2);
+    }
+  }, 30000);
+});
+
 // runs a whole match (bots only, so there is always something to catch and
 // something to breed), returning the finished sim
 function playOut(seed: string, n = 4): RushSim {
@@ -682,6 +700,20 @@ describe("boats, unloading and schools, as the prototype (port fidelity)", () =>
     expect(b.speed).toBeLessThan(RUSH.SPEED); // but not there yet
   });
 
+  it("Trawl respects Let Them Go: a boat with both cards does not scoop up a young fish it sails over", () => {
+    const s = make("trawl-release", 1);
+    const b = s.boats[0];
+    b.cards = ["trawl", "release"];
+    clearFish(s);
+    put(s, 0, 0, 0); b.h = 0; b.tx = 40; b.ty = 0; // sail east, fast
+    until(s, s.t + 1); // get up to speed
+    s.schools[0].x = s.schools[0].tx = b.x + 2; s.schools[0].y = s.schools[0].ty = b.y; s.schools[0].vx = s.schools[0].vy = 0; s.schools[0].t = 999;
+    s.fish.push({ id: s.nextId++, x: b.x + 2, y: b.y, h: 0, adult: false, scare: 0, sx: 0, sy: 0, big: false, school: 0, ox: 0, oy: 0, ph: 0 });
+    until(s, s.t + 0.4);
+    expect(b.hold.length).toBe(0); // the young fish went free, as Let Them Go promises
+    expect(s.fish.length).toBe(1); // it is still in the lake
+  });
+
   it("trawl picks up a fish within 2.6 units, not 0.26, about every 0.35 s", () => {
     const s = make("trawl-radius", 1);
     const b = s.boats[0];
@@ -695,6 +727,42 @@ describe("boats, unloading and schools, as the prototype (port fidelity)", () =>
     s.fish.push({ id: s.nextId++, x: b.x + 2, y: b.y, h: 0, adult: true, scare: 0, sx: 0, sy: 0, big: false, school: 0, ox: 0, oy: 0, ph: 0 });
     until(s, s.t + 0.4);
     expect(b.hold.length).toBe(1);
+  });
+});
+
+describe("a boat nobody steers comes to rest at the start of a season (bug fix)", () => {
+  it("a steer target from the season before does not sail an untouched boat away when the next season opens", () => {
+    const s = make("sail-away", 2, 280);
+    // one steer early in spring, far across the lake; nothing after it, ever
+    step(s, [{ seat: 0, i: { k: "steer", x: 20, y: -18 } }]);
+    for (let season = 0; season < RUSH.SEASONS - 1; season++) {
+      until(s, s.t + RUSH.SEASON_S + RUSH.REST_S + 0.01); // into the market
+      for (let seat = 0; seat < s.players; seat++) step(s, [{ seat, i: { k: "pick", id: null } }]);
+      while (s.phase !== "play") step(s); // the reveal, then the new season
+      const d = s.lake.dockPos(0);
+      expect(Math.hypot(s.boats[0].x - d.x, s.boats[0].y - d.y)).toBeLessThan(1); // at the dock, right as the season opens
+      until(s, s.t + 3); // three untouched seconds into the new season
+      expect(Math.hypot(s.boats[0].x - d.x, s.boats[0].y - d.y)).toBeLessThan(2); // still there, not sailed off
+    }
+  }, 30000);
+
+  it("a ram's knockback settles back to rest, not a wander (neither rams() nor its stun touches tx/ty)", () => {
+    const s = make("ram-rest", 2); clearFish(s);
+    put(s, 1, 0, 0); put(s, 0, -2, 0);
+    s.boats[0].tx = 6; s.boats[0].ty = 0;
+    s.boats[1].hold = Array(8).fill(1);
+    step(s, [{ seat: 0, i: { k: "dash" } }]);
+    until(s, s.t + 6); // several seconds, nobody steers seat 1 again
+    expect(Math.hypot(s.boats[1].x, s.boats[1].y)).toBeLessThan(1); // back near where it was, not off wandering
+    expect(s.boats[1].speed).toBeLessThan(0.5);
+  });
+
+  it("winter ice leaves an unsteered boat stopped, not sliding off (ice-stop sets speed and leaves tx/ty alone)", () => {
+    const s = make("ice-rest", 2); s.season = 3;
+    const [fx, fy] = s.lake.shape(200, 0.95); // far from every dock, near the shore
+    put(s, 0, fx, fy);
+    until(s, s.t + 2);
+    expect(Math.hypot(s.boats[0].x - fx, s.boats[0].y - fy)).toBeLessThan(0.1);
   });
 });
 

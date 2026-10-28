@@ -1,4 +1,4 @@
-# Next Year, No Fish (明年无鱼): design v5.10
+# Next Year, No Fish (明年无鱼): design v5.11
 
 ## What it is
 
@@ -376,7 +376,11 @@ and the match is shown.
 **Cards** (11): Big Hold, Fast Hull, Wide Net, Quick Hands, Iron Bow and
 Golden Hook (plain); Fine Mesh and Trawl (greedy: they take young fish); Fish
 Ladder, Let Them Go and Reed Bed (keeper). The wording and numbers are those
-in the prototype's RCARDS.
+in the prototype's RCARDS. Let Them Go spares young fish from a net and from
+Trawl alike (rule change 13, bug fix, 29 Oct): Trawl's drive-over pickup used
+to take every fish regardless of other cards, so a boat holding both scooped
+up young fish its own Let Them Go promised to spare. The card words now say
+this in both languages.
 
 **Bots:** steady, keeper and greedy. These differ in when they go home
 (0.75, 0.6 and 0.95 full) and in what they pick at the market.
@@ -816,6 +820,7 @@ Lake Holdings becomes turn-based; Boat Rush has four seasons of 45 s.
 
 ## Changelog
 
+- v5.11 (29 Oct): rule change 13, bug fix. Trawl's drive-over pickup took every fish it passed over, young ones included, even for a boat that also held Let Them Go — the card's own text said the net lets them go, but the trawl did not ask. Fixed so `trawlPickup()` checks `takesYoung()` as `closeNets()` already does, and the Trawl and Let Them Go cards are reworded in both languages to say so. No balance re-measurement: across the balance harness's four rush tables (all-greedy, all-keeper, all-steady, random mix), 300 seeds each, 1200 matches and 4800 boats total, no boat ever ended a match holding both cards (greedy and keeper bots weight the other kind's cards too low to pick both across a match's three market visits), so the published numbers in README.md and docs/checks/balance-fish-2026-10-25.md are unaffected.
 - v5.10 (25 Oct, session 18): what was left of "the fish flicker", and the music. A fish now never moves faster than it swims (it closed 8% of the gap to its school every tick with no limit: a scared fish came back at 95 a second against its own 4.2), and a new season's schools carry their fish to the season's places instead of leaving them to sprint after. A bot picks its market card from the three cards on the table, as everyone else does (71.5% of the picks the reveal showed were cards nobody had been offered). The music is rebuilt around a village drum, a four-phrase bass and one motif. Re-measured, 300 matches a table: docs/checks/balance-fish-2026-10-25.md. Boat Rush's three targets still hold, with (a) at 56.7% (70.3% before) and (b) at 73.0% (65.0%); README carries the new numbers. spec/unit/boat-move.test.ts's Boat Rush shore share is now the mean of eight tables, not one: the quantity sits at 0.145 either side of this change and one table against a 0.15 line turned on luck (0.139 before, 0.150 after; the eight-table mean, 0.143 and 0.145).
 - v5.9 (25 Oct, session 18): three things Ava found playing rush 2.0. The market's reveal now runs from the moment the market closes, not from the end of its 14 s, so picking early no longer buys a wait in front of a frozen lake. Every fish in a frame carries its own id and the pages follow it by that (`src/static/play/fishview.js`), instead of by its place in the list, which made a catch move every fish after it. A net that lets young fish go says how many slipped through (the `fry` count in its catch event was always 0, so the page never said it). Nothing in the lake's own model changed: the balance of 24 October stands. Three more bugs are measured and written up for Ava to decide on, in the code where they are (a bot picks from a roll of its own instead of the three cards on the table; a fish crosses the lake at up to 20x its own speed after a scare or a new season's school places).
 - v5.8 (24 Oct, session 18): rule change 12, Lake Holdings is Monopoly on the water (Ava: "the land-grab game is not complete and not fun", then "like Monopoly"; model holdings 3.0). 24 squares round the lake: homes at the docks, the Lake Spirit between them, grounds in colour groups to buy; roll and sail, tolls (double for a whole group), haul or build a net or a pond, nets haul and ponds pay after every round, the grounds breed, a dead lake ends the match. Score: coins + grounds + buildings + fish on your grounds, × next spring's tier. holdings 2.0's section moved word for word to docs/design-history/holdings-v2.0.md and its tests are replaced. Boat Rush's rules card says the hold is 8 with four boats (it said 12). The table under "Where each mode stands" now says Fishing Party follows v5.0. Measured in docs/checks/balance-hold3-2026-10-24.md.

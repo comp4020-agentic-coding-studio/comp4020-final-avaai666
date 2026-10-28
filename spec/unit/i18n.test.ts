@@ -39,6 +39,19 @@ describe("the dictionaries", () => {
   });
 });
 
+describe("Trawl and Let Them Go agree with the code (rule change 13, bug fix)", () => {
+  // trawlPickup() in rush.ts was fixed to spare a young fish when the boat also
+  // holds Let Them Go (takesYoung(b)), matching closeNets(). The cards' own
+  // words must say the same thing, in both languages, or the card lies.
+  it("Trawl's text no longer claims it always takes young fish", () => {
+    for (const lang of ["en", "zh"] as const) expect(DICT[lang].r_text_trawl).not.toMatch(/young ones included|小鱼也不放过/);
+  });
+  it("Let Them Go's text covers the trawl too, in both languages", () => {
+    expect(DICT.en.r_text_release).toMatch(/trawl/i);
+    expect(DICT.zh.r_text_release).toMatch(/拖网/);
+  });
+});
+
 describe("the lang cookie", () => {
   it("picks the language; a missing or unknown one gives English", () => {
     expect(langFrom("lang=zh")).toBe("zh");
