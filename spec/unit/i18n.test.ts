@@ -74,7 +74,7 @@ describe("what a player reads", () => {
   it("no key in either language contains course text", () => {
     const hits: string[] = [];
     for (const lang of ["en", "zh"] as const) for (const [k, v] of Object.entries(DICT[lang])) {
-      if (k === "about_p" || k === "readme_en_note" || k === "nav_about" || k === "about_title" || k === "about_h") continue; // the About page IS the README: it may say so
+      if (k === "about_p" || k === "nav_about" || k === "about_title" || k === "about_h") continue; // the About page IS the README: it may say so
       for (const re of BANNED) if (re.test(v)) hits.push(`${lang}.${k}: ${v}`);
     }
     expect(hits).toEqual([]);
@@ -83,9 +83,12 @@ describe("what a player reads", () => {
   it("the About page's own words say what it is without naming tests or the course", () => {
     for (const lang of ["en", "zh"] as const) {
       expect(DICT[lang].about_p).not.toMatch(/COMP|crit|课程|测试|\bcourse\b|\btests?\b/i);
-      expect(DICT[lang].readme_en_note).not.toMatch(/COMP|crit|课程|\bcourse\b/i);
     }
-    expect(DICT.zh.readme_en_note).toBe("README 只有英文版。");
+  });
+
+  it("there is no one-line note that the README is in English: the Chinese page carries its own Chinese About instead (Ava's call, 29 Oct)", () => {
+    expect(DICT.en).not.toHaveProperty("readme_en_note");
+    expect(DICT.zh).not.toHaveProperty("readme_en_note");
   });
 
   it("the footer is the game's own line, the same in both languages, with no year", () => {

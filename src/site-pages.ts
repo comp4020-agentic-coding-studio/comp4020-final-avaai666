@@ -203,10 +203,13 @@ export function noRoomSitePage(lang: Lang, code: string): string {
 
 export function readmeSitePage(lang: Lang, readmeHtml: string): string {
   // the README stays English (the course reads it here); a Chinese page leads with a Chinese summary
-  // and keeps the English text one tap away (Codex review, 24 Oct: the page was almost all English)
+  // and keeps the English text one tap away (Codex review, 24 Oct: the page was almost all English).
+  // The Chinese page carries its own Chinese About and the English text sits behind a plain link, with
+  // no note about the language (Ava's call, 29 Oct: a Chinese page is either fully Chinese or it does
+  // not apologise for being English).
   const article = `<article class="readme" lang="en">${readmeHtml}</article>`;
   const body = lang === "zh"
-    ? `<section class="about-zh" lang="zh"><h1>${esc(t(lang, "about_zh_h"))}</h1>${[1, 2, 3].map((n) => `<p>${esc(t(lang, `about_zh_p${n}`))}</p>`).join("")}<p class="note-en">${esc(t(lang, "readme_en_note"))}</p></section>
+    ? `<section class="about-zh" lang="zh"><h1>${esc(t(lang, "about_zh_h"))}</h1>${[1, 2, 3].map((n) => `<p>${esc(t(lang, `about_zh_p${n}`))}</p>`).join("")}</section>
       <details class="readme-en"><summary class="btn ghost">${esc(t(lang, "about_zh_more"))}</summary>${article}</details>`
     : article;
   return sitePage(lang, { title: t(lang, "about_title"), nav: "about", here: "/readme/", body, head: '<base href="/" />' });
@@ -221,7 +224,7 @@ const ERAS = [
 
 export function makingOfPage(lang: Lang): string {
   const body = `<p class="eyebrow">${esc(t(lang, "making_eyebrow"))}</p><h1>${esc(t(lang, "making_h"))}</h1><p class="lede">${esc(t(lang, "making_p"))}</p>
-    <ol class="timeline" id="earlier">${ERAS.map((e) => `<li class="${e.now ? "now" : ""}"><span class="when">${esc(t(lang, `era${e.n}_when`))}</span><h2 class="h3">${esc(t(lang, `era${e.n}_t`))}</h2><p>${esc(t(lang, `era${e.n}_p`))}</p><p class="why">${esc(t(lang, `era${e.n}_why`))}</p>${e.now ? "" : `<a class="btn ghost small" href="${e.go}">${esc(t(lang, "open_old"))} (${e.go})</a>`}</li>`).join("")}</ol>`;
+    <ol class="timeline" id="earlier">${ERAS.map((e) => `<li class="${e.now ? "now" : ""}"><span class="when">${esc(t(lang, `era${e.n}_when`))}</span><h2 class="h3">${esc(t(lang, `era${e.n}_t`))}</h2><p>${esc(t(lang, `era${e.n}_p`))}</p>${e.now ? "" : `<a class="btn ghost small" href="${e.go}">${esc(t(lang, "open_old"))} (${e.go})</a>`}</li>`).join("")}</ol>`;
   return sitePage(lang, { title: t(lang, "making_title"), nav: "making", here: "/making-of", body });
 }
 

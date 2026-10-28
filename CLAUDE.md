@@ -124,7 +124,8 @@ Scope
   it sends. Every visible word comes from src/lib/i18n.ts. A key missing
   in either language fails a test.
 - README.md stays English (the course reads it at /readme/). A Chinese
-  page may show it with a one-line note that it is in English.
+  page carries its own Chinese About, with the English text sitting behind
+  a plain link, and no note about the language.
 - Test names are English too.
 - The game is full screen on its own page and is never embedded under a page.
   Every other page scrolls. "Stop match" is in the host menu, behind a

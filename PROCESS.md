@@ -157,6 +157,46 @@ landed the same way
 [`9da6314`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/9da6314),
 [`f2d125a`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-avaai666/commit/f2d125a)).
 
+## Moved off the player's pages, 29 October
+
+CLAUDE.md already said player-facing pages carry no course text; three
+places on the live site still broke that rule, found by a sweep for
+"commit", "PROCESS.md", "DESIGN.md", "seeded", "balance-check", the course
+and my own name, run against every player page's rendered HTML in both
+languages (`spec/unit/site-pages.test.ts`'s new describe block).
+
+- `/making-of`'s lede said "The full story, with the commits, is in
+  PROCESS.md" (`making_p`). That sentence is this very file's own pitch to
+  the reader; a player does not need to be told where the commits are. Cut
+  to the second sentence alone: every earlier version still runs, and its
+  lakes are still there.
+- Each of the four `/making-of` eras had a `_why` line that was a design
+  log, not a game page: it named me by name ("it was one game where Ava
+  wanted four"), reported a play test's outcome, or said "Balance-checked
+  by bots over many seeded matches" — a claim about a harness, not something
+  a player standing on the page needs. All four `era*_why` keys are gone
+  from both dictionaries; each era still says what it *was*, in its own
+  `era*_p` line, with no verdict attached. This also closed a wider leak the
+  sweep's test found by accident: every page embeds the *whole* dictionary
+  as boot JSON for the client scripts (`src/site-pages.ts`'s `#boot` script
+  tag), so these four keys were not only visible on `/making-of` — their
+  raw text sat in the HTML source of every page on the site, including the
+  room and the game itself.
+- `/readme/`'s Chinese page opened with a Chinese About, then a yellow
+  banner apologising that the README is English-only (`readme_en_note`),
+  above the collapsed English text. My call: a Chinese page is either fully
+  Chinese or it does not apologise for being English. The note is gone from
+  both dictionaries; the Chinese About stands on its own (it already told a
+  player what the game is, how a room works, and that the lake remembers,
+  in three paragraphs), and the English README sits one tap away with no
+  note about its language. `CLAUDE.md`'s line on this is updated to match:
+  "A Chinese page carries its own Chinese About, with the English text
+  sitting behind a plain link, and no note about the language."
+
+Nothing here is deleted from the project's own record: the commits, the
+play-test findings and the balance numbers are still exactly where they
+belong, in this file and in `docs/checks/`.
+
 ## Corrections that landed in the harness
 
 - Scope belongs to me: the four modes are named in `CLAUDE.md`.

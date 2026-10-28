@@ -108,17 +108,16 @@ describe("the room page", () => {
 });
 
 describe("/readme/ and /making-of", () => {
-  it("/readme/ shows README.md inside the top bar; in Chinese with a one-line note that it is in English", () => {
+  it("/readme/ shows README.md inside the top bar", () => {
     const zh = readmeSitePage("zh", "<h2>What good means here</h2>");
     expect(zh).toContain("<h2>What good means here</h2>");
-    expect(textOf(zh)).toContain(t("zh", "readme_en_note"));
-    expect(textOf(readmeSitePage("en", "<h2>x</h2>"))).not.toContain(t("zh", "readme_en_note"));
   });
 
-  it("/readme/ in Chinese leads with a Chinese summary, and keeps the English README one tap away (Codex review, 24 Oct)", () => {
+  it("/readme/ in Chinese leads with its own Chinese About, with no note that the README is in English, and keeps the English README one tap away (Ava's call, 29 Oct: a Chinese page is either fully Chinese or it does not apologise for being English)", () => {
     const d = doc(readmeSitePage("zh", "<h2>What good means here</h2>"));
     expect(d.querySelector(".about-zh h1")!.textContent).toBe(t("zh", "about_zh_h"));
     expect(d.querySelectorAll(".about-zh p").length).toBeGreaterThanOrEqual(3);
+    expect(d.querySelector(".about-zh .note-en")).toBeNull();
     expect(d.querySelector("details.readme-en article.readme h2")!.textContent).toBe("What good means here");
     expect(doc(readmeSitePage("en", "<h2>x</h2>")).querySelector(".about-zh, details.readme-en")).toBeNull(); // English: the README itself
   });
@@ -134,6 +133,45 @@ describe("/readme/ and /making-of", () => {
     expect(title(notFoundPage("zh"))).toContain("明年无鱼");
     expect(classicNote()).toContain("/making-of");
   });
+});
+
+describe("player-facing pages carry no course text (CLAUDE.md)", () => {
+  // Every term here would surprise a player of a finished game: the course
+  // that assigned it, the designer's name, a commit, a seeded bot match, a
+  // balance check. /readme/'s English article is the README itself, which
+  // the course reads, so it is exempt; its own Chinese About and every
+  // other player page must say none of this. The room page's own fixtures
+  // (above) use "Ava" as an in-game player's chosen display name, which is
+  // not a course reference, so this describe renders the room with a
+  // different name instead of reusing `room`/`lines`.
+  const BANNED: [RegExp, string][] = [
+    [/PROCESS\.md/, "cites PROCESS.md, the agent's own process log"],
+    [/DESIGN\.md/, "cites DESIGN.md, the spec file"],
+    [/\bcommit\b/i, "names a git commit"],
+    [/COMP4020/, "names the course"],
+    [/\bcourse\b/i, "names 'the course'"],
+    [/\bassignment\b/i, "names 'the assignment'"],
+    [/\bcrit\b/i, "names a crit"],
+    [/\bAva\b/, "names the designer by name (not an in-game character)"],
+    [/\bseeded\b/i, "exposes a match's seed as a course-transparency detail"],
+    [/balance-check/i, "names the balance-check harness"],
+  ];
+  const noAvaRoom = { ...room, players: [{ seat: 0, name: "P1", character: "mei" as const }] };
+  const noAvaLines: MatchLine[] = [{ endedAt: Date.UTC(2026, 9, 19, 9, 14), mode: "rush", winner: { kind: "seat", name: "P1", character: "mei", bot: false }, lakeBefore: 220, lakeAfter: 151 }];
+  const PAGES_NO_AVA: [string, (lang: Lang) => string][] = PAGES.map(([path, render]) =>
+    path === "/play/CODE" ? [path, (lang: Lang) => roomSitePage(lang, noAvaRoom, noAvaLines, "https://example.test")] : [path, render],
+  );
+  for (const [path, render] of PAGES_NO_AVA) {
+    it(`${path} says none of: commit, PROCESS.md, DESIGN.md, COMP4020, course, assignment, crit, Ava, seeded, balance-check`, () => {
+      for (const lang of ["en", "zh"] as const) {
+        const html = render(lang);
+        // the README's own English article is the one page allowed to be course material
+        const withoutReadmeArticle = html.replace(/<article class="readme"[\s\S]*?<\/article>/, "");
+        const text = textOf(withoutReadmeArticle);
+        for (const [re, why] of BANNED) expect(text, `${path} (${lang}): ${why}`).not.toMatch(re);
+      }
+    });
+  }
 });
 
 describe("a bot that won is named in the reader's language", () => {
