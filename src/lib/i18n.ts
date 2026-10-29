@@ -65,7 +65,7 @@ const en = {
 
   // ---- making of ----
   making_title: "How it was made", making_eyebrow: "How it was made",
-  making_h: "Four versions, and why each one changed",
+  making_h: "Four versions of this game",
   making_p: "Every earlier version still runs, and its lakes are still there.",
   open_old: "Open this version",
   era1_when: "Sept", era1_t: "Ponds (v0.4)", era1_p: "One tap catches a fish from a shared pond, and the pond regrows.",
@@ -489,7 +489,7 @@ const zh: Record<Key, string> = {
   lobby_tag: "一片共享的湖，四种玩法。",
 
   making_title: "制作过程", making_eyebrow: "制作过程",
-  making_h: "四个版本，以及每次为什么改",
+  making_h: "这个游戏的四个版本",
   making_p: "每个早期版本都还能打开，里面的湖也都还在。",
   open_old: "打开这个版本",
   era1_when: "9 月", era1_t: "池塘（v0.4）", era1_p: "点一下从共享的池塘里捞一条鱼，池塘会长回来。",
