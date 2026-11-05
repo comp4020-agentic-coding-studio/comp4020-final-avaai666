@@ -157,6 +157,7 @@ function bindOverlay() {
 // ---- the stream ----
 let countdownT = 0;
 let practising = new URLSearchParams(location.search).has("practice");
+let inMatch = false; // true from "go" (a match is showing) until the ceremony or showMatchGoneSheet()
 let practiceOn = false;
 // the practice's "Start the real game": the same start the room page's button sends
 async function practiceDone() {
@@ -174,6 +175,7 @@ function showRoom() {
     location.replace(`/play/${code}`); return;
   }
   if (view.state === "end" && view.results) {
+    inMatch = false;
     // a mode may draw its own results screen (the ceremony, DESIGN.md "The ceremony"); the generic
     // podium (resultsHtml) is the fallback for modes not yet rebuilt to it
     sound.music("calm");
@@ -181,6 +183,15 @@ function showRoom() {
     else { overlay.innerHTML = resultsHtml(); bindOverlay(); }
   }
   if (view.state === "play") { /* the countdown or the match */ }
+}
+// D: a server restart marks a running match "interrupted" and the room goes straight back to its
+// lobby with no results. A page that was actually showing that match (it received "go") said so,
+// instead of leaving the last frame on screen with nothing moving (Ava, 29 Oct: "the page cannot
+// move"). A deliberate "Stop match" (note "stopped") still goes straight back to the room: the
+// player who clicked it does not need telling twice.
+function showMatchGoneSheet() {
+  hostMenu.hidden = true; openHost(false);
+  overlay.innerHTML = `<div class="sheet narrow"><h2>${esc(t("g_match_gone_h"))}</h2><p class="lede">${esc(t("g_match_gone_s"))}</p><div class="row"><a class="btn primary" href="/play/${esc(code)}">${esc(t("g_back_room_btn"))}</a></div></div>`;
 }
 function countdown(startedAt, serverNow) {
   const skew = Date.now() - serverNow;
@@ -194,20 +205,47 @@ function countdown(startedAt, serverNow) {
 }
 
 const conn = $("conn");
+// D: a plain network blip resyncs on its own (the EventSource retries, and hub.open() re-sends "room"
+// and, mid-match, "go" with the current frame) so a short "reconnecting…" is enough for that. But a
+// stream down for longer than this says more, since by then a quiet retry has had its chance (Ava, 29
+// Oct: the label said "reconnecting" and the page just stopped)
+const RECONNECT_LONG_MS = 6000;
+let reconnectT = 0, reconnectLong = false;
 function connect() {
   const es = new EventSource(`/play/${code}/events`);
-  es.onopen = () => { conn.textContent = t("g_live"); conn.classList.add("live"); };
-  es.onerror = () => { conn.textContent = t("g_reconnecting"); conn.classList.remove("live"); };
+  es.onopen = () => { conn.textContent = t("g_live"); conn.classList.add("live"); clearTimeout(reconnectT); reconnectT = 0; reconnectLong = false; };
+  es.onerror = () => {
+    conn.classList.remove("live");
+    // the browser retries this on its own (the server's "retry: 1000"), so onerror fires again every
+    // ~1 s while it stays down: once the long-disconnect message is up, later retries must not overwrite
+    // it back to plain "reconnecting…", and the timer itself is armed only on the first one
+    if (reconnectLong) return;
+    conn.textContent = t("g_reconnecting");
+    if (!reconnectT) reconnectT = setTimeout(() => {
+      reconnectLong = true;
+      conn.innerHTML = `${esc(t("g_reconnect_long"))} <button type="button" id="conn-reload">${esc(t("g_reload"))}</button>`;
+      $("conn-reload")?.addEventListener("click", () => location.reload());
+    }, RECONNECT_LONG_MS);
+  };
   es.addEventListener("room", async (e) => {
-    const was = view.mode;
+    const was = view.mode, wasPlaying = inMatch;
     view = JSON.parse(e.data);
     if (was !== view.mode || !modeApi) await loadMode(view.mode);
+    // D: a restart marks a running match "interrupted" (note "interrupted") and the room goes straight
+    // back to its lobby with no results. Say so to a page that was actually showing that match, instead
+    // of leaving the last frame frozen on screen with nothing moving. A deliberate "Stop match" (note
+    // "stopped") still goes straight back to the room via showRoom()'s lobby branch: whoever clicked it
+    // does not need telling twice.
+    if (wasPlaying && view.note === "interrupted") {
+      inMatch = false; clearInterval(countdownT); showMatchGoneSheet(); return;
+    }
     modeApi.room?.(view);
     showRoom();
   });
   es.addEventListener("go", async (e) => {
     sound.music("play");
     const g = JSON.parse(e.data);
+    inMatch = true;
     // a real match: the practice is over, and this page is the plain game page from now on
     if (practising) { practising = false; practiceOn = false; history.replaceState(null, "", location.pathname); }
     await loadMode(view.mode);

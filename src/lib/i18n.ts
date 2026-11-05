@@ -190,7 +190,8 @@ const en = {
   hold_a1: "ROLL", hold_a1s: "Sail 1-6 squares", hold_a2: "BUY", hold_a2s: "A ground nobody owns", hold_a3: "HAUL or BUILD", hold_a3s: "On your own ground: fish, a net or a pond",
 
   // ---- the room's shared HUD, start card and results ----
-  g_connecting: "connecting…", g_live: "live", g_reconnecting: "reconnecting…",
+  g_connecting: "connecting…", g_live: "live", g_reconnecting: "reconnecting…", g_reconnect_long: "still reconnecting — reload the page", g_reload: "Reload",
+  g_match_gone_h: "This match ended", g_match_gone_s: "The server restarted and the match could not go on. Nothing was scored.", g_back_room_btn: "Back to the room",
   g_stop: "Stop match", g_stop_confirm: "Stop this match for everyone? Nothing will be scored.", g_stop_fail: "Could not stop",
   g_sound_on: "Sound: on", g_sound_off: "Sound: off", g_sound: "Sound (music and effects)", g_details: "Details ▾", g_close: "Close ▴",
   g_slow: "Slow down", g_slow_s: "too many inputs a second",
@@ -609,7 +610,8 @@ const zh: Record<Key, string> = {
   party_a1: "先试试", party_a1s: "每回合都能先试，不算分", party_a2: "商店", party_a2s: "第 1-3 回合后 9 秒", party_a3: "选网", party_a3s: "暗中选 3、6 或 10 的网",
   hold_a1: "掷骰子", hold_a1s: "前进 1-6 格", hold_a2: "买下", hold_a2s: "没人要的渔场", hold_a3: "收鱼或建设", hold_a3s: "在自己的渔场：收鱼、渔网或鱼塘",
 
-  g_connecting: "连接中…", g_live: "在线", g_reconnecting: "重新连接中…",
+  g_connecting: "连接中…", g_live: "在线", g_reconnecting: "重新连接中…", g_reconnect_long: "一直连不上——请刷新页面", g_reload: "刷新",
+  g_match_gone_h: "这一局结束了", g_match_gone_s: "服务器重启了，这一局没法继续。没有计分。", g_back_room_btn: "回到房间",
   g_stop: "结束这局", g_stop_confirm: "为所有人结束这一局？不会计分。", g_stop_fail: "没能结束",
   g_sound_on: "声音：开", g_sound_off: "声音：关", g_sound: "声音（音乐和音效）", g_details: "详情 ▾", g_close: "收起 ▴",
   g_slow: "慢一点", g_slow_s: "每秒操作太多了",

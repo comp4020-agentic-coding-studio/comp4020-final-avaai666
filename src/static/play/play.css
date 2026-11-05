@@ -209,8 +209,9 @@ body.play.in-room { overflow: hidden; }
 .goalclock b { font-family: var(--display); font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .goalclock span { margin-left: auto; font-family: var(--display); font-weight: 800; font-size: 20px; font-variant-numeric: tabular-nums; color: var(--gold); }
 .goalclock span.hot { color: #ff7a5a; }
-.conn { font-size: 12px; color: var(--mist); background: var(--panel); border-radius: 999px; padding: 4px 10px; }
+.conn { font-size: 12px; color: var(--mist); background: var(--panel); border-radius: 999px; padding: 4px 10px; display: flex; align-items: center; gap: 8px; }
 .conn.live { color: #8fe0c9; }
+.conn button { border: 1px solid var(--line); background: var(--gold); color: var(--ink); border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 700; }
 .tiny { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 4px 10px; font-size: 12px; }
 .room .hud { top: calc(max(10px, env(safe-area-inset-top, 0px)) + 54px); }
 .coach { position: absolute; z-index: 6; left: 50%; transform: translateX(-50%); bottom: calc(max(14px, env(safe-area-inset-bottom, 0px)) + 86px); margin: 0; padding: 10px 18px; border-radius: 999px; background: var(--gold); color: var(--ink); font-family: var(--display); font-weight: 800; font-size: 17px; box-shadow: 0 6px 24px rgba(0,0,0,.4); animation: bob 1.4s ease-in-out infinite; white-space: nowrap; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis; }
