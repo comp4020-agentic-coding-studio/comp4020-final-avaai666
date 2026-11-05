@@ -18,6 +18,9 @@ export function mount({ world, sound, ui, send, view, post }) {
   const colorOf = (seat) => COLORS[seats?.[seat]?.character] ?? "#f5ead6";
   const nameOf = (seat) => (seat === me() ? t("g_you") : ui.seatName(seats?.[seat]) ?? t("g_boat_n", { n: seat + 1 }));
   const $ = (id) => document.getElementById(id);
+  // the real radius unloading starts at (RUSH.DOCK_R, server-side): drawn on the home ring, not a number
+  // typed into this file (CLAUDE.md: model constants live only on the server)
+  const dockR = JSON.parse(document.getElementById("boot")?.textContent ?? "{}").rushPractice?.dockR ?? 6.5;
 
   world.setCameraMode("follow");
   world.setSteerMode(true);
@@ -115,8 +118,10 @@ export function mount({ world, sound, ui, send, view, post }) {
   }
 
   function hudFrom(f) {
-    // the match's lake (its size and docks, rule change 11) and your home on it
-    if (!practice) { world.setLake?.(f.lk); if (me() !== null) world.setHome?.(me(), colorOf(me()), t("g_your_home")); }
+    // the match's lake (its size and docks, rule change 11) and your home on it, its ring at the real
+    // unloading radius (DOCK_R, from the boot data, scaled to this match's lake), not a fixed picture
+    // (Ava, 29 Oct: "the circle round home is too small -- I get there and it will not unload")
+    if (!practice) { world.setLake?.(f.lk); if (me() !== null) world.setHome?.(me(), colorOf(me()), t("g_your_home"), dockR * (f.lk?.k ?? 1)); }
     const mine = me() !== null ? f.b.find((b) => b[0] === me()) : null;
     // an arrow home when your boat is half full, or in the Rush with fish aboard (DESIGN.md: "an arrow home if you carry fish")
     if (!practice) { const d = mine ? world.docks?.[me()] : null; const go = d && f.phase === "play" && (mine[4] >= mine[5] * 0.5 || (f.left <= 10 && mine[4] > 0)); world.pointAt(go ? d.wx : null, go ? d.wz : null); }

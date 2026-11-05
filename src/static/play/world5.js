@@ -691,19 +691,25 @@ export function createWorld5(canvas, stage, world, opts = {}) {
   // your home (Ava: "I cannot find my own home"): a tall beam of light in your colour over your dock, a
   // lantern, and a label; an arrow at the screen's edge when it is off screen (a mode turns that on)
   const home = { seat: -1, beam: null, tag: null };
-  function setHome(seat, color, label) {
+  const HOME_RING_OUTER = 3.2; // the ring's own geometry, before a mode's ringR scales it
+  // ringR: the real radius a mode's unloading (or other choice) actually starts at, from its own boot
+  // data (DOCK_R for Boat Rush), so the ring on the water tells the truth about where play still works
+  // (it drew at a fixed 3.2 while unloading began at 6.5, twice as far out: Ava, 29 Oct, "the circle round
+  // home is too small -- I get there and it will not unload, the hold stays full")
+  function setHome(seat, color, label, ringR) {
     if (seat === null || seat === undefined || seat < 0 || !DOCKS.length) { if (home.beam) home.beam.visible = false; if (home.tag) home.tag.hidden = true; home.seat = -1; return; }
     const d = DOCKS[seat % DOCKS.length];
     if (!home.beam) {
       home.beam = new THREE.Group();
       const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 1.2, 11, 14, 1, true), new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide }));
-      beam.position.y = 5.5; const lan = makeLantern(1.3); lan.position.y = 4.2; const ring = makeRing(2.2, 3.2); ring.position.y = 0.2;
+      beam.position.y = 5.5; const lan = makeLantern(1.3); lan.position.y = 4.2; const ring = makeRing(2.2, HOME_RING_OUTER); ring.position.y = 0.2;
       home.beam.add(beam, lan, ring); home.beam.userData = { beam, ring }; scene.add(home.beam);
       home.tag = document.createElement("div"); home.tag.className = "tag3d home"; tagsEl?.appendChild(home.tag);
     }
     home.seat = seat; home.beam.visible = true; home.tag.hidden = false;
     home.beam.position.set(d.wx, 0, d.wz);
     home.beam.userData.beam.material.color.set(color ?? "#ffd34d"); home.beam.userData.ring.userData.gold.material.color.set(color ?? "#ffd34d");
+    home.beam.userData.ring.scale.setScalar(ringR ? ringR / HOME_RING_OUTER : 1);
     home.tag.textContent = label ?? ""; home.tag.style.setProperty("--c", color ?? "#ffd34d");
   }
   function updateHome(tt) {

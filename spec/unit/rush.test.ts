@@ -666,6 +666,27 @@ describe("boats, unloading and schools, as the prototype (port fidelity)", () =>
     expect(s.boats[0].hold.length).toBe(2); // exactly one fish gone by UNLOAD_EVERY
   });
 
+  // bug fix: moveBoats() used to reset unloadT to a full UNLOAD_EVERY on every docked transition, so a
+  // boat crossing the dock's edge back and forth (a wave, a tap that lands just inside and out) never
+  // got unloadT down to 0 and so never finished a fish
+  it("a boat bobbing in and out of the dock radius still finishes unloading, not stuck forever", () => {
+    const s = make("unload-bob", 2);
+    const d = dockPos(0, 2);
+    s.boats[0].hold = [1, 1, 1];
+    s.boats[0].docked = false; // starts outside, so the first crossing is a real docked transition
+    let toggle = true;
+    // cross the DOCK_R boundary every 0.15 s (3 ticks), well under UNLOAD_EVERY (0.3 s): a boat that got a
+    // fresh countdown on every re-entry (the old bug) would never hold still inside long enough to finish
+    // even one fish, however long this runs
+    for (let i = 0; i < 400; i++) {
+      const [x, y] = toggle ? [d.x + RUSH.DOCK_R - 0.5, d.y] : [d.x + RUSH.DOCK_R + 0.5, d.y];
+      s.boats[0].x = x; s.boats[0].y = y; s.boats[0].tx = x; s.boats[0].ty = y;
+      if (i % 3 === 0) toggle = !toggle;
+      step(s);
+    }
+    expect(s.boats[0].hold.length).toBe(0); // all three fish unloaded, from accumulated time inside across the bobbing
+  });
+
   it("Wide Net and Fine Mesh each add 2 to a cast's cap", () => {
     const s = make("net-cap"); clearFish(s); put(s, 0, 0, 0);
     // Big Hold too, so the hold (8 since rule change 10, 12 with Big Hold) has room for the 10 (Ava, 24 Oct)

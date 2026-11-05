@@ -70,6 +70,25 @@ describe("createWorld5()", () => {
     api.end();
   });
 
+  // Rule change 14 (Ava, 29 Oct: "the circle round home is too small -- I get there and it will not
+  // unload, the hold stays full"): the ring used to be a fixed 3.2 while unloading started at DOCK_R
+  // (6.5), twice as far out. setHome's fourth argument draws the ring at the real radius a caller gives
+  // it, scaled with the match's lake, not a number baked into this file.
+  it("setHome draws its ring at the radius it is given (DOCK_R from the boot data), not a fixed picture", async () => {
+    dom();
+    const { createWorld5 } = await importJs("../../src/static/play/world5.js");
+    const stage = document.getElementById("stage")!, canvas = document.getElementById("gl5")! as HTMLCanvasElement;
+    const api = createWorld5(canvas, stage, worldForPage());
+    const ringGroupOf = (seat: number) => api.scene.children.find((o: any) => o.position.x === api.docks[seat].wx && o.position.z === api.docks[seat].wz);
+    api.setHome(0, "#d6473a", "Your home", 6.5);
+    const g1 = ringGroupOf(0);
+    const r1 = g1.userData.ring.scale.x;
+    api.setHome(0, "#d6473a", "Your home", 13);
+    const r2 = g1.userData.ring.scale.x;
+    expect(r2).toBeCloseTo(r1 * 2, 5); // twice the radius scales the ring twice as wide
+    api.end();
+  });
+
   it("drawing a boat and setting fish, in every season, does not throw", async () => {
     dom();
     const { createWorld5 } = await importJs("../../src/static/play/world5.js");

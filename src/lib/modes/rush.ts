@@ -335,7 +335,10 @@ function moveBoats(s: RushSim, ev: GameEvent[]): void {
     const d = s.lake.dockPos(b.seat);
     const wasDocked = b.docked;
     b.docked = Math.hypot(b.x - d.x, b.y - d.y) < Q.DOCK_R;
-    if (b.docked && !wasDocked) { b.unloadT = Q.UNLOAD_EVERY; b.tripValue = 0; }
+    // unloadT's own countdown is left running (not reset here): a boat bobbing in and out of DOCK_R used
+    // to get a fresh Q.UNLOAD_EVERY on every re-entry and so never finished unloading a fish (bug fix,
+    // rule change 13 follow-up)
+    if (b.docked && !wasDocked) b.tripValue = 0;
     if (!b.docked && wasDocked && b.tripValue > 0) { b.stats.trips++; b.stats.bestTrip = Math.max(b.stats.bestTrip, b.tripValue); b.tripValue = 0; }
     if (b.docked && b.hold.length) {
       b.unloadT -= dt;
