@@ -24,8 +24,21 @@ export const TURN = 3.2; // radians a second (the prototype's)
 export const SHORE_K = 0.965; // a boat's centre stays within this share of the way to the shore
 export const ISLAND_CLEAR = 2.2; // a boat's centre stays this far off the island's edge (its half-width)
 export const SLIDE = 1; // speed kept on a tick that touches the shore or the island (the prototype: 0.7)
+export const ARRIVE_R = 0.9; // within this of its target, a boat has arrived
+export const REACQUIRE_R = 2; // knocked this far from an arrived target (a ram, the ice), it sets off again
+// a boat starts shedding speed once it is this close to its target, so it lands within ARRIVE_R instead
+// of coasting past (Ava, 29 Oct: "it still changes direction by itself although I have touched nothing"
+// -- the old throttle cut to 0 only inside 0.9 units with no braking at all, so a boat at full speed
+// sailed through, found the target behind it, and circled back, three times in 20 s measured). This sits
+// just under 12, the one distance every client always resends while a player actively steers (world5.js's
+// WASD/stick interval and poach/party/rush's own steer calls all send "12 units ahead of wherever the
+// boat is now", never nearer): an earlier version scaled the window with the boat's own stopping
+// distance, which worked for a single tap but braked a boat the whole time it was being actively steered,
+// since 12 then always fell inside that window too -- it cut a bot's average season speed by nearly half
+// (4.3 of 16, measured) before this fix, not only near a real arrival.
+const BRAKE_WIN = 11.5;
 
-export interface Sailing { x: number; y: number; h: number; speed: number; tx: number; ty: number }
+export interface Sailing { x: number; y: number; h: number; speed: number; tx: number; ty: number; arrived?: boolean; atx?: number; aty?: number }
 
 // the point a boat actually heads for: the target, or, if it is on the island, the nearest water round it
 export function inWater(x: number, y: number, lake: Lake = L4): [number, number] {
@@ -34,18 +47,30 @@ export function inWater(x: number, y: number, lake: Lake = L4): [number, number]
   return [x, y];
 }
 
-// turn towards the target and set the speed; returns nothing, moves nothing
+// turn towards the target and set the speed; returns nothing, moves nothing. Once a boat is within
+// ARRIVE_R of a target it latches "arrived" and holds still and facing that way (rule change 14): it
+// does not re-acquire the same point and chase it again over a tap's jitter or the shore's own slide.
+// Only a new target, or something else moving it past REACQUIRE_R (a ram's knockback, the ice), sets it
+// off again.
 export function steer(b: Sailing, maxSpeed: number, dt: number, lake: Lake = L4): void {
   const [gx, gy] = inWater(b.tx, b.ty, lake);
+  if (b.atx !== gx || b.aty !== gy) { b.arrived = false; b.atx = gx; b.aty = gy; }
   const dx = gx - b.x, dy = gy - b.y, d = Math.hypot(dx, dy);
-  let throttle = 0;
-  if (d > 0.9) {
+  if (d <= ARRIVE_R) b.arrived = true;
+  else if (d > REACQUIRE_R) b.arrived = false;
+  let target = 0;
+  if (!b.arrived) {
     const want = Math.atan2(dy, dx), diff = Math.atan2(Math.sin(want - b.h), Math.cos(want - b.h));
     b.h += Math.sign(diff) * Math.min(Math.abs(diff), dt * TURN);
-    throttle = Math.min(1, d / 4) * Math.max(0.25, Math.cos(Math.min(1.4, Math.abs(diff))));
+    const cruise = d > BRAKE_WIN ? maxSpeed : maxSpeed * Math.max(0, (d - ARRIVE_R) / (BRAKE_WIN - ARRIVE_R));
+    // cos(diff), not clamped at 0: turning away from a close target brakes hard instead of still
+    // pulling forward at a quarter throttle, so the boat pivots rather than arcing wide (Ava: "it
+    // comes about with great difficulty")
+    target = cruise * Math.cos(diff);
   }
   const R = lake.zones.reeds, inReeds = Math.hypot(b.x - R.x, b.y - R.y) < R.r && lake.nr(b.x, b.y) > 0.6;
-  b.speed += (maxSpeed * throttle * (inReeds ? REED_SLOW : 1) - b.speed) * Math.min(1, dt * 2.6);
+  b.speed += (target * (inReeds ? REED_SLOW : 1) - b.speed) * Math.min(1, dt * 2.6);
+  if (b.speed < 0) b.speed = 0; // a boat does not go backwards
 }
 
 // the shore's outward direction at (x, y): the way nr() grows fastest

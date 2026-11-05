@@ -85,6 +85,44 @@ describe("sailing (boat-move.ts)", () => {
     const b = boat(0, 10, 0, 20, 10); steer(b, RUSH.SPEED, RUSH.DT);
     expect([b.x, b.y]).toEqual([0, 10]); expect(b.speed).toBeGreaterThan(0);
   });
+
+  // Rule change 14 (Ava, 29 Oct, playing live: "when I click, the boat turns round with great difficulty,
+  // and when it arrives it still changes direction by itself although I have touched nothing"). steer()
+  // only cut the throttle to 0 inside 0.9 units of the target, with no braking before that: a boat at
+  // full speed coasted straight through, found the target behind it, and circled back (measured: 0.9
+  // units from the tap 20 s later, after wandering up to 2.1 units away and coming back three times).
+  it("after one tap and no further input, a boat comes to rest near the target and stays facing it", () => {
+    const b = boat(0, 0, 0, 20, 0);
+    let maxOvershoot = 0, hAfterArrive: number | null = null, worstDrift = 0;
+    for (let t = 0; t < 20; t += RUSH.DT) {
+      sail(b, RUSH.SPEED, RUSH.DT);
+      if (hAfterArrive === null && Math.hypot(b.x - 20, b.y) < 1) hAfterArrive = b.h;
+      if (hAfterArrive !== null) worstDrift = Math.max(worstDrift, Math.abs(b.h - hAfterArrive));
+      maxOvershoot = Math.max(maxOvershoot, b.x - 20);
+    }
+    expect(Math.hypot(b.x - 20, b.y)).toBeLessThan(1); // at rest within about a unit of the point
+    expect(b.speed).toBeLessThan(0.01);
+    expect(maxOvershoot).toBeLessThan(0.5); // it does not sail well past the point before settling
+    expect((worstDrift * 180) / Math.PI).toBeLessThan(5); // and its heading never changed once arrived
+  });
+
+  // The throttle floor (Math.max(0.25, cos(diff))) kept a boat driving forward at a quarter speed even
+  // while turning away from its own heading, so coming about was a wide, slow arc (Ava: "the boat turns
+  // round with great difficulty"; measured: 0.9 s to come about, carrying 3.3 units further the wrong
+  // way first). Letting the throttle go negative (cos(diff) itself) brakes instead of arcing.
+  it("tapping a point behind the boat turns it about with little wasted distance (not a wide arc)", () => {
+    const b = boat(0, 0, 0, -100, 0); b.speed = RUSH.SPEED; // full speed heading east, target due west
+    let wrongWay = 0, cameAboutAt: number | null = null;
+    for (let t = 0; t < 5; t += RUSH.DT) {
+      const x0 = b.x;
+      sail(b, RUSH.SPEED, RUSH.DT);
+      if (b.x > x0) wrongWay += b.x - x0; // still sailing east (the wrong way) this tick
+      const err = Math.abs(Math.atan2(Math.sin(b.h - Math.PI), Math.cos(b.h - Math.PI)));
+      if (cameAboutAt === null && err < (5 * Math.PI) / 180) cameAboutAt = t;
+    }
+    expect(cameAboutAt).not.toBeNull();
+    expect(wrongWay).toBeLessThan(3.257); // less than the old floor's 3.257 units the wrong way
+  });
 });
 
 describe("every place a mode names is on the lake's open water, at the lake's scale", () => {

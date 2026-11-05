@@ -340,7 +340,10 @@ function moveBoats(s: RushSim, ev: GameEvent[]): void {
     if (b.docked && b.hold.length) {
       b.unloadT -= dt;
       let v = 0;
-      while (b.unloadT <= 0 && b.hold.length) { b.unloadT += Q.UNLOAD_EVERY; v += b.hold.pop()!; }
+      // 1e-9, not a bare 0: dt and UNLOAD_EVERY are tenths that don't divide evenly in float (0.3 - 6 * 0.05
+      // lands at 1.39e-17, not 0), so a bare "<= 0" missed the tick a fish was due and unloading fell
+      // a step behind (exposed by rule change 14's 0.30; 0.33 never hit the same rounding)
+      while (b.unloadT <= 1e-9 && b.hold.length) { b.unloadT += Q.UNLOAD_EVERY; v += b.hold.pop()!; }
       if (v) {
         b.banked += v; b.stats.home += v; b.tripValue += v;
         b.firstScoreAt ??= s.t;

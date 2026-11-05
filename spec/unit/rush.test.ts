@@ -658,7 +658,7 @@ describe("boats, unloading and schools, as the prototype (port fidelity)", () =>
     expect(s.boats[0].hold.length).toBeLessThan(2); // unloading has started
   });
 
-  it("a fish unloads every UNLOAD_EVERY (0.33 s since rule change 11; 0.1 before, not the prototype's 0.12)", () => {
+  it("a fish unloads every UNLOAD_EVERY (0.3 s since rule change 14; 0.33 before that, 0.1 before rule change 11, not the prototype's 0.12)", () => {
     const s = make("unload-rate", 2);
     s.boats[0].hold = [1, 1, 1];
     s.boats[0].unloadT = RUSH.UNLOAD_EVERY; // as if just arrived at the dock (moveBoats sets this on the docked transition)

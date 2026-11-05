@@ -165,7 +165,13 @@ export const RUSH = {
   RAM_R: 3.4, RAM_DROP: 3, STUN: 0.6, SHIELD: 3,
   // rule change 11: unloading takes 0.33 s a fish (0.1 before): with the homes spread round the lake every school
   // is near someone's dock, and the walk home no longer held the catch (docs/checks/balance-lake11-2026-10-24.md)
-  DOCK_R: 6.5, SAFE_R: 11, UNLOAD_EVERY: 0.33, // unloading starts within 6.5 of the dock (prototype's UNLOAD_R); no ram within 11 of a dock
+  // rule change 14, 29 Oct: two rounds of physics fixes (the fish speed on 25 October, then the boat's
+  // steering) made every bot's season more efficient and so gentler on the lake, carrying prompt-17 step
+  // 5's target (a) under its own "most" wording (40.0% at 0.33, measured). unloading is turned back down
+  // to 0.30 (from 0.33) to put the pressure back where Ava tuned it on 24 October, not to invent a new
+  // number: (a) 70.0% and (b) 63.7% at 0.30 sit on the same 70.3%/65.0% the lake had then
+  // (docs/checks/balance-steer-2026-10-29.md, the full sweep against (a), (b) and (c))
+  DOCK_R: 6.5, SAFE_R: 11, UNLOAD_EVERY: 0.3, // unloading starts within 6.5 of the dock (prototype's UNLOAD_R); no ram within 11 of a dock
   PRACTICE_RING: 24 * WS, // the practice's gold ring, this far out from your dock (the prototype's 24)
   LOOSE_S: 8, PICK_R: 2.6,
   KOI_VALUE: 5, KOI_FOR: 10, KOI_STOP: 12, // no golden carp in the last 12 s of a season
