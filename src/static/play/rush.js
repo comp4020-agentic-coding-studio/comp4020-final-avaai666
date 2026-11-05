@@ -119,9 +119,12 @@ export function mount({ world, sound, ui, send, view, post }) {
 
   function hudFrom(f) {
     // the match's lake (its size and docks, rule change 11) and your home on it, its ring at the real
-    // unloading radius (DOCK_R, from the boot data, scaled to this match's lake), not a fixed picture
-    // (Ava, 29 Oct: "the circle round home is too small -- I get there and it will not unload")
-    if (!practice) { world.setLake?.(f.lk); if (me() !== null) world.setHome?.(me(), colorOf(me()), t("g_your_home"), dockR * (f.lk?.k ?? 1)); }
+    // unloading radius (DOCK_R, from the boot data), not a fixed picture (Ava, 29 Oct: "the circle
+    // round home is too small -- I get there and it will not unload"). DOCK_R is flat regardless of
+    // the lake's size (the server's b.docked check in rush.ts never scales it either), so the ring is
+    // not scaled by the lake's k a second time (Ava, 6 Nov: "only this far in will it put the fish
+    // down" -- a 2-boat lake, k=0.708, drew the ring at 4.6 while the server still unloaded at 6.5)
+    if (!practice) { world.setLake?.(f.lk); if (me() !== null) world.setHome?.(me(), colorOf(me()), t("g_your_home"), dockR); }
     const mine = me() !== null ? f.b.find((b) => b[0] === me()) : null;
     // an arrow home when your boat is half full, or in the Rush with fish aboard (DESIGN.md: "an arrow home if you carry fish")
     if (!practice) { const d = mine ? world.docks?.[me()] : null; const go = d && f.phase === "play" && (mine[4] >= mine[5] * 0.5 || (f.left <= 10 && mine[4] > 0)); world.pointAt(go ? d.wx : null, go ? d.wz : null); }

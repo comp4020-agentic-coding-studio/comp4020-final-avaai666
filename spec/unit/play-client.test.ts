@@ -323,6 +323,24 @@ describe("following a fish between frames (fishview.js)", () => {
     expect(drawn[2]).toEqual([-30, 0, 0, 1]); // still itself, still in its own slot
     mode.end();
   });
+
+  // Ava, 6 Nov: "only this far in will it put the fish down -- touching the outer edge of the ring
+  // does nothing." rush.js used to scale the ring's radius by the match's lake-size factor
+  // (f.lk.k), but the server's own b.docked check (rush.ts) never scales RUSH.DOCK_R: on a
+  // two-boat lake (k=0.708) the ring would be drawn well inside where unloading actually starts.
+  // The radius the page draws must equal DOCK_R regardless of the lake's size.
+  it("the home ring's radius is DOCK_R flat, not scaled a second time by the lake's size", async () => {
+    const rush = await importJs("../../src/static/play/rush.js");
+    const { api } = ui("en");
+    const homes: unknown[][] = [];
+    const world = Object.assign(fakeWorld5(), { boats: new Map(), wantDir: () => null, setHome: (...args: unknown[]) => homes.push(args) });
+    const mode = rush.mount({ world, sound: api.sound, ui: api, send: () => {}, post: () => {}, view: () => ({ mySeat: 0, seats: [{ name: "Ava", character: "mei" }] }) });
+    const frame = (k: number) => ({ phase: "play", season: 0, left: 30, market: null, n: [], l: [], k: null, lk: { k }, f: [], b: [[0, 0, 100, 0, 0, 8, 0, 0, 0, 0, [], 0, 100]] });
+    mode.start(frame(1), { seats: [{ name: "Ava", character: "mei" }] }); // the four-boat lake, k = 1
+    mode.frame(frame(0.708), []); // a two-boat lake: k = 0.708, DOCK_R still flat at 6.5
+    expect(homes.at(-1)![3]).toBe(6.5);
+    mode.end();
+  });
 });
 
 // Ava, 25 October: "the music has no fire in it". The tune now rides a drum: this drives sound.js with a

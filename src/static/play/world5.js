@@ -709,7 +709,12 @@ export function createWorld5(canvas, stage, world, opts = {}) {
     home.seat = seat; home.beam.visible = true; home.tag.hidden = false;
     home.beam.position.set(d.wx, 0, d.wz);
     home.beam.userData.beam.material.color.set(color ?? "#ffd34d"); home.beam.userData.ring.userData.gold.material.color.set(color ?? "#ffd34d");
-    home.beam.userData.ring.scale.setScalar(ringR ? ringR / HOME_RING_OUTER : 1);
+    // the gold band's outer edge is HOME_RING_OUTER, but the dark halo round it (what the eye
+    // actually reads as the ring's own edge) is 0.7 units wider still, so the scale is set
+    // against the halo's own outer radius, not the band's: the edge of this circle is a
+    // promise -- inside it, fish go home -- and its real, visible edge must be the one that
+    // keeps it (Ava, 6 Nov: "touching the outer edge of the ring does nothing")
+    home.beam.userData.ring.scale.setScalar(ringR ? ringR / (HOME_RING_OUTER + 0.7) : 1);
     home.tag.textContent = label ?? ""; home.tag.style.setProperty("--c", color ?? "#ffd34d");
   }
   function updateHome(tt) {

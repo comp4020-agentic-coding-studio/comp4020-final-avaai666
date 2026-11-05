@@ -89,6 +89,26 @@ describe("createWorld5()", () => {
     api.end();
   });
 
+  // Ava, 6 Nov: "only this far in will it put the fish down -- touching the outer edge of the
+  // ring does nothing." makeRing's halo (the dark edge the eye actually reads as the ring's
+  // boundary) is 0.7 units wider than the gold band it surrounds; scaling the whole group by
+  // ringR against the band's own radius left the halo's outer edge ringR * 1.21875 out --
+  // about 1.4 units past DOCK_R at ringR=6.5 -- promising unloading somewhere it doesn't
+  // happen yet. The edge of this circle is a promise: inside it, fish go home, so the
+  // halo's own outer edge, not the gold band's, must land on ringR.
+  it("the ring's outer edge (its dark halo, not just the gold band) lands exactly on the radius it is given", async () => {
+    dom();
+    const { createWorld5 } = await importJs("../../src/static/play/world5.js");
+    const stage = document.getElementById("stage")!, canvas = document.getElementById("gl5")! as HTMLCanvasElement;
+    const api = createWorld5(canvas, stage, worldForPage());
+    const ringGroupOf = (seat: number) => api.scene.children.find((o: any) => o.position.x === api.docks[seat].wx && o.position.z === api.docks[seat].wz);
+    api.setHome(0, "#d6473a", "Your home", 6.5);
+    const g = ringGroupOf(0), ring = g.userData.ring;
+    const haloOuter = ring.userData.halo.geometry.parameters.outerRadius * ring.scale.x;
+    expect(haloOuter).toBeCloseTo(6.5, 5);
+    api.end();
+  });
+
   it("drawing a boat and setting fish, in every season, does not throw", async () => {
     dom();
     const { createWorld5 } = await importJs("../../src/static/play/world5.js");
