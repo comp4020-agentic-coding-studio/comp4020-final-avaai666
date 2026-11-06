@@ -44,5 +44,14 @@ reaching home with their catch infinitesimally sooner across a match.
 Both move only a few points, within a 300-match run's own noise, and both stay well clear of the 55%
 revert threshold and of their own "most" wording. `UNLOAD_EVERY` is not touched.
 
+Worth flagging: (a) moved down and (b) moved up, the opposite of what the mechanism itself predicts —
+removing a wait gives every boat strictly more fishing time per trip, which should take more fish and push
+the lake toward emptier (a) up, not down). The seeds are identical before and after, so this is not
+sampling noise; it is attributed to each match being a long, deterministic chain of ticks in which a few
+milliseconds' difference in exactly when a fish banks can flip a steering decision, a market pick, or a
+catch that happens or doesn't a season later, so a tiny, uniformly-applied timing change can still push any
+one seed's outcome either way without implying the lake is systematically fuller or emptier on average. The
+three targets' margins are what was checked, not the sign of the movement.
+
 (c), the no-kind-over-41% target, is unaffected: steady 24.3%, keeper 26.3%, greedy 24.4% (vs. 24.3% /
 27.0% / 24.4% before) — the same kinds, same seeds, no bot-kind advantage introduced.
