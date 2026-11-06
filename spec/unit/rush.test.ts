@@ -729,6 +729,52 @@ describe("boats, unloading and schools, as the prototype (port fidelity)", () =>
     expect(s.boats[0].hold.length).toBe(0); // all three fish unloaded, from accumulated time inside across the bobbing
   });
 
+  // bug fix (rule change 17): unloadT used to count down only while docked, so a boat back from a real
+  // trip (away far longer than UNLOAD_EVERY, so its countdown from the last trip is long expired) still
+  // waited up to another UNLOAD_EVERY after its hull crossed the ring before the first fish banked (Ava,
+  // 6 Nov, after the ring and DOCK_R were already made to agree: "the stern has to be inside too"). The
+  // countdown now runs whenever it is above zero, docked or not, so it is already at (or below) zero by
+  // the time a boat that has been away banks its first fish on the very tick it docks.
+  it("a boat back from a real trip banks its first fish the instant it docks, not up to UNLOAD_EVERY later", () => {
+    const s = make("unload-away", 2);
+    const d = dockPos(0, 2);
+    s.boats[0].hold = [1, 1];
+    s.boats[0].docked = false;
+    s.boats[0].unloadT = RUSH.UNLOAD_EVERY; // left over from the previous trip's unloading
+    // away from the dock for well over UNLOAD_EVERY, as a real trip out and back would be
+    put(s, 0, d.x + 50, d.y);
+    for (let i = 0; i < 40; i++) step(s); // 2 s away: unloadT counts down to 0 and stays there, undocked
+    put(s, 0, d.x, d.y); // the instant the hull reaches home
+    step(s);
+    expect(s.boats[0].docked).toBe(true);
+    expect(s.boats[0].hold.length).toBe(1); // the first fish banked on this very tick, not after another wait
+  });
+
+  // the fix above must not let a boat bank faster than one fish per UNLOAD_EVERY by crossing the edge
+  // repeatedly: time spent away never decrements unloadT below zero (it rests there instead), so leaving
+  // and returning never banks more than the single leftover tick a real arrival gets — it cannot be used,
+  // by bobbing, to stack up extra "free" unloads beyond the plain one-per-UNLOAD_EVERY rate.
+  it("a boat crossing the home edge repeatedly still banks no faster than one fish per UNLOAD_EVERY", () => {
+    const s = make("unload-crossing", 2);
+    const d = dockPos(0, 2);
+    s.boats[0].hold = Array(20).fill(1); // far more fish than the window below could unload at the true rate
+    s.boats[0].docked = false;
+    let toggle = true;
+    const windowS = 2; // real seconds
+    const steps = Math.round(windowS / RUSH.DT);
+    for (let i = 0; i < steps; i++) {
+      // half the time docked, half the time well away, 3 ticks (0.15 s) at a stretch
+      const [x, y] = toggle ? [d.x, d.y] : [d.x + RUSH.DOCK_R + 10, d.y];
+      s.boats[0].x = x; s.boats[0].y = y; s.boats[0].tx = x; s.boats[0].ty = y;
+      if (i % 3 === 0) toggle = !toggle;
+      step(s);
+    }
+    const unloaded = 20 - s.boats[0].hold.length;
+    // at most one fish per UNLOAD_EVERY of real elapsed time (plus the one immediate arrival fish), however
+    // the window was spent crossing in and out -- not the far larger count an unbounded rate would allow
+    expect(unloaded).toBeLessThanOrEqual(Math.ceil(windowS / RUSH.UNLOAD_EVERY) + 1);
+  });
+
   it("Wide Net and Fine Mesh each add 2 to a cast's cap", () => {
     const s = make("net-cap"); clearFish(s); put(s, 0, 0, 0);
     // Big Hold too, so the hold (8 since rule change 10, 12 with Big Hold) has room for the 10 (Ava, 24 Oct)

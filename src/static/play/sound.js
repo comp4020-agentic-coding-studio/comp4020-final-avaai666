@@ -182,5 +182,7 @@ export function createSound(button, words = { on: "Sound: on", off: "Sound: off"
     tick: play((t) => { osc(1800, "square", t, 0.03, 0.002, 0.03); }),
     splash: play((t) => { const n = noise(t, 0.35, 0.18, "bandpass", 1400, 0.8); n.f.frequency.exponentialRampToValueAtTime(400, t + 0.3); }),
     chime: play((t) => { bell(note(3, 1), t, 0.06, 1.6); bell(note(0, 2), t + 0.12, 0.04, 1.8); }),
+    // a boat arriving home (not a catch, not a bank of a fish -- the moment the hull itself reaches the ring)
+    dock: play((t) => { osc(hz(ROOT - 12), "sine", t, 0.1, 0.01, 0.3); bell(note(2, 1), t + 0.02, 0.05, 0.6); }),
   };
 }

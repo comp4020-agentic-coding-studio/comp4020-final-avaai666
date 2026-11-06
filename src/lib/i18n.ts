@@ -257,6 +257,7 @@ const en = {
 
   // ---- Boat Rush 2.0 HUD (DESIGN.md "Boat Rush 开船抢鱼 (2.0)") ----
   r_hold: "Your hold", r_banked: "Banked", r_tip: "Fish aboard are not yours until they are home.", r_board: "Banked at home",
+  r_unloading: "Unloading…",
   r_cast: "CAST", r_cast_s: "hold to widen", r_dash: "DASH",
   r_hold_full: "Hold full!", r_hold_full_b: "Your hold is full", r_hold_full_s: "sail home to your dock",
   r_golden: " golden carp!", r_fry_slip: "{n} fry slipped through", r_empty: "empty",
@@ -673,6 +674,7 @@ const zh: Record<Key, string> = {
   bot_suffix: "{name}（机器人）",
 
   r_hold: "你的船舱", r_banked: "已卸货", r_tip: "船上的鱼运回家才算你的。", r_board: "运回家的鱼",
+  r_unloading: "卸货中…",
   r_cast: "撒网", r_cast_s: "按住撒得更大", r_dash: "冲刺",
   r_hold_full: "船舱满了！", r_hold_full_b: "你的船舱满了", r_hold_full_s: "开回自家码头",
   r_golden: " 金色锦鲤！", r_fry_slip: "{n} 条小鱼漏过去了", r_empty: "空网",

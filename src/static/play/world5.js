@@ -690,7 +690,7 @@ export function createWorld5(canvas, stage, world, opts = {}) {
   }
   // your home (Ava: "I cannot find my own home"): a tall beam of light in your colour over your dock, a
   // lantern, and a label; an arrow at the screen's edge when it is off screen (a mode turns that on)
-  const home = { seat: -1, beam: null, tag: null };
+  const home = { seat: -1, beam: null, tag: null, pulse: 0, ringR: null };
   const HOME_RING_OUTER = 3.2; // the ring's own geometry, before a mode's ringR scales it
   // ringR: the real radius a mode's unloading (or other choice) actually starts at, from its own boot
   // data (DOCK_R for Boat Rush), so the ring on the water tells the truth about where play still works
@@ -714,12 +714,22 @@ export function createWorld5(canvas, stage, world, opts = {}) {
     // against the halo's own outer radius, not the band's: the edge of this circle is a
     // promise -- inside it, fish go home -- and its real, visible edge must be the one that
     // keeps it (Ava, 6 Nov: "touching the outer edge of the ring does nothing")
-    home.beam.userData.ring.scale.setScalar(ringR ? ringR / (HOME_RING_OUTER + 0.7) : 1);
+    home.ringR = ringR; home.beam.userData.ring.scale.setScalar(ringR ? ringR / (HOME_RING_OUTER + 0.7) : 1);
     home.tag.textContent = label ?? ""; home.tag.style.setProperty("--c", color ?? "#ffd34d");
   }
-  function updateHome(tt) {
+  // a one-shot brightening of the home ring, the instant the game tells it a boat has docked
+  // (Ava, 7 Nov, after the unloading countdown was fixed to run while a boat is away: the player
+  // should see the promise kept -- the ring lighting up -- the moment her hull touches it, not
+  // only when the first fish lands a tick or more later)
+  const PULSE_S = 0.6;
+  function pulseHome() { home.pulse = PULSE_S; }
+  function updateHome(dt, tt) {
     if (!home.beam || !home.beam.visible) return;
-    home.beam.userData.beam.material.opacity = 0.2 + Math.sin(tt * 2.4) * 0.07;
+    if (home.pulse > 0) home.pulse = Math.max(0, home.pulse - dt);
+    const pulse = home.pulse > 0 ? home.pulse / PULSE_S : 0;
+    home.beam.userData.beam.material.opacity = 0.2 + Math.sin(tt * 2.4) * 0.07 + pulse * 0.5;
+    home.beam.userData.ring.userData.gold.material.opacity = 1 + pulse * 0.6;
+    home.beam.userData.ring.scale.setScalar((home.ringR ? home.ringR / (HOME_RING_OUTER + 0.7) : 1) * (1 + pulse * 0.12));
     const W = stage.clientWidth, H = stage.clientHeight; pv.set(home.beam.position.x, 9, home.beam.position.z).project(camera);
     const vis = pv.z < 1 && Math.abs(pv.x) < 1.05 && Math.abs(pv.y) < 1.05; home.tag.style.display = vis ? "block" : "none";
     if (vis) home.tag.style.transform = `translate(${(pv.x * 0.5 + 0.5) * W}px, ${(-pv.y * 0.5 + 0.5) * H}px) translate(-50%, -100%)`;
@@ -752,7 +762,7 @@ export function createWorld5(canvas, stage, world, opts = {}) {
     waterU.lanN.value = n;
     for (const d of DOCKS) d.lantern.userData.glow.material.opacity = 0.35 + night * 0.65;
     onFrame(dt, t);
-    updateFx(dt); updateCamera(dt, t); updateParts(dt, cam.x, cam.z, t); updateArrow(t); updateHome(t);
+    updateFx(dt); updateCamera(dt, t); updateParts(dt, cam.x, cam.z, t); updateArrow(t); updateHome(dt, t);
     const W = stage.clientWidth, H = stage.clientHeight;
     for (const b of boats.values()) {
       if (!b.mesh.visible) { b.tag.style.display = "none"; continue; }
@@ -775,7 +785,7 @@ export function createWorld5(canvas, stage, world, opts = {}) {
     setSeason, setNight: (v) => { nightTarget = v; }, setLanterns: (l) => { lanterns = l; },
     setDocks, boat, drawBoat, clearBoats, boats, setFish, setKoi, prop, sweepProps, clearProps,
     ripple, netDrop, floatText, setLabels, screenToSim,
-    setCameraMode, viewSpan, iceBlocks, growHouse, resetHouses, minimapEl: miniEl, setLake, setHome,
+    setCameraMode, viewSpan, iceBlocks, growHouse, resetHouses, minimapEl: miniEl, setLake, setHome, pulseHome,
     shoreShare: nr, onFrame: (f) => { onFrame = f; }, pointAt, wantDir,
     setTap: (f) => { onTap = f; }, setSteerMode: (v) => { steerMode = v; },
     shake(a = 0.3) { shakeA = Math.max(shakeA, a); },

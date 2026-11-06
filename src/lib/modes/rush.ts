@@ -343,8 +343,16 @@ function moveBoats(s: RushSim, ev: GameEvent[]): void {
     // rule change 13 follow-up)
     if (b.docked && !wasDocked) b.tripValue = 0;
     if (!b.docked && wasDocked && b.tripValue > 0) { b.stats.trips++; b.stats.bestTrip = Math.max(b.stats.bestTrip, b.tripValue); b.tripValue = 0; }
+    // the countdown runs whenever it is above zero, docked or not (not just while docked, rule
+    // change 17): a boat has been away for seconds on a real trip, so by the time it reaches home
+    // its countdown is long since expired and the first fish banks the moment its hull reaches the
+    // ring, instead of after up to another UNLOAD_EVERY of waiting at the dock (Ava, 6 Nov, after the
+    // ring and DOCK_R were already made to agree: "the stern has to be inside too"). It is left to
+    // rest at zero rather than running on negative, so a long trip never banks more than one fish on
+    // the first tick back — the bobbing fix above (rule change 13's follow-up) still holds: only one
+    // fish unloads per UNLOAD_EVERY of real time, docked throughout.
+    if (b.unloadT > 0) b.unloadT -= dt;
     if (b.docked && b.hold.length) {
-      b.unloadT -= dt;
       let v = 0;
       // 1e-9, not a bare 0: dt and UNLOAD_EVERY are tenths that don't divide evenly in float (0.3 - 6 * 0.05
       // lands at 1.39e-17, not 0), so a bare "<= 0" missed the tick a fish was due and unloading fell

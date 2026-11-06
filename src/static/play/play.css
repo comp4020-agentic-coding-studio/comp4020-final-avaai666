@@ -111,6 +111,10 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--gold);
 .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .bar { height: 10px; border-radius: 999px; background: rgba(245,234,214,.1); overflow: hidden; }
 .bar > i { display: block; height: 100%; background: var(--jade); border-radius: inherit; transition: width .4s; }
+.r-unloading-tip { display: none; color: var(--gold); font-weight: 700; }
+.card.mine.unloading .r-unloading-tip { display: block; animation: r-unload-pulse 1s ease-in-out infinite; }
+.card.mine.unloading #r-tip { display: none; }
+@keyframes r-unload-pulse { 50% { opacity: .55; } }
 .board { display: grid; gap: 4px; font-size: 13.5px; font-variant-numeric: tabular-nums; }
 .board div { display: flex; justify-content: space-between; gap: 8px; }
 .pads { display: flex; gap: 8px; }

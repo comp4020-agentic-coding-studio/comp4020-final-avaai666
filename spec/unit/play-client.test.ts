@@ -364,6 +364,51 @@ describe("following a fish between frames (fishview.js)", () => {
     expect(homes.at(-1)![3]).toBeCloseTo(8 - 2.5, 5);
     mode.end();
   });
+
+  // rule change 17's cue: the moment b.docked turns true (FLAG.DOCKED, rush.ts's b[6] bit 8) with fish
+  // aboard, the player should see and hear it land at once -- the ring pulses, the dock sound plays once
+  // (not every frame she stays docked), and the hold panel says "Unloading" -- so the promise is kept
+  // visibly the instant her hull reaches the ring, not only when the first fish float-text appears.
+  it("docking plays the cue once, on the transition, not every frame while docked", async () => {
+    const rush = await importJs("../../src/static/play/rush.js");
+    const { api } = ui("en");
+    const pulses: number[] = [];
+    const dockSounds: number[] = [];
+    const sound = { ...api.sound, dock: () => dockSounds.push(1) };
+    const world = Object.assign(fakeWorld5(), { boats: new Map(), wantDir: () => null, pulseHome: () => pulses.push(1) });
+    const mode = rush.mount({ world, sound, ui: api, send: () => {}, post: () => {}, view: () => ({ mySeat: 0, seats: [{ name: "Ava", character: "mei" }] }) });
+    // [seat, x, y, h, hold, holdMax, flags, banked, castCd, dashCd, cards, tx, ty] (rush.ts's frameFor);
+    // flags is FLAG.DOCKED (8) when docked, 0 otherwise
+    const frame = (docked: boolean, hold: number) => ({ phase: "play", season: 0, left: 30, market: null, n: [], l: [], k: null, f: [], b: [[0, 0, 0, 100, hold, 8, docked ? 8 : 0, 0, 0, 0, [], 0, 0]] });
+    mode.start(frame(false, 3), { seats: [{ name: "Ava", character: "mei" }] });
+    expect(pulses.length).toBe(0); expect(dockSounds.length).toBe(0);
+    expect(document.querySelector(".card.mine")!.classList.contains("unloading")).toBe(false);
+    mode.frame(frame(true, 3), []); // the hull reaches the ring, fish still aboard: the transition
+    expect(pulses.length).toBe(1); expect(dockSounds.length).toBe(1);
+    expect(document.querySelector(".card.mine")!.classList.contains("unloading")).toBe(true);
+    mode.frame(frame(true, 2), []); // still docked, one fish unloaded: no second cue
+    expect(pulses.length).toBe(1); expect(dockSounds.length).toBe(1);
+    mode.frame(frame(false, 0), []); // left the dock, empty: the panel stops saying so
+    expect(document.querySelector(".card.mine")!.classList.contains("unloading")).toBe(false);
+    mode.end();
+  });
+
+  // docking with an empty hold (arriving before catching anything, or already fully unloaded) is not
+  // "unloading" and should not fire the cue -- there is nothing to unload
+  it("docking with an empty hold does not fire the unloading cue", async () => {
+    const rush = await importJs("../../src/static/play/rush.js");
+    const { api } = ui("en");
+    const pulses: number[] = [];
+    const sound = { ...api.sound, dock: () => pulses.push(1) };
+    const world = Object.assign(fakeWorld5(), { boats: new Map(), wantDir: () => null, pulseHome: () => {} });
+    const mode = rush.mount({ world, sound, ui: api, send: () => {}, post: () => {}, view: () => ({ mySeat: 0, seats: [{ name: "Ava", character: "mei" }] }) });
+    const frame = (docked: boolean, hold: number) => ({ phase: "play", season: 0, left: 30, market: null, n: [], l: [], k: null, f: [], b: [[0, 0, 0, 100, hold, 8, docked ? 8 : 0, 0, 0, 0, [], 0, 0]] });
+    mode.start(frame(false, 0), { seats: [{ name: "Ava", character: "mei" }] });
+    mode.frame(frame(true, 0), []);
+    expect(pulses.length).toBe(0);
+    expect(document.querySelector(".card.mine")!.classList.contains("unloading")).toBe(false);
+    mode.end();
+  });
 });
 
 // Ava, 25 October: "the music has no fire in it". The tune now rides a drum: this drives sound.js with a

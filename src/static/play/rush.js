@@ -9,9 +9,11 @@ import { makeFishView } from "./fishview.js";
 
 const COLORS = { mei: "#d6473a", wang: "#4a7d9c", jin: "#e0a93a", lu: "#2f9a8f", lian: "#d9668a", shitou: "#62a344" };
 
+const FLAG_DOCKED = 8; // rush.ts's FLAG.DOCKED, in the frame's b[6] bitmask
+
 export function mount({ world, sound, ui, send, view, post }) {
   const t = ui.t, esc = ui.esc;
-  let prev = null, cur = null, curAt = 0, seats = null, practice = null;
+  let prev = null, cur = null, curAt = 0, seats = null, practice = null, wasDocked = false;
   const fishView = makeFishView();
   // in the practice (before any match, so no seat) you are seat 0, alone
   const me = () => (practice ? practice.seat : view().mySeat);
@@ -34,9 +36,12 @@ export function mount({ world, sound, ui, send, view, post }) {
 
   ui.hud.innerHTML = `
     <div class="card mine"><div class="row"><div><h4>${t("r_hold")}</h4><div class="big" id="r-hold"></div></div><div style="text-align:right"><h4>${t("r_banked")}</h4><div class="big" id="r-bank">0</div></div></div>
-      <div class="bar" style="margin-top:6px"><i id="r-holdbar" style="width:0%"></i></div><p class="small" id="r-tip">${t("r_tip")}</p></div>
+      <div class="bar" style="margin-top:6px"><i id="r-holdbar" style="width:0%"></i></div>
+      <p class="small r-unloading-tip">${esc(t("r_unloading"))}</p>
+      <p class="small" id="r-tip">${t("r_tip")}</p></div>
     <div class="card hide-sm"><h4>${t("r_board")}</h4><div class="board" id="r-board"></div></div>
     <div class="pads dock"><button class="pad" type="button" id="r-cast">${t("r_cast")}<br><small>${t("r_cast_s")}</small></button><button class="pad red" type="button" id="r-dash">${t("r_dash")}</button></div>`;
+  const mineCard = ui.hud.querySelector(".card.mine");
 
   // ---- input: tap/drag the water to steer (keys and the thumb stick come from world5.js's wantDir()) ----
   world.setTap((x, y) => { if (practice) { practice.tx = x; practice.ty = y; return; } if (me() === null) return; send({ k: "steer", x, y }); ui.did("sail"); });
@@ -144,6 +149,14 @@ export function mount({ world, sound, ui, send, view, post }) {
       $("r-holdbar").style.width = `${(mine[4] / mine[5]) * 100}%`; $("r-holdbar").style.background = mine[4] >= mine[5] ? "#ff7a5a" : "";
       $("r-tip").textContent = mine[10].length ? mine[10].map((id) => t(`r_card_${id}`)).join(", ") : t("r_tip");
       $("r-cast").disabled = mine[8] > 0; $("r-dash").disabled = mine[9] > 0;
+      // the moment docked turns true (and not before): the ring brightens, the unload sound plays
+      // once, and the hold panel says so -- so the player sees the promise kept the instant her hull
+      // touches the ring, not only when the first fish lands a tick or more later (Ava, 7 Nov, after
+      // the countdown was fixed to run while a boat is away)
+      const docked = !!(mine[6] & FLAG_DOCKED), hasFish = mine[4] > 0;
+      mineCard?.classList.toggle("unloading", docked && hasFish);
+      if (docked && !wasDocked && hasFish && !practice) { world.pulseHome?.(); sound.dock?.(); }
+      wasDocked = docked;
     }
     $("r-board").innerHTML = [...f.b].sort((a, b) => b[7] - a[7]).map((b) => `<div><span><span class="swatch" style="background:${colorOf(b[0])}"></span>${esc(nameOf(b[0]))}</span><b>${b[7]} <small>${t("r_aboard", { n: b[4] })}</small></b></div>`).join("");
   }
