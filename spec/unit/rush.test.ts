@@ -658,12 +658,18 @@ describe("boats, unloading and schools, as the prototype (port fidelity)", () =>
     expect(s.boats[0].hold.length).toBeLessThan(2); // unloading has started
   });
 
-  it("a fish unloads every UNLOAD_EVERY (0.3 s since rule change 14; 0.33 before that, 0.1 before rule change 11, not the prototype's 0.12)", () => {
+  it("a fish unloads every UNLOAD_EVERY (0.32 s since rule change 15; 0.3 before that, 0.33 before rule change 14, 0.1 before rule change 11, not the prototype's 0.12)", () => {
     const s = make("unload-rate", 2);
     s.boats[0].hold = [1, 1, 1];
     s.boats[0].unloadT = RUSH.UNLOAD_EVERY; // as if just arrived at the dock (moveBoats sets this on the docked transition)
-    until(s, s.t + RUSH.UNLOAD_EVERY - RUSH.DT / 2);
-    expect(s.boats[0].hold.length).toBe(2); // exactly one fish gone by UNLOAD_EVERY
+    // the exact tick a fish is due, not a fixed "-DT/2" fudge: that only lands on the right tick when
+    // UNLOAD_EVERY/DT's fractional part is 0 or at least 0.5 (true of 0.3 and 0.33, false of 0.31 and
+    // 0.32, which this test wrongly failed on before this fix, one tick early)
+    const ticks = Math.ceil(RUSH.UNLOAD_EVERY / RUSH.DT - 1e-9);
+    for (let i = 0; i < ticks - 1; i++) step(s);
+    expect(s.boats[0].hold.length).toBe(3); // not yet, the tick before
+    step(s);
+    expect(s.boats[0].hold.length).toBe(2); // exactly one fish gone on the tick UNLOAD_EVERY is reached
   });
 
   // bug fix: moveBoats() used to reset unloadT to a full UNLOAD_EVERY on every docked transition, so a
@@ -675,7 +681,7 @@ describe("boats, unloading and schools, as the prototype (port fidelity)", () =>
     s.boats[0].hold = [1, 1, 1];
     s.boats[0].docked = false; // starts outside, so the first crossing is a real docked transition
     let toggle = true;
-    // cross the DOCK_R boundary every 0.15 s (3 ticks), well under UNLOAD_EVERY (0.3 s): a boat that got a
+    // cross the DOCK_R boundary every 0.15 s (3 ticks), well under UNLOAD_EVERY (0.32 s): a boat that got a
     // fresh countdown on every re-entry (the old bug) would never hold still inside long enough to finish
     // even one fish, however long this runs
     for (let i = 0; i < 400; i++) {

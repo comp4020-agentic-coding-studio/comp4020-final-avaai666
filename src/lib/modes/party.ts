@@ -70,7 +70,7 @@ function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number
   const a0 = lake.adults ?? Math.round(lake.fish * 0.8), y0 = lake.young ?? Math.round(lake.fish * 0.2);
   seedFish(s, a0, y0);
   s.start = s.fish.length;
-  for (const st of seats) { const d = s.lake.dockPos(st.seat); s.boats.push({ seat: st.seat, x: d.x, y: d.y, h: d.inward + Math.PI, speed: 0, tx: d.x, ty: d.y, gate: 0, reel: 0, stun: 0, castCd: 0, lanT: 0, finished: false }); }
+  for (const st of seats) { const d = s.lake.dockPos(st.seat); s.boats.push({ seat: st.seat, x: d.x, y: d.y, h: d.inward, speed: 0, tx: d.x, ty: d.y, gate: 0, reel: 0, stun: 0, castCd: 0, lanT: 0, finished: false }); }
   setupRound(s);
   return s;
 }
@@ -78,7 +78,10 @@ function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number
 // a round's own setup: boats back at their docks, the round's props
 function setupRound(s: PartySim): void {
   s.game = GAMES[s.round - 1];
-  for (const b of s.boats) { const d = s.lake.dockPos(b.seat); b.x = b.tx = d.x - Math.cos(d.inward) * 2; b.y = b.ty = d.y - Math.sin(d.inward) * 2; b.h = d.inward + Math.PI; b.speed = 0; b.gate = 0; b.reel = 0; b.stun = 0; b.castCd = 0; b.lanT = 0; b.finished = false; }
+  // dockPos's inward points from the dock toward the water; a boat starts facing it, two units
+  // out on the lake, not two units further inland onto the pier (Ava, 6 Nov: "the bow points the
+  // wrong way -- it should be the opposite")
+  for (const b of s.boats) { const d = s.lake.dockPos(b.seat); b.x = b.tx = d.x + Math.cos(d.inward) * 2; b.y = b.ty = d.y + Math.sin(d.inward) * 2; b.h = d.inward; b.speed = 0; b.gate = 0; b.reel = 0; b.stun = 0; b.castCd = 0; b.lanT = 0; b.finished = false; }
   s.spots = []; s.spotT = 0.8; s.lanterns = []; s.tug = { needle: 0, dir: 1, zone: 0.45, zw: 0.2, zv: 0.18, places: 0 };
   if (s.game === "koi") {
     s.path = Array.from({ length: Q.GATES }, (_, k) => s.lake.shape(70 + k * 45, k % 2 ? 0.62 : 0.78)) as [number, number][];

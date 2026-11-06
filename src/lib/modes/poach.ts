@@ -116,9 +116,12 @@ function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number
   for (let i = 0; i < Q.EXTRA_YOUNG; i++) s.fish.push(newFish(s, null, null, false, NURSERY_FIRST + (i % 4)));
   s.start = s.fish.length;
   for (const seat of seats) {
-    const d = s.lake.dockPos(seat.seat), x = d.x - Math.cos(d.inward) * 2, y = d.y - Math.sin(d.inward) * 2;
+    // dockPos's inward points from the dock toward the water; a boat starts facing it, two units
+    // out on the lake, not two units further inland onto the pier (Ava, 6 Nov: "the bow points the
+    // wrong way -- it should be the opposite")
+    const d = s.lake.dockPos(seat.seat), x = d.x + Math.cos(d.inward) * 2, y = d.y + Math.sin(d.inward) * 2;
     s.boats.push({
-      seat: seat.seat, x, y, h: d.inward + Math.PI, speed: 0, tx: x, ty: y, netCd: 0, fineCd: 0, fry: 0, caught: 0, taskFish: 0, youngKilled: 0, fineCasts: 0,
+      seat: seat.seat, x, y, h: d.inward, speed: 0, tx: x, ty: y, netCd: 0, fineCd: 0, fry: 0, caught: 0, taskFish: 0, youngKilled: 0, fineCasts: 0,
       tasks: [], buoy: false, insp: null, known: {}, witnessed: {}, saw: [], path: [],
       mind: { hunt: null, wander: null, inspected: {}, lines: null, sayAt: 0, voteAt: 0, meet: 0 },
     });
@@ -325,8 +328,11 @@ function startDay(s: PoachSim, ev: GameEvent[]): void {
   s.day++; s.phase = "day"; s.phaseT = 0; s.meeting = null; s.tally = null;
   const spots = shuffle(s.rng, tasksFor(s.lake));
   for (const b of s.boats) {
+    // dockPos's inward points from the dock toward the water; a boat starts facing it, two units
+    // out on the lake, not two units further inland onto the pier (Ava, 6 Nov: "the bow points the
+    // wrong way -- it should be the opposite")
     const d = s.lake.dockPos(b.seat);
-    b.x = d.x - Math.cos(d.inward) * 2; b.y = d.y - Math.sin(d.inward) * 2; b.h = d.inward + Math.PI; b.tx = b.x; b.ty = b.y; b.speed = 0;
+    b.x = d.x + Math.cos(d.inward) * 2; b.y = d.y + Math.sin(d.inward) * 2; b.h = d.inward; b.tx = b.x; b.ty = b.y; b.speed = 0;
     b.fry = 0; b.buoy = false; b.insp = null; b.saw = []; b.path = []; b.netCd = 0;
     b.fineCd = Q.FINE_FIRST + s.rng() * Q.FINE_FIRST;
     b.tasks = shuffle(s.rng, spots).slice(0, Q.TASKS_A_DAY).map((t) => ({ ...t, p: 0, done: false }));

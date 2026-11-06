@@ -104,9 +104,12 @@ function make(seed: string, seats: Seat[], lake: { fish: number; adults?: number
   seedFish(s, a0, y0);
   s.history.push({ startA: a0, startY: y0, caught: 0, young: 0, gongA: 0, gongY: 0, bred: false, bonus: 0, reedsExtra: 0 });
   seats.forEach((_, seat) => {
-    const d = s.lake.dockPos(seat), x = d.x - Math.cos(d.inward) * 2, y = d.y - Math.sin(d.inward) * 2;
+    // dockPos's inward points from the dock toward the water; a boat starts facing it, two units
+    // out on the lake, not two units further inland onto the pier (Ava, 6 Nov: "the bow points the
+    // wrong way -- it should be the opposite")
+    const d = s.lake.dockPos(seat), x = d.x + Math.cos(d.inward) * 2, y = d.y + Math.sin(d.inward) * 2;
     s.boats.push({
-      seat, x, y, h: d.inward + Math.PI, speed: 0, vx: 0, vy: 0, tx: x, ty: y, hold: [], holdBase: holdFor(s.lake.boats), castCd: 0, dashT: 0, dashCd: 0, stun: 0, shield: 0, unloadT: 0, trawlT: 0,
+      seat, x, y, h: d.inward, speed: 0, vx: 0, vy: 0, tx: x, ty: y, hold: [], holdBase: holdFor(s.lake.boats), castCd: 0, dashT: 0, dashCd: 0, stun: 0, shield: 0, unloadT: 0, trawlT: 0,
       docked: true, tripValue: 0, banked: 0, cards: [], combo: 0, lastCatch: -9, firstScoreAt: null,
       stats: { caught: 0, home: 0, trips: 0, bestTrip: 0, lost: 0, rams: 0, rammed: 0, scooped: 0, koi: 0, youngKilled: 0, youngSpared: 0 },
     });
@@ -292,7 +295,7 @@ export const DEFAULT_BOT_KINDS = ["steady", "keeper", "greedy"];
 export function botKindOf(i: number): string { return DEFAULT_BOT_KINDS[i % 3]; }
 function startSeason(s: RushSim, ev: GameEvent[]): void {
   s.season = (s.season + 1) as Season; s.phase = "play"; s.phaseT = 0; s.market = null;
-  for (const b of s.boats) { const d = s.lake.dockPos(b.seat); b.x = d.x; b.y = d.y; b.h = d.inward + Math.PI; b.tx = b.x; b.ty = b.y; b.speed = 0; b.docked = true; b.combo = 0; }
+  for (const b of s.boats) { const d = s.lake.dockPos(b.seat); b.x = d.x; b.y = d.y; b.h = d.inward; b.tx = b.x; b.ty = b.y; b.speed = 0; b.docked = true; b.combo = 0; }
   placeSchools(s, true); // the new season's places (prototype's rNextSeason()), with the fish carried to them
   const [a, y] = counts(s);
   s.history.push({ startA: a, startY: y, caught: 0, young: 0, gongA: 0, gongY: 0, bred: false, bonus: 0, reedsExtra: 0 });

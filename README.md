@@ -57,13 +57,13 @@ Enforced, by checks that fail if the claim breaks:
 
 Measured, not enforced, in 300 bot matches per table (the 2.0 modes, each
 match on the lake for its boats with the homes round it; re-measured after
-the steering fix of 29 October and a timing bug it exposed:
-`docs/checks/balance-steer-fixed-2026-11-06.md`, which names the report
-before it, and the v4 numbers stay in `docs/checks/balance-2026-10-15.md`).
-These are claims about the modes' own bots and seeds, not about people:
+the start-pose fix of 6 November: `docs/checks/balance-start-pose-2026-11-06.md`,
+which names the report before it, and the v4 numbers stay in
+`docs/checks/balance-2026-10-15.md`). These are claims about the modes' own
+bots and seeds, not about people:
 - Boat Rush, four boats: no bot kind won over 41% of random-mix tables
-  (keeper 26.8%); all-greedy tables ended Lean or No fish in 72.0%, and
-  replayed at 80% of their catch ended Fair or better in 62.0%. With two or
+  (keeper 27.0%); all-greedy tables ended Lean or No fish in 68.7%, and
+  replayed at 80% of their catch ended Fair or better in 66.0%. With two or
   three boats (60 matches, before the fish fixes) the lake was not fished
   down.
 - Fishing Party, four boats: no shop habit won over 40% (never buy 28.7%);

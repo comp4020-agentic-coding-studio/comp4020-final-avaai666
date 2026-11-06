@@ -171,7 +171,17 @@ export const RUSH = {
   // to 0.30 (from 0.33) to put the pressure back where Ava tuned it on 24 October, not to invent a new
   // number: (a) 70.0% and (b) 63.7% at 0.30 sit on the same 70.3%/65.0% the lake had then
   // (docs/checks/balance-steer-2026-10-29.md, the full sweep against (a), (b) and (c))
-  DOCK_R: 6.5, SAFE_R: 11, UNLOAD_EVERY: 0.3, // unloading starts within 6.5 of the dock (prototype's UNLOAD_R); no ram within 11 of a dock
+  // rule change 15, 6 Nov: a third physics fix (boats starting on open water, facing it, instead of
+  // on the pier facing the bank) made every bot's first seconds of a season more efficient again,
+  // this time carrying target (b) under its own "most" wording (49.3% at 0.30, measured). Unloading
+  // moves to 0.32 (from 0.30): both margins over 50% come out wide and roughly even ((a) 68.7%, +18.7;
+  // (b) 66.0%, +16.0), closer than 0.31's (a 75.7%, b 58.3%, only +8.3 on (b): inside a 300-match run's
+  // own noise), and the pair almost exactly reproduces 29 October's own 70.0%/63.7%
+  // (docs/checks/balance-start-pose-2026-11-06.md, the full sweep). This is the third time the
+  // unloading dial has moved, each time because the simulation itself got more faithful (the fish
+  // speed on 25 October, the braking fix on 29 October, the start pose now), never because a target's
+  // own wording was reworded to fit the code.
+  DOCK_R: 6.5, SAFE_R: 11, UNLOAD_EVERY: 0.32, // unloading starts within 6.5 of the dock (prototype's UNLOAD_R); no ram within 11 of a dock
   PRACTICE_RING: 24 * WS, // the practice's gold ring, this far out from your dock (the prototype's 24)
   LOOSE_S: 8, PICK_R: 2.6,
   KOI_VALUE: 5, KOI_FOR: 10, KOI_STOP: 12, // no golden carp in the last 12 s of a season

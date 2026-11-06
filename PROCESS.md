@@ -197,6 +197,30 @@ Nothing here is deleted from the project's own record: the commits, the
 play-test findings and the balance numbers are still exactly where they
 belong, in this file and in `docs/checks/`.
 
+## The same dial, moved three times, 6 November
+
+`RUSH.UNLOAD_EVERY` has now moved three times, and each time for the same reason: a physics bug
+got fixed, the simulation became more faithful to what it was meant to model, every bot's season
+got a little more efficient as a result, and the dial was turned to hold Boat Rush's three
+published targets where they have always been.
+
+- 25 October: a fish that had just been scared, or that a new season's school carried to its
+  place, could cross the lake at up to 20x its own swimming speed. Fixed, and `UNLOAD_EVERY`
+  stayed at 0.33 (the fix did not move the targets far enough to need it).
+- 29 October: `steer()` braked a boat the whole time it was being actively steered, not only on a
+  real arrival, cutting a season's average speed nearly in half. Fixed, and `UNLOAD_EVERY` moved
+  from 0.33 to 0.30 to put the pressure back where I tuned it on 24 October.
+- 6 November: every mode started a boat facing the bank, not the water, two units onto the pier
+  instead of two units out on the lake ("at the start of a match the bow points the wrong way").
+  Fixed, and `UNLOAD_EVERY` moved from 0.30 to 0.32, after a sweep of 0.30–0.33 shown to me as a
+  table, not a single number chosen for me.
+
+The targets themselves — their wording, their "most," the 41% line — have never been reworded to
+fit the code. Each time, I was shown the sweep and picked the value; the agent never touched the
+dial on its own judgement. `docs/checks/balance-start-pose-2026-11-06.md` has the full sweep table
+from the third move, and the isolation proof that the start-pose fix, not an unrelated change
+committed alongside it, was what moved the numbers.
+
 ## Corrections that landed in the harness
 
 - Scope belongs to me: the four modes are named in `CLAUDE.md`.

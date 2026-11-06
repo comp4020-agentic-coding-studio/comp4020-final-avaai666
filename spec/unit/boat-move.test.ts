@@ -125,6 +125,47 @@ describe("sailing (boat-move.ts)", () => {
   });
 });
 
+// Ava, 6 Nov, playing live: "at the start of a match the bow points the wrong way -- it
+// should be the opposite -- otherwise I have to turn round before I can set off." dockPos's
+// `inward` points from a dock toward the water; every mode started a boat facing
+// `inward + Math.PI` (the bank) and sitting `d.x - cos(inward) * 2` (two units further
+// inland from a dock already on the shore line, onto the pier).
+describe("a boat starts on open water, facing it, not the bank", () => {
+  const onWater = (x: number, y: number) => nr(x, y) < SHORE_K;
+  const facesWater = (h: number, inward: number) => Math.abs(Math.atan2(Math.sin(h - inward), Math.cos(h - inward))) < (5 * Math.PI) / 180;
+  for (const n of [2, 3, 4]) {
+    it(`Boat Rush, ${n} boats`, () => {
+      const seats: Seat[] = Array.from({ length: n }, (_, i) => ({ seat: i, name: `P${i}`, bot: null, character: "mei" }));
+      const s = rush.make(`start-face-${n}`, seats, { fish: 280, adults: 224, young: 56 });
+      for (const b of s.boats) {
+        const d = s.lake.dockPos(b.seat);
+        expect(onWater(b.x, b.y), `seat ${b.seat} at (${b.x.toFixed(1)}, ${b.y.toFixed(1)})`).toBe(true);
+        expect(facesWater(b.h, d.inward), `seat ${b.seat} heading ${b.h.toFixed(2)} vs inward ${d.inward.toFixed(2)}`).toBe(true);
+      }
+    });
+    it(`Fishing Party, ${n} boats`, () => {
+      const seats: Seat[] = Array.from({ length: n }, (_, i) => ({ seat: i, name: `P${i}`, bot: null, character: "mei" }));
+      const s = party.make(`start-face-party-${n}`, seats, { fish: 280 });
+      for (const b of s.boats) {
+        const d = s.lake.dockPos(b.seat);
+        expect(onWater(b.x, b.y), `seat ${b.seat} at (${b.x.toFixed(1)}, ${b.y.toFixed(1)})`).toBe(true);
+        expect(facesWater(b.h, d.inward), `seat ${b.seat} heading ${b.h.toFixed(2)} vs inward ${d.inward.toFixed(2)}`).toBe(true);
+      }
+    });
+  }
+  for (const n of [4, 6]) {
+    it(`Who's Poaching, ${n} boats`, () => {
+      const seats: Seat[] = Array.from({ length: n }, (_, i) => ({ seat: i, name: `P${i}`, bot: null, character: "mei" }));
+      const s = poach.make(`start-face-poach-${n}`, seats, { fish: 280, adults: 224, young: 56 });
+      for (const b of s.boats) {
+        const d = s.lake.dockPos(b.seat);
+        expect(onWater(b.x, b.y), `seat ${b.seat} at (${b.x.toFixed(1)}, ${b.y.toFixed(1)})`).toBe(true);
+        expect(facesWater(b.h, d.inward), `seat ${b.seat} heading ${b.h.toFixed(2)} vs inward ${d.inward.toFixed(2)}`).toBe(true);
+      }
+    });
+  }
+});
+
 describe("every place a mode names is on the lake's open water, at the lake's scale", () => {
   const onWater = (x: number, y: number, k = 0.93) => nr(x, y) < k && !blockedAt(x, y, 0);
   it("Who's Poaching's task spots", () => {
