@@ -23,6 +23,17 @@ const L4 = makeLake(); // the four-boat lake, for a caller that does not say whi
 export const TURN = 3.2; // radians a second (the prototype's)
 export const SHORE_K = 0.965; // a boat's centre stays within this share of the way to the shore
 export const ISLAND_CLEAR = 2.2; // a boat's centre stays this far off the island's edge (its half-width)
+// how far a boat's hull reaches ahead of its centre (world5.js's hullShape: the hull mesh's bow sits
+// at x=3.1 in its own local space). Named once, here, not typed again anywhere that needs to know it.
+// Ava, 6 Nov, after the ring was fixed to draw its true edge at DOCK_R: "only this far in will it put
+// the fish down -- touching the outer edge of the ring does nothing", because b.docked tests the
+// boat's centre against DOCK_R, not its hull. Moving the sim's own boundary out to DOCK_R + HULL_FWD
+// (so any part of the boat counts) was measured and reverted: an all-greedy table's counterfactual
+// target collapsed to 2.0% (docs/checks/balance-hull-2026-11-06.md), nowhere near its own "most"
+// wording. The sim stays exactly as it was; the ring (rush.js) is drawn smaller instead, at
+// DOCK_R - HULL_FWD, sent to the page through rushPractice.hullFwd in the boot JSON -- so the
+// boat's hull reaching the ring's own edge is the real moment the unchanged sim starts unloading.
+export const HULL_FWD = 3.1;
 export const SLIDE = 1; // speed kept on a tick that touches the shore or the island (the prototype: 0.7)
 export const ARRIVE_R = 0.9; // within this of its target, a boat has arrived
 export const REACQUIRE_R = 2; // knocked this far from an arrived target (a ram, the ice), it sets off again

@@ -18,9 +18,16 @@ export function mount({ world, sound, ui, send, view, post }) {
   const colorOf = (seat) => COLORS[seats?.[seat]?.character] ?? "#f5ead6";
   const nameOf = (seat) => (seat === me() ? t("g_you") : ui.seatName(seats?.[seat]) ?? t("g_boat_n", { n: seat + 1 }));
   const $ = (id) => document.getElementById(id);
-  // the real radius unloading starts at (RUSH.DOCK_R, server-side): drawn on the home ring, not a number
-  // typed into this file (CLAUDE.md: model constants live only on the server)
-  const dockR = JSON.parse(document.getElementById("boot")?.textContent ?? "{}").rushPractice?.dockR ?? 6.5;
+  // the ring is drawn smaller than DOCK_R, by the boat's own hull reach (server-side, not a number
+  // typed into this file: CLAUDE.md, model constants live only on the server): b.docked still tests
+  // the boat's centre against the unchanged DOCK_R, so drawing the ring at DOCK_R - hullFwd is the
+  // radius where the boat's hull -- its bow, the part that actually gets there first -- reaches the
+  // real unloading boundary. Moving the boundary itself to the hull's reach (DOCK_R + hullFwd)
+  // was measured and reverted: it fished the lake out in nearly every all-greedy match (target (b)
+  // fell to 2.0%, docs/checks/balance-hull-2026-11-06.md), so the circle is smaller on purpose
+  // instead -- it marks where the boat's hull must reach, not where its centre must be
+  const bootData = JSON.parse(document.getElementById("boot")?.textContent ?? "{}").rushPractice ?? {};
+  const dockR = (bootData.dockR ?? 6.5) - (bootData.hullFwd ?? 3.1);
 
   world.setCameraMode("follow");
   world.setSteerMode(true);

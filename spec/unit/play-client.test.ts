@@ -328,7 +328,8 @@ describe("following a fish between frames (fishview.js)", () => {
   // does nothing." rush.js used to scale the ring's radius by the match's lake-size factor
   // (f.lk.k), but the server's own b.docked check (rush.ts) never scales RUSH.DOCK_R: on a
   // two-boat lake (k=0.708) the ring would be drawn well inside where unloading actually starts.
-  // The radius the page draws must equal DOCK_R regardless of the lake's size.
+  // The radius the page draws must equal DOCK_R (less the hull's own forward reach, see below) flat,
+  // regardless of the lake's size.
   it("the home ring's radius is DOCK_R flat, not scaled a second time by the lake's size", async () => {
     const rush = await importJs("../../src/static/play/rush.js");
     const { api } = ui("en");
@@ -337,8 +338,30 @@ describe("following a fish between frames (fishview.js)", () => {
     const mode = rush.mount({ world, sound: api.sound, ui: api, send: () => {}, post: () => {}, view: () => ({ mySeat: 0, seats: [{ name: "Ava", character: "mei" }] }) });
     const frame = (k: number) => ({ phase: "play", season: 0, left: 30, market: null, n: [], l: [], k: null, lk: { k }, f: [], b: [[0, 0, 100, 0, 0, 8, 0, 0, 0, 0, [], 0, 100]] });
     mode.start(frame(1), { seats: [{ name: "Ava", character: "mei" }] }); // the four-boat lake, k = 1
-    mode.frame(frame(0.708), []); // a two-boat lake: k = 0.708, DOCK_R still flat at 6.5
-    expect(homes.at(-1)![3]).toBe(6.5);
+    mode.frame(frame(0.708), []); // a two-boat lake: k = 0.708, the radius still flat regardless
+    // with no #boot element, rush.js's fallback defaults are DOCK_R 6.5 and hullFwd 3.1
+    expect(homes.at(-1)![3]).toBeCloseTo(6.5 - 3.1, 5);
+    mode.end();
+  });
+
+  // Ava, 6 Nov, after the ring above was fixed: the circle's visible edge now sat exactly at
+  // DOCK_R, but her boat still had to reach the plank before anything unloaded, because b.docked
+  // tests the centre and her hull reaches 3.1 units ahead of it. Moving the sim's own boundary out
+  // was measured and reverted (docs/checks/balance-hull-2026-11-06.md): the circle is drawn smaller
+  // instead, at DOCK_R minus the hull's own forward reach, so the hull reaching the ring's edge is
+  // the real moment the unchanged sim starts unloading.
+  it("the home ring is drawn at DOCK_R minus the boat's own hull reach, from the boot data, not typed in twice", async () => {
+    const rush = await importJs("../../src/static/play/rush.js");
+    const { api } = ui("en");
+    const homes: unknown[][] = [];
+    const boot = document.createElement("script"); boot.id = "boot"; boot.type = "application/json";
+    boot.textContent = JSON.stringify({ rushPractice: { dockR: 8, hullFwd: 2.5 } });
+    document.body.appendChild(boot);
+    const world = Object.assign(fakeWorld5(), { boats: new Map(), wantDir: () => null, setHome: (...args: unknown[]) => homes.push(args) });
+    const mode = rush.mount({ world, sound: api.sound, ui: api, send: () => {}, post: () => {}, view: () => ({ mySeat: 0, seats: [{ name: "Ava", character: "mei" }] }) });
+    const frame = { phase: "play", season: 0, left: 30, market: null, n: [], l: [], k: null, lk: { k: 1 }, f: [], b: [[0, 0, 100, 0, 0, 8, 0, 0, 0, 0, [], 0, 100]] };
+    mode.start(frame, { seats: [{ name: "Ava", character: "mei" }] });
+    expect(homes.at(-1)![3]).toBeCloseTo(8 - 2.5, 5);
     mode.end();
   });
 });

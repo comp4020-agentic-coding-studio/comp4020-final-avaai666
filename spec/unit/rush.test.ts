@@ -3,6 +3,7 @@ import { botStream, eventsFor, replay, type Seat } from "../../src/lib/game-plat
 import { botKindOf, DEFAULT_BOT_KINDS, makeWithOpts, nextSpring, rush, type RushInput, type RushSim, type SeasonHistory } from "../../src/lib/modes/rush.ts";
 import { RUSH } from "../../src/lib/game-constants.ts";
 import { dockPos, forecast, iceBlocks, K, nr, shape, ZONES } from "../../src/lib/lake-world.ts";
+import { HULL_FWD } from "../../src/lib/modes/boat-move.ts";
 
 // Boat Rush, "rush 2.0" (DESIGN.md "Boat Rush 开船抢鱼 (2.0)"): four seasons,
 // each with a twist, ending in the gong, a breeding rest, and a market of
@@ -656,6 +657,41 @@ describe("boats, unloading and schools, as the prototype (port fidelity)", () =>
     step(s);
     expect(s.boats[0].docked).toBe(true);
     expect(s.boats[0].hold.length).toBeLessThan(2); // unloading has started
+  });
+
+  // Ava, 6 Nov, after the ring was fixed to draw its true edge at DOCK_R: "only this far in will it
+  // put the fish down -- touching the outer edge of the ring does nothing" was still true, because
+  // b.docked tests the boat's centre against DOCK_R while the ring's picture promises any part of
+  // the boat. Moving the sim's own boundary out to DOCK_R + HULL_FWD (so any part of the boat counts)
+  // was measured and reverted: an all-greedy table's counterfactual target collapsed to 2.0%
+  // (docs/checks/balance-hull-2026-11-06.md). The sim's boundary stays exactly DOCK_R, unmodified;
+  // the ring is drawn smaller instead, at DOCK_R - HULL_FWD (rush.js), so a boat's hull -- which
+  // reaches HULL_FWD ahead of its centre -- crosses the ring's own drawn edge at the same moment its
+  // centre crosses DOCK_R and the unchanged sim starts unloading it. This is that equivalence,
+  // checked directly, on a two-boat and a four-boat lake.
+  it("a boat sailing straight at its dock starts unloading at the same moment its hull crosses the ring the page draws", () => {
+    const ringR = RUSH.DOCK_R - HULL_FWD; // the radius rush.js actually draws
+    for (const n of [2, 4]) {
+      const s = make("unload-hull", n);
+      const d = dockPos(0, n);
+      s.boats[0].hold = [1, 1];
+      // straight out onto open water from the dock (its own inward direction), heading back at it;
+      // a boat's hull is HULL_FWD ahead of its centre, so its hull sits exactly on the drawn ring
+      // when its centre is HULL_FWD further out still, at ringR + HULL_FWD (= RUSH.DOCK_R)
+      const ang = d.inward, h = d.inward + Math.PI;
+      // the hull is 0.3 short of the ring: not yet docked
+      put(s, 0, d.x + Math.cos(ang) * (ringR + HULL_FWD + 0.3), d.y + Math.sin(ang) * (ringR + HULL_FWD + 0.3));
+      s.boats[0].h = h;
+      step(s);
+      expect(s.boats[0].docked, `n=${n} hull just outside the ring`).toBe(false);
+      // the hull is 0.3 past the ring: docked, and unloading starts, from the sim's own unchanged
+      // DOCK_R check alone -- nothing in rush.ts changed to make this true
+      put(s, 0, d.x + Math.cos(ang) * (ringR + HULL_FWD - 0.3), d.y + Math.sin(ang) * (ringR + HULL_FWD - 0.3));
+      s.boats[0].h = h;
+      step(s);
+      expect(s.boats[0].docked, `n=${n} hull just inside the ring`).toBe(true);
+      expect(s.boats[0].hold.length, `n=${n} unloading`).toBeLessThan(2);
+    }
   });
 
   it("a fish unloads every UNLOAD_EVERY (0.32 s since rule change 15; 0.3 before that, 0.33 before rule change 14, 0.1 before rule change 11, not the prototype's 0.12)", () => {
