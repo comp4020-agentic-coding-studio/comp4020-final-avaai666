@@ -46,12 +46,14 @@ revert threshold and of their own "most" wording. `UNLOAD_EVERY` is not touched.
 
 Worth flagging: (a) moved down and (b) moved up, the opposite of what the mechanism itself predicts —
 removing a wait gives every boat strictly more fishing time per trip, which should take more fish and push
-the lake toward emptier (a) up, not down). The seeds are identical before and after, so this is not
-sampling noise; it is attributed to each match being a long, deterministic chain of ticks in which a few
-milliseconds' difference in exactly when a fish banks can flip a steering decision, a market pick, or a
-catch that happens or doesn't a season later, so a tiny, uniformly-applied timing change can still push any
-one seed's outcome either way without implying the lake is systematically fuller or emptier on average. The
-three targets' margins are what was checked, not the sign of the movement.
+the lake toward emptier, i.e. (a) up and (b) down, not the reverse. The same seed does not buy a paired
+comparison here: the fix changes exactly when a boat's first fish of a trip banks, which perturbs that
+match's trajectory from its first docking onward, so "seed 7 before" and "seed 7 after" are no longer
+comparable runs of the same match — they diverge early and end up different matches that merely started
+from the same draw. The two 300-match runs are therefore better read as independent samples from the seed
+space, which is exactly what their Wilson intervals already describe, and those intervals overlap on both
+targets (63.2%–73.7% vs. 59.4%–70.2% for (a); 60.5%–71.1% vs. 67.0%–77.1% for (b)). The three targets'
+margins are what was checked, not the sign of the movement.
 
 (c), the no-kind-over-41% target, is unaffected: steady 24.3%, keeper 26.3%, greedy 24.4% (vs. 24.3% /
 27.0% / 24.4% before) — the same kinds, same seeds, no bot-kind advantage introduced.
