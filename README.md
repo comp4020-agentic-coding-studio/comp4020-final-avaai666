@@ -68,7 +68,7 @@ rematch?
 ## Known limits
 
 Boats move on the server's next frame; slow links feel late. Who's Poaching
-needs four.
+needs four seats; two people can start it with bots filling the rest.
 
 ## References
 

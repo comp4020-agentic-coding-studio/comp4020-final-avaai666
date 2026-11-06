@@ -46,14 +46,11 @@ revert threshold and of their own "most" wording. `UNLOAD_EVERY` is not touched.
 
 Worth flagging: (a) moved down and (b) moved up, the opposite of what the mechanism itself predicts —
 removing a wait gives every boat strictly more fishing time per trip, which should take more fish and push
-the lake toward emptier, i.e. (a) up and (b) down, not the reverse. The same seed does not buy a paired
-comparison here: the fix changes exactly when a boat's first fish of a trip banks, which perturbs that
-match's trajectory from its first docking onward, so "seed 7 before" and "seed 7 after" are no longer
-comparable runs of the same match — they diverge early and end up different matches that merely started
-from the same draw. The two 300-match runs are therefore better read as independent samples from the seed
-space, which is exactly what their Wilson intervals already describe, and those intervals overlap on both
-targets (63.2%–73.7% vs. 59.4%–70.2% for (a); 60.5%–71.1% vs. 67.0%–77.1% for (b)). The three targets'
-margins are what was checked, not the sign of the movement.
+the lake toward emptier, i.e. (a) up and (b) down, not the reverse. Both runs used the same seeds, which makes
+the comparison paired, not certain: the fix changes when a boat's first fish of a trip banks, so a seed's
+match after the change can diverge from the same seed's match before it, and that weakens the pairing
+without removing it. No analysis of the per-seed differences was done, so this run does not establish the
+direction of the move either way. What was checked is each target's own margin against its own line.
 
 (c), the no-kind-over-41% target, is unaffected: steady 24.3%, keeper 26.3%, greedy 24.4% (vs. 24.3% /
 27.0% / 24.4% before) — the same kinds, same seeds, no bot-kind advantage introduced.

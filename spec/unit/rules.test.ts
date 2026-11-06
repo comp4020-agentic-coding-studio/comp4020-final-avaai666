@@ -7,11 +7,20 @@ import type { Rule } from "../../src/lib/rules.ts";
 // families, k planning fine nets, each rule kept by everyone from year 2, 12
 // secrets. The same loop as sim/rules.mjs, printed the same way, must give
 // sim/rules_output.txt line for line. Pure: no server.
+//
+// Timeout raised from 180 s to 360 s on 7 November 2026. The full unit suite
+// failed here with "Test timed out in 180000ms" (204 s); the file alone then
+// passed in 123 s. The test is pure (fixed seeds, no server, no clock) and
+// compares against a golden file, so a wrong result would fail the same way
+// on every run: the failure was the time budget, not behaviour. It runs 96
+// full seasons (2 k x 4 rules x 12 secrets), so 180 s left about 1.5x
+// headroom over an idle run, which went as soon as 31 files ran in parallel
+// on 8 cores. No assertion was altered and sim/rules_output.txt is untouched.
 
 const S = 12;
 const RULES: Rule[] = ["none", "ban", "spring", "nursery"];
 
-describe("the rules", { timeout: 180_000 }, () => {
+describe("the rules", { timeout: 360_000 }, () => {
   it("reproduces sim/rules_output.txt exactly", () => {
     const lines: string[] = [];
     for (const k of [2, 4]) {
@@ -35,5 +44,5 @@ describe("the rules", { timeout: 180_000 }, () => {
     console.log(lines.join("\n"));
     const saved = readFileSync(new URL("../../sim/rules_output.txt", import.meta.url), "utf8").trimEnd().split("\n");
     expect(lines).toEqual(saved);
-  }, 180_000);
+  }, 360_000);
 });
