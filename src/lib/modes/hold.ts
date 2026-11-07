@@ -294,9 +294,9 @@ function results(s: HoldSim): Results {
     { title: "The lake", text: s.ended === "dead" ? `the lake died in round ${s.round}` : `${lakeFish(s)} fish left of ${s.start}`, tkey: "h3_hl_lake_t", key: s.ended === "dead" ? "h3_hl_lake_dead" : "h3_hl_lake", vars: { n: lakeFish(s), start: s.start, round: s.round } },
   ];
   return {
-    seats: rows.map((x) => ({ seat: x.p.seat, score: x.score, place: 1 + order.filter((v) => v > x.score).length, firstScoreS: null, base: x.base, coins: x.p.coins, grounds: x.grounds })),
+    seats: rows.map((x) => ({ seat: x.p.seat, score: x.score, place: 1 + order.filter((v) => v > x.score).length, firstScoreS: null, final: x.score, base: x.base, coins: x.p.coins, grounds: x.grounds })),
     lakeLeft: lakeFish(s), highlights,
-    left: { a: lakeFish(s), y: 0 }, next, tier: tier.id, dead: s.ended === "dead",
+    left: { a: lakeFish(s), y: 0 }, next, tier: tier.id, scoreTier: { id: tier.id, mult: tier.mult }, dead: s.ended === "dead",
     ledger: s.players.map((p) => ({ seat: p.seat, home: p.hauled, young: 0, spared: 0 })),
     log: s.log,
   };

@@ -13,6 +13,7 @@ import type { ServerResponse } from "node:http";
 import { LAKE_DEAD, PLAY_COUNTDOWN_MS, PLAY_FRAME_EVERY, PLAY_HEARTBEAT_MS, PLAY_MAX_CATCHUP, PLAY_MAX_RUNNING, PLAY_TICK_MS } from "./game-constants.ts";
 import { type AnyMode, type Character, eventsFor, type GameEvent, lakeAfterMatch, lakeAtStart, type Results, type Seat, tickOnce } from "./game-platform.ts";
 import type { GameJoin, GameStore, MatchRow, Summary } from "./game-store.ts";
+import { fillScoreTier } from "./score-tier.ts";
 
 // Bots take characters nobody in the room has, in this order.
 const BOT_CHARACTERS: Character[] = ["wang", "jin", "lu", "lian", "shitou", "mei"];
@@ -84,7 +85,7 @@ export function createGameHub(store: GameStore, modes: Record<string, AnyMode>, 
     return {
       code: room.code, mode: r.mode, state: room.state, me, mySeat: seatOf(room, me), players: store.players(room.id),
       seats: room.match?.seats ?? room.last?.seats ?? null, startedAt: room.match?.startedAt ?? null,
-      lake: { fish: r.lakeFish, died: r.lakeFish < LAKE_DEAD }, results: room.state === "end" ? (room.last?.summary ?? null) : null,
+      lake: { fish: r.lakeFish, died: r.lakeFish < LAKE_DEAD }, results: room.state === "end" && room.last?.summary ? fillScoreTier(room.last.summary) : null,
       note: room.note, ready, history: historyOf(r.id),
     };
   };
@@ -109,8 +110,9 @@ export function createGameHub(store: GameStore, modes: Record<string, AnyMode>, 
       rematchBy: m.rematchBy, highlights: res.highlights.map((h) => ({ ...h, text: h.text.replaceAll("{name}", m.seats.find((x) => x.seat === h.seat)?.name ?? "someone") })),
       seats: m.seats.map((st) => {
         const r = res.seats.find((x) => x.seat === st.seat)!;
-        const { seat: _a, score: _b, place: _c, firstScoreS: _d, ...detail } = r;
-        return { seat: st.seat, name: st.name, bot: st.bot !== null, character: st.character, inputs: m.counts[st.seat], firstScoreS: r.firstScoreS, score: r.score, place: r.place, detail };
+        const { seat: _a, score: _b, place: _c, firstScoreS: _d, final, ...detail } = r;
+        // final is the number this player is shown (DESIGN.md v5.16): beside score and place, never in detail
+        return { seat: st.seat, name: st.name, bot: st.bot !== null, character: st.character, inputs: m.counts[st.seat], firstScoreS: r.firstScoreS, score: r.score, place: r.place, final: typeof final === "number" ? final : r.score, detail };
       }),
     };
     const { seats: _s, lakeLeft: _l, highlights: _h, ...extra } = res;
@@ -225,7 +227,7 @@ export function createGameHub(store: GameStore, modes: Record<string, AnyMode>, 
       if (!r) return null;
       return store.matches(r.id).map((m) => ({
         mode: m.mode, model: m.model, status: m.status, startedAt: m.startedAt, endedAt: m.endedAt,
-        seed: m.status === "running" ? null : m.seed, summary: m.summary,
+        seed: m.status === "running" ? null : m.seed, summary: m.summary ? fillScoreTier(m.summary) : null,
       }));
     },
     history(code) {

@@ -1,75 +1,75 @@
 # Agreement is not justification: what a harness can establish about a repository's claims
 
-Harness engineering is the strongest current account of working well with a
+Harness engineering offers a useful account of working well with a
 coding agent: feedforward *guides* that steer the agent before it acts, and
 feedback *sensors* that let it correct itself after (Böckeler, 2026). Böckeler
-is explicit that the point is not autonomy. A harness "should not necessarily
-aim to fully eliminate human input", but "to direct it to where our input is
-most important". I take that principle as settled and argue about its
-unanswered half: *to what*. My answer is that the division worth drawing is
+argues that a harness should direct human attention where it matters most,
+rather than necessarily eliminate it. I agree, but this leaves a practical
+question: which claims still need scrutiny after the checks pass? I distinguish
 between **agreement** among a repository's artefacts and **justification** of
-the claims those artefacts make. Harnesses are getting good at the first. The
-second is not a weaker version of it, and treating them as one thing is how a
-well-harnessed project still publishes things that are not true.
+the claims those artefacts make. Checks that establish the first do not, by
+themselves, establish the second. Treating them as equivalent can leave an
+unsupported explanation looking verified.
 
 Agreement is increasingly mechanised, and it is a mistake to say documentation
-goes unchecked. The OpenAI team whose harness Böckeler cites reports that
-"dedicated linters and CI jobs validate that the knowledge base is up to date,
-cross-linked, and structured correctly", and that "a recurring 'doc-gardening'
-agent scans for stale or obsolete documentation", opening fix-up pull requests
-where docs no longer reflect code behaviour (Lopopolo, 2026). Small projects
+goes unchecked. The OpenAI team whose harness Böckeler cites uses linters and
+CI to check its knowledge base, alongside an agent that proposes fixes for
+documentation that no longer reflects code behaviour (Lopopolo, 2026). Small projects
 can do a version of this cheaply: a test that fails when a README names a file
 that does not exist, a script that fails when a cited commit does not resolve.
-Böckeler's *inferential* sensors — "semantic analysis, AI code review, 'LLM as
-judge'" — push the same machinery onto ground that is not purely structural.
+Böckeler's inferential sensors, including AI reviewers, can also examine
+meaning. This is the strongest counter-case: automated review need not stop
+at checking agreement.
 
-What all of these establish is correspondence: this path exists, this commit
-resolves, this paragraph matches what the code now does. None of them
-establishes that a published number is the right number for the question it
-claims to answer, or that an explanation offered for why a number moved is
-supported by what was measured. Those are claims about evidence, not about two
-artefacts matching.
+But success at checking correspondence does not itself establish justification.
+A README can match a measurement report exactly while both describe bot
+results as evidence about people. An AI reviewer might catch this; passing a
+freshness check cannot establish that it did. Lopopolo's account describes a
+team's practice, not a measured error rate for its published explanations.
+The distinction concerns what a check establishes, not whether a machine or a
+person performs it.
 
 The gap is concrete. Suppose a measurement report explains a result by arguing
 that because the random seeds were identical before and after, the difference
 cannot be sampling noise. Every agreement check passes: the figures match the
 run that produced them, the file is current, no code behaviour contradicts it.
-The sentence is still unsupported. Identical seeds make the comparison paired,
-not certain; shared randomness is a variance-reduction technique, not a
-guarantee, and deciding what the difference means requires analysing the
-per-seed differences, which the report never did. Reproducibility is not
-justification, and a freshness check and a justification check are looking at
-different objects.
+The sentence is still unsupported. Reusing seeds supports paired
+comparison (Pearce et al., 2019) and can reduce variance, but it does not
+remove uncertainty about performance across other seeds. That requires analysing
+the differences and their uncertainty, not simply noting reproducibility.
+A check of the reported figures and a check of this inference answer
+different questions.
 
-This is not merely a linter nobody has written yet, though some of it is. A
-checker encodes a standard that someone has already articulated; the question
-of whether that standard is adequate for a particular claim is not inside it.
-Naur (1985) argued that a program's text cannot carry the theory that lets
-someone judge a modification — the theory being "the ability to do certain
-things", held by a person. He was not writing about automated reviewers, and I
-am extending rather than applying him: the same recursion appears one level up,
-in deciding whether a check is the right check for the claim. That recursion
-has to terminate in a reviewer who knows what the measurement was for.
+Some of this gap can be closed by better checks. A statistical check could
+require an uncertainty estimate; a semantic reviewer could challenge an
+unsupported explanation. Someone still has to decide whether those checks
+answer the relevant question. Naur (1985) argues that program texts and
+documentation do not fully convey the understanding needed to explain and
+modify a program. I extend that argument to reviewing evidence: knowing what
+a measurement was meant to establish matters alongside reading its output.
+This supports keeping informed review, not claiming that automated judgment
+is impossible.
 
-Two findings make the risk more than theoretical, and I should be clear that
-neither tested this mechanism directly. Parasuraman and Riley (1997) separate
-*misuse* of automation, meaning over-reliance born of complacency, from disuse,
-and find monitoring decays when automation is usually right; a true, detailed,
-green test log is evidence about something else, and I infer that it suppresses
-checking of the claims around it. METR's randomised trial (Becker et al., 2025)
+Two sources help explain why this distinction matters, although neither
+tests documentation review directly. Parasuraman and Riley (1997) describe
+automation misuse as over-reliance that can produce monitoring failures and
+decision biases. Their account suggests a risk: confidence in reliable code
+checks may spill over into trust in unchecked explanations. METR's randomised
+trial (Becker et al., 2025)
 found sixteen experienced developers took 19% longer on 246 real issues with AI
 assistance while believing afterwards that it had made them 20% faster. That
-measures productivity and belief, not documentation; what it establishes is
-that confidence and measured outcome come apart precisely where work looks
-finished.
+measures productivity and belief, not documentation. It shows that confidence
+can diverge from measured outcomes in that setting; it does not establish
+that green test logs cause misplaced trust.
 
 The practice I would argue for follows from the distinction. Mechanise
-agreement wholesale, because it is cheap and it is most of the volume. Then
-attach to every published claim the evidence it rests on, the version it holds
-for, and its scope — and route the explanatory claims, the sentences that say
-why a result came out as it did, to a named human reviewer. The useful measure
-of a harness is not how much supervision it removes, but whether what remains
-is pointed at justification rather than at freshness.
+repeatable agreement checks. For important published claims, record the
+supporting evidence, applicable version and scope. Review explanations
+separately: what was measured, what is inferred, and what remains unknown?
+AI reviewers can assist, but I would assign a named person responsibility for
+accepting those inferences. This is a practical accountability rule, not a
+claim that people are infallible. A harness should make the limits of its
+evidence visible, so passing checks does not become permission to overclaim.
 
 ## References
 
@@ -86,3 +86,6 @@ is pointed at justification rather than at freshness.
   Microprogramming*, 15(5).
 - Parasuraman, R. & Riley, V. (1997). Humans and automation: use, misuse,
   disuse, abuse. *Human Factors*, 39(2).
+- Pearce, M., Poloczek, M. & Branke, J. (2019). *Bayesian Optimization
+  Allowing for Common Random Numbers*. arXiv:1910.09259.
+  https://arxiv.org/abs/1910.09259

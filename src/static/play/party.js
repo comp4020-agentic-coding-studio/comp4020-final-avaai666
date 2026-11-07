@@ -21,7 +21,8 @@ export function mount({ world, sound, ui, send, view, post }) {
   const t = ui.t, esc = ui.esc;
   const bootEl = document.getElementById("boot");
   const boot = bootEl ? JSON.parse(bootEl.textContent) : { lang: "en", world: {} };
-  const W = { tiers: [[0.6, "rich", 1.2], [0.35, "fair", 1], [0.15, "lean", 0.8], [0, "none", 0.5]], k: 340, ...(boot.world ?? {}) };
+  // the tiers and K come only from the boot JSON (the server's worldForPage()); they draw the lake bar's marks, never a tier or a score
+  const W = { tiers: [], k: 340, ...(boot.world ?? {}) };
   let koiH = 0, prev = null, cur = null, curAt = 0, seats = null, lastKey = "", lastPhase = "", trying = false, revealT = [];
   const fishView = makeFishView();
   const me = () => view().mySeat;
@@ -260,12 +261,12 @@ export function mount({ world, sound, ui, send, view, post }) {
   function renderResults(v, overlayEl) {
     revealT.forEach(clearTimeout); revealT = [];
     const r = v.results, x = r.extra ?? {};
-    const tierOf = (n) => { for (const [min, id, mult] of W.tiers) if (n >= min * W.k) return { id, mult }; return { id: "none", mult: 0.5 }; };
-    const next = x.next ?? r.lakeAfter, tier = tierOf(next);
+    // the tier and every final number are the server's (DESIGN.md v5.16): this page computes neither
+    const next = x.next ?? r.lakeAfter, tier = x.scoreTier;
     const data = {
       // what the tier multiplies here is coins, not fish home, so there is no fish ledger step
       a: x.left?.a ?? r.lakeAfter, y: x.left?.y ?? 0, next, tier, multKey: "y2_cer_mult",
-      podium: r.seats.map((s) => ({ seat: s.seat, name: nameOf(s.seat), character: charOf(s.seat), isMe: s.seat === me(), base: s.detail?.base ?? s.score, score: s.score })),
+      podium: r.seats.map((s) => ({ seat: s.seat, name: nameOf(s.seat), character: charOf(s.seat), isMe: s.seat === me(), base: s.detail?.base ?? s.score, score: s.final })),
     };
     const zh = (key) => (boot.lang === "zh" ? t(key) : (boot.other ?? {})[key] ?? key);
     const html = ceremonySteps(data, { t, esc, portrait: ui.portrait, zh });

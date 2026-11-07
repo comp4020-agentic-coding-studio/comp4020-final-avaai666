@@ -254,3 +254,38 @@ describe("stop match", () => {
     expect(hub.stop(code, a.seat)).toEqual({ ok: false, reason: "not_playing" });
   });
 });
+
+describe("the stored summary holds the number each player was shown", () => {
+  // DESIGN.md v5.16: final sits beside score and place on each stored seat, not
+  // inside detail; a mode that names a tier has it stored as summary.extra.scoreTier
+  it("finish() stores each seat's final at the top level, beside score, and the mode's scoreTier in extra", () => {
+    const tiered: typeof fake = { ...fake, id: "tiered", results: (s) => ({ ...fake.results(s), seats: fake.results(s).seats.map((x) => ({ ...x, final: x.score * 3 })), scoreTier: { id: "rich", mult: 1.2 } }) };
+    hub.close();
+    hub = createGameHub(store, { fake, tiered }, now, (e) => { throw e; }, ["fake", "tiered"]);
+    const { code } = hub.createRoom("tiered");
+    const a = hub.join(code, "Ava", "mei"), b = hub.join(code, "Bo", "jin");
+    if (!a.ok || !b.ok) throw new Error("join failed");
+    hub.start(code, a.seat, { bots: false });
+    clock = hub.view(code, a.seat)!.startedAt! + 10;
+    for (let i = 0; i < 400; i++) { clock += 25; if (i % 5 === 0) hub.input(code, a.seat, { k: "dig" }); hub.tick(); }
+    const m = store.lastMatch(store.roomByCode(code)!.id)!;
+    expect(m.summary!.extra!.scoreTier).toEqual({ id: "rich", mult: 1.2 });
+    for (const st of m.summary!.seats) {
+      expect(st.final).toBe(st.score * 3);
+      expect(st.detail ?? {}).not.toHaveProperty("final");
+    }
+    expect(hub.view(code, a.seat)!.results!.extra!.scoreTier).toEqual({ id: "rich", mult: 1.2 });
+    expect(hub.view(code, a.seat)!.results!.seats.map((x) => x.final)).toEqual(m.summary!.seats.map((x) => x.score * 3));
+  });
+  it("a mode with no tier stores final = score and no scoreTier", () => {
+    const { code } = hub.createRoom("fake");
+    const a = hub.join(code, "Ava", "mei"), b = hub.join(code, "Bo", "jin");
+    if (!a.ok || !b.ok) throw new Error("join failed");
+    hub.start(code, a.seat, { bots: false });
+    clock = hub.view(code, a.seat)!.startedAt! + 10;
+    runToEnd();
+    const m = store.lastMatch(store.roomByCode(code)!.id)!;
+    for (const st of m.summary!.seats) expect(st.final).toBe(st.score);
+    expect(m.summary!.extra ?? {}).not.toHaveProperty("scoreTier");
+  });
+});

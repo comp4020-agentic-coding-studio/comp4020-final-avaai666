@@ -331,9 +331,9 @@ function results(s: PartySim): Results {
     { title: "The last net", text: s.last?.fit ? "held" : "tore", tkey: "y2_hl_last_t", key: s.last?.fit ? "y2_hl_last_fit" : "y2_hl_last_tear", vars: { cap: s.last?.cap ?? 0 } },
   ];
   return {
-    seats: s.coins.map((c, i) => ({ seat: i, score: scores[i], place: 1 + scores.filter((v) => v > scores[i]).length, firstScoreS: null, base: c })),
+    seats: s.coins.map((c, i) => ({ seat: i, score: scores[i], place: 1 + scores.filter((v) => v > scores[i]).length, firstScoreS: null, final: scores[i], base: c })),
     lakeLeft: left, highlights,
-    left: { a, y }, next, tier: tier.id,
+    left: { a, y }, next, tier: tier.id, scoreTier: { id: tier.id, mult: tier.mult },
     ledger: s.coins.map((c, i) => ({ seat: i, home: c, young: 0, spared: 0, took: s.tookFish[i] })),
     last: s.last ? { cap: s.last.cap, picks: s.last.picks, fit: s.last.fit } : null,
   };

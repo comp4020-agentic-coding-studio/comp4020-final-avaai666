@@ -1,6 +1,7 @@
 import { JSDOM } from "jsdom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DICT, t } from "../../src/lib/i18n.ts";
+import { fillScoreTier } from "../../src/lib/score-tier.ts";
 
 // The /play game scripts (src/static/play/*.js) are plain browser modules that
 // draw what the server sends. These load the real files with a fake `world`
@@ -63,6 +64,14 @@ function ui(lang: "en" | "zh") {
   };
 }
 
+// DESIGN.md v5.16: the server sends the tier and each seat's final number, and
+// the pages compute neither. A results fixture here is an old-shaped summary
+// (before v5.16) run through the server's own fill-in, so it is what a page is
+// really sent when someone reopens a room whose last match was recorded before
+// v5.16, and no tier or final is typed in by hand.
+const served = (mode: string, r: { seats: Record<string, unknown>[]; lakeAfter: number; highlights: unknown[]; extra?: Record<string, unknown> }) =>
+  fillScoreTier({ mode, model: `${mode} old`, durationS: 1, lakeBefore: 280, rematchBy: null, ...r } as never);
+
 // Lake Holdings 3.0 (holdings 3.0, Ava 24 Oct: "like Monopoly"): these replace 2.0's two tests here (a tap
 // before a card was picked; the ceremony's wording), whose cards and tiles are gone.
 function holdFrame(over: Record<string, unknown> = {}) {
@@ -119,7 +128,7 @@ describe("Lake Holdings' ceremony", () => {
       const world = Object.assign(fakeWorld5(), { canvas: document.createElement("canvas") });
       const mode = hold.mount({ world, sound: api.sound, ui: api, send: () => {}, post: () => {}, view: () => ({ mySeat: 0, seats, code: "ABCD" }) });
       const overlay = document.createElement("div");
-      mode.results({ results: { seats: [{ seat: 0, score: 48, base: 40, coins: 30, grounds: 3 }, { seat: 1, score: 24, base: 20, coins: 14, grounds: 2 }], lakeAfter: 200, highlights: [], extra: { next: 230, left: { a: 180 }, ledger: [{ seat: 0, home: 7 }, { seat: 1, home: 3 }] } }, code: "ABCD" }, overlay);
+      mode.results({ results: served("hold", { seats: [{ seat: 0, score: 48, base: 40, coins: 30, grounds: 3 }, { seat: 1, score: 24, base: 20, coins: 14, grounds: 2 }], lakeAfter: 200, highlights: [], extra: { next: 230, left: { a: 180 }, ledger: [{ seat: 0, home: 7 }, { seat: 1, home: 3 }] } }), code: "ABCD" }, overlay);
       overlay.querySelector<HTMLElement>("[data-cer-skip]")?.click();
       expect(overlay.textContent).toContain(t(lang, "h3_cer_mult", { mult: 1.2, tier: t(lang, "cer_v_rich") }).slice(0, 4));
       expect(overlay.textContent).not.toContain(t(lang, "cer_step3_mult", { mult: 1.2, tier: t(lang, "cer_v_rich") }));
@@ -172,8 +181,8 @@ describe("Who's Poaching's results", () => {
     const mode = poach.mount({ world, sound: api.sound, ui: api, send: () => {}, post: () => {}, view: () => ({ mySeat: 0, seats, code: "ABCD" }) });
     const overlay = document.createElement("div");
     document.body.append(overlay);
-    const results = { seats: [summarySeat(0, "Ava", "mei", 32, { base: 10, won: true }), summarySeat(1, "Bo", "jin", 6, { base: 6, won: false })], lakeAfter: 200, highlights: [],
-      extra: { winner: "fishers", roles: ["fisher", "poacher"], health: 80, replay: { path: [[0, 0], [10, 5]], nets: [[10, 5]] }, next: 230, left: { a: 180 }, ledger: [{ seat: 0, home: 10 }, { seat: 1, home: 6 }] } };
+    const results = served("poach", { seats: [summarySeat(0, "Ava", "mei", 32, { base: 10, won: true }), summarySeat(1, "Bo", "jin", 6, { base: 6, won: false })], lakeAfter: 200, highlights: [],
+      extra: { winner: "fishers", roles: ["fisher", "poacher"], health: 80, replay: { path: [[0, 0], [10, 5]], nets: [[10, 5]] }, next: 230, left: { a: 180 }, ledger: [{ seat: 0, home: 10 }, { seat: 1, home: 6 }] } });
     expect(() => mode.results({ results, code: "ABCD" }, overlay)).not.toThrow();
     const btn = overlay.querySelector<HTMLElement>("#po-year");
     expect(btn).not.toBeNull();
@@ -190,8 +199,8 @@ describe("Who's Poaching's results", () => {
     const mode = poach.mount({ world, sound: api.sound, ui: api, send: () => {}, post: () => {}, view: () => ({ mySeat: 0, seats, code: "ABCD" }) });
     const overlay = document.createElement("div");
     document.body.append(overlay);
-    const results = { seats: [summarySeat(0, "Ava", "mei", 32, { base: 10, won: true }), summarySeat(1, "Bo", "jin", 6, { base: 6, won: false })], lakeAfter: 300, highlights: [],
-      extra: { winner: "fishers", roles: ["fisher", "poacher"], health: 80, replay: { path: [], nets: [] }, next: 300, left: { a: 280 }, ledger: [{ seat: 0, home: 10 }, { seat: 1, home: 6 }] } };
+    const results = served("poach", { seats: [summarySeat(0, "Ava", "mei", 32, { base: 10, won: true }), summarySeat(1, "Bo", "jin", 6, { base: 6, won: false })], lakeAfter: 300, highlights: [],
+      extra: { winner: "fishers", roles: ["fisher", "poacher"], health: 80, replay: { path: [], nets: [] }, next: 300, left: { a: 280 }, ledger: [{ seat: 0, home: 10 }, { seat: 1, home: 6 }] } });
     mode.results({ results, code: "ABCD" }, overlay);
     overlay.querySelector<HTMLElement>("#po-year")!.click();
     overlay.querySelector<HTMLElement>("[data-cer-skip]")!.click();
@@ -212,7 +221,7 @@ describe("the podium reads base, coins and grounds from the stored seat's detail
     const world = Object.assign(fakeWorld5(), { canvas: document.createElement("canvas") });
     const mode = hold.mount({ world, sound: api.sound, ui: api, send: () => {}, post: () => {}, view: () => ({ mySeat: 0, seats, code: "ABCD" }) });
     const overlay = document.createElement("div");
-    mode.results({ results: { seats: [summarySeat(0, "Ava", "mei", 48, { base: 40, coins: 7, grounds: 3 }), summarySeat(1, "Bo", "jin", 24, { base: 20, coins: 14, grounds: 2 })], lakeAfter: 200, highlights: [], extra: { next: 230, left: { a: 180 }, ledger: [{ seat: 0, home: 7 }, { seat: 1, home: 3 }] } }, code: "ABCD" }, overlay);
+    mode.results({ results: served("hold", { seats: [summarySeat(0, "Ava", "mei", 48, { base: 40, coins: 7, grounds: 3 }), summarySeat(1, "Bo", "jin", 24, { base: 20, coins: 14, grounds: 2 })], lakeAfter: 200, highlights: [], extra: { next: 230, left: { a: 180 }, ledger: [{ seat: 0, home: 7 }, { seat: 1, home: 3 }] } }), code: "ABCD" }, overlay);
     overlay.querySelector<HTMLElement>("[data-cer-skip]")!.click();
     const podium = overlay.querySelector(".podium")!.textContent!;
     expect(podium).toContain(t("en", "h3_coins", { c: 7, g: 3 }));
@@ -228,12 +237,46 @@ describe("the podium reads base, coins and grounds from the stored seat's detail
     const world = Object.assign(fakeWorld5(), { boats: new Map() });
     const mode = party.mount({ world, sound: api.sound, ui: api, send: () => {}, post: () => {}, view: () => ({ mySeat: 0, seats, code: "ABCD" }) });
     const overlay = document.createElement("div");
-    mode.results({ results: { seats: [summarySeat(0, "Ava", "mei", 31, { base: 26 }), summarySeat(1, "Bo", "jin", 12, { base: 10 })], lakeAfter: 300, highlights: [], extra: { next: 300, left: { a: 280 }, ledger: [{ seat: 0, home: 26 }, { seat: 1, home: 10 }] } }, code: "ABCD" }, overlay);
+    mode.results({ results: served("party", { seats: [summarySeat(0, "Ava", "mei", 31, { base: 26 }), summarySeat(1, "Bo", "jin", 12, { base: 10 })], lakeAfter: 300, highlights: [], extra: { next: 300, left: { a: 280 }, ledger: [{ seat: 0, home: 26 }, { seat: 1, home: 10 }] } }), code: "ABCD" }, overlay);
     overlay.querySelector<HTMLElement>("[data-cer-skip]")!.click();
     const podium = overlay.querySelector(".podium")!.textContent!;
     expect(podium).toContain("26 × ");
     expect(podium).not.toContain("31 × ");
   });
+});
+
+describe("every podium renders the tier and final number the server sent, and computes neither", () => {
+  // DESIGN.md v5.16. Each summary here says the tier is Lean (x 0.8) while its
+  // lake (340, or next 340) would make Rich (x 1.2), and gives finals no
+  // multiplication of the score would give: a page that computed either itself
+  // would show a different podium.
+  const TIER = { id: "lean", mult: 0.8 };
+  const podiumOf = (overlay: HTMLElement) => { overlay.querySelector<HTMLElement>("#po-year")?.click(); overlay.querySelector<HTMLElement>("[data-cer-skip]")!.click(); return overlay.querySelector(".podium")!.textContent!; };
+  const seatsWith = (finals: number[], details: Record<string, unknown>[]) => finals.map((f, i) => ({ ...summarySeat(i, i ? "Bo" : "Ava", i ? "jin" : "mei", 17 - i * 10, details[i]), final: f }));
+  for (const [name, file, details, extra] of [
+    ["Boat Rush", "rush", [{}, {}], { fairShare: 5, ledger: [{ seat: 0, home: 17 }, { seat: 1, home: 7 }] }],
+    ["Lake Holdings", "hold", [{ base: 17, coins: 7, grounds: 3 }, { base: 7, coins: 2, grounds: 1 }], { next: 340, ledger: [{ seat: 0, home: 17 }, { seat: 1, home: 7 }] }],
+    ["Fishing Party", "party", [{ base: 17 }, { base: 7 }], { next: 340, ledger: [{ seat: 0, home: 17 }, { seat: 1, home: 7 }] }],
+    ["Who's Poaching", "poach", [{ base: 17, won: true }, { base: 7, won: false }], { next: 340, winner: "fishers", roles: ["fisher", "poacher"], replay: { path: [], nets: [] }, ledger: [{ seat: 0, home: 17 }, { seat: 1, home: 7 }] }],
+  ] as const) {
+    it(`${name}`, async () => {
+      const d = dom();
+      d.window.HTMLCanvasElement.prototype.getContext = function (kind: string) { return kind === "2d" ? fake2d() : null; } as never;
+      const boot = document.createElement("script"); boot.id = "boot"; boot.type = "application/json"; boot.textContent = JSON.stringify({ lang: "en", world: { k: 340 } }); document.body.append(boot);
+      const js = await importJs(`../../src/static/play/${file}.js`);
+      const { api } = ui("en");
+      const seats = [{ name: "Ava", character: "mei" }, { name: "Bo", character: "jin" }];
+      const world = Object.assign(fakeWorld5(), { boats: new Map(), canvas: document.createElement("canvas") });
+      const mode = js.mount({ world, sound: api.sound, ui: api, send: () => {}, post: () => {}, view: () => ({ mySeat: 0, seats, code: "ABCD" }) });
+      const overlay = document.createElement("div"); document.body.append(overlay);
+      mode.results({ results: { seats: seatsWith([41, 3], details as never), lakeAfter: 340, highlights: [], extra: { ...extra, scoreTier: TIER } }, code: "ABCD" }, overlay);
+      podiumOf(overlay);
+      // each place's big number is the server's final (41, 3), not 17 or 7 times any tier (20, 14, 8, 6)
+      expect([...overlay.querySelectorAll(".podium .sc")].map((e) => e.textContent)).toEqual(["41", "3"]);
+      // and the multiplier beside each base is the server's tier, not the one lakeAfter 340 would make
+      expect([...overlay.querySelectorAll(".podium .sc + small")].map((e) => e.textContent)).toEqual([`17 × ${TIER.mult}`, `7 × ${TIER.mult}`]);
+    });
+  }
 });
 
 describe("Fishing Party", () => {

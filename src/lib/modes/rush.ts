@@ -612,6 +612,13 @@ function titlesFor(s: RushSim): { key: string; vars: Record<string, string | num
   return out.slice(0, 4);
 }
 
+// The number a Boat Rush player reads as their final score: their score (the
+// fish banked, plus Let Them Go's share) times next spring's tier, rounded.
+// DESIGN.md v5.16: Rush's score and place stay this unmultiplied base, and
+// final is only what the podium shows. results() and the fill-in for older
+// summaries (score-tier.ts) both use this, so the arithmetic exists once.
+export const rushFinal = (score: number, mult: number): number => Math.round(score * mult);
+
 function results(s: RushSim): Results {
   // Let Them Go (DESIGN's card text): each young fish its net let go scores
   // half a fish, if next year is Fair or better
@@ -635,8 +642,9 @@ function results(s: RushSim): Results {
   const alt = nextSpring(s.history, 0.8);
   const fairShare = Math.max(1, Math.round((s.boats.reduce((n, b) => n + b.banked, 0)) / s.boats.length));
   const [leftA, leftY] = counts(s); // what the last gong left: the ceremony's "left -> next spring"
+  const lakeLeft = Math.min(K, next), scoreTier = tierOf(lakeLeft);
   return {
-    seats, lakeLeft: Math.min(K, next), highlights, left: { a: leftA, y: leftY },
+    seats: seats.map((x) => ({ ...x, final: rushFinal(x.score, scoreTier.mult) })), lakeLeft, highlights, left: { a: leftA, y: leftY }, scoreTier,
     titles: titlesFor(s), counterfactual: { alt, tierId: tierOf(alt).id }, fairShare,
     ledger: s.boats.map((b) => ({ seat: b.seat, home: b.stats.home, young: b.stats.youngKilled, spared: b.stats.youngSpared })),
   };

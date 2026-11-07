@@ -1,4 +1,4 @@
-# Next Year, No Fish (明年无鱼): design v5.15
+# Next Year, No Fish (明年无鱼): design v5.16
 
 ## What it is
 
@@ -268,6 +268,37 @@ P7. **Thumbs away from the edges.**
 3. **Podium.** Score = base × tier multiplier, with the base shown. Two
    buttons: "Next year: same lake (N fish)" and "Back to the village"
    (the room).
+
+#### The podium's tier and final score (v5.16, 7 Nov)
+
+The server names the tier and every seat's final number; no page computes
+either. Each mode's results() returns `scoreTier` ({id, mult}, from
+lake-world.ts's `tierOf`), stored in the summary's `extra`, and a `final`
+on every seat, stored beside `score` and `place` (never inside `detail`).
+So the record holds the number each player was shown.
+
+In Lake Holdings, Fishing Party and Who's Poaching, `score` already carries
+the tier, so `final` is the same number. **In Boat Rush they differ, on
+purpose.** `score` stays the unmultiplied base (fish banked, plus Let Them
+Go's share), and `final` is `rushFinal(score, mult)`, the one helper in
+src/lib/modes/rush.ts. The reason: Rush's `place`, its three published
+balance targets (scripts/balance.ts counts `place === 1`), the expectation
+in spec/unit/rush.test.ts that a Let Them Go score is 10 in a dead year,
+and the room history's winner lookup in game-hub.ts are all defined on the
+unmultiplied number. Multiplying it before ranking would round neighbouring
+scores together in Lean and None years (at × 0.5, 3 and 4 both become 2)
+and make new ties for first. That is a rule change. It would need the
+balance harness re-run and README's figures re-measured, and it was not
+made two days from the deadline (Ava, 7 Nov). In Rush, `score` is what a
+seat is ranked on and `final` is what the player reads.
+
+A summary stored before v5.16 has neither field. src/lib/score-tier.ts
+fills them in when the summary is served, the way that mode's page used
+to: the tier of `extra.next`, or of `lakeAfter` when there is no `next`
+(Boat Rush), and none for a Lake Holdings lake that died; `final` is
+`rushFinal(score, mult)` in Rush and `score` in the other three. Nothing
+is written back into a stored row. spec/unit/score-tier.test.ts pins
+this to the old pages' arithmetic, mode by mode.
 
 ### The flow
 
@@ -829,6 +860,7 @@ Lake Holdings becomes turn-based; Boat Rush has four seasons of 45 s.
 
 ## Changelog
 
+- v5.16 (7 Nov): the podium's tier and final score come from the server. Each mode's results() names `scoreTier` and every seat's `final`; the summary stores both; Boat Rush, Lake Holdings, Fishing Party and Who's Poaching's pages read them and keep no copy of `tierOf`. Boat Rush's `score` and `place` stay the unmultiplied base, as a dated decision, not an oversight: see "The podium's tier and final score" for why. Summaries stored before v5.16 are filled in when served (src/lib/score-tier.ts) and never rewritten. No score, place, tier or balance number changes.
 - v5.15 (7 Nov): rule change 17, bug fix, balance barely moved. With v5.14's ring and `DOCK_R` already made to agree, Ava still found a delay on a real trip home: "the stern has to be inside too." The cause was `unloadT`, the per-fish countdown: `moveBoats()` only ran it down while `b.docked` was true, so a boat back from a real trip (away for seconds, well over `UNLOAD_EVERY`) still carried whatever countdown its *previous* trip's unloading had left — up to a full `UNLOAD_EVERY` — and had to wait that out again before the first fish banked, instead of banking the instant its hull reached the ring. The countdown now runs whenever it is above zero, docked or not (resting at zero rather than going negative), so a real trip's countdown is long expired by the time the boat gets home. The bobbing fix from rule change 13's follow-up still holds: a boat crossing the edge repeatedly unloads no faster than one fish per `UNLOAD_EVERY` of real time. Two tests cover both (`spec/unit/rush.test.ts`). Measured: `BALANCE_SET='{}' node scripts/balance.ts rush 300` moves (a) from 68.7% to 65.0% and (b) from 66.0% to 72.3%, both well clear of the 55% revert line and inside a 300-match run's own noise — the expected size of the change, since it only removes up to ~0.16 s of waiting before the first fish of each trip. `UNLOAD_EVERY` is not touched. docs/checks/balance-unload-countdown-2026-11-07.md has the full comparison. The home ring also now pulses and the hold panel shows "Unloading" the moment `b.docked` turns true, so the player sees the promise kept at the moment her hull touches the ring, not when the first fish lands.
 - v5.14 (6 Nov): rule change 16, bug fix, balance unchanged. Even with v5.13's ring fixed to draw its true edge at `DOCK_R`, Ava still had to push her boat further in — "only this far in will it put the fish down — touching the outer edge of the ring does nothing" — because `b.docked` tests the boat's centre against `DOCK_R`, while the ring's own picture promises any part of the boat. The faithful fix, matching the picture (`b.docked = ... < DOCK_R + HULL_FWD`, `HULL_FWD = 3.1`, a boat's hull reach, named once in `boat-move.ts`), was measured and makes the lake far too easy to fish out: target (b) collapsed from 66.0% to 2.0% (92% of all-greedy tables ended with the lake at "none" tier, against 13.0% before). `UNLOAD_EVERY` was not touched a third time to try to recover it — a jump of this size is not what the dial is for. The sim is reverted to exactly its unmodified form instead, and the ring is drawn smaller, at `DOCK_R - HULL_FWD`, sent to the page through `rushPractice.hullFwd`: a boat's hull reaches the smaller ring's edge at the exact moment its centre crosses `DOCK_R` and the unchanged sim starts unloading it. Balance is confirmed unchanged: (a) 68.7%, (b) 66.0%, (c) keeper 27.0%, identical to v5.13's own published numbers, since nothing in `rush.ts`'s math moved. docs/checks/balance-hull-2026-11-06.md has both measurements and the test proving the equivalence.
 - v5.13 (6 Nov): two things Ava found playing the v5.12 build, plus a third unloading-dial move. (1) rule change 15, bug fix: `dockPos()` gives each dock an `inward` pointing from the dock toward the water, but all six places a mode starts a boat (`rush.ts`'s `make()` and `startSeason()`, `party.ts`'s `make()` and `setupRound()`, `poach.ts`'s `make()` and `startDay()`) started it facing `inward + Math.PI` (the bank) and, where the start position was offset at all, two units further inland from a dock already on the shore line — onto the pier, which `keepOnWater()` then shoved back onto the lake on the first tick ("at the start of a match the bow points the wrong way — it should be the opposite — otherwise I have to turn round before I can set off"). All six now face `inward` and start two units out on open water, with a cross-mode test (Boat Rush and Fishing Party at 2, 3 and 4 boats; Who's Poaching at 4 and 6) checking every seat starts on water, facing its own dock within a few degrees. This is the third physics fix to make every bot's season a little more efficient (after the fish speed on 25 October and the braking fix on 29 October), and it carried target (b) under its own "most" wording (49.3% at `UNLOAD_EVERY` 0.30, measured) while pushing (a) well clear (83.3%). `UNLOAD_EVERY` moves from 0.30 to 0.32: of the values swept, 0.31 and 0.32 both clear 50% on both targets, and 0.32's margins come out wide and roughly even ((a) 68.7%, +18.7 over 50%; (b) 66.0%, +16.0), closer than 0.31's thin +8.3 on (b) (inside a 300-match run's own noise), and the pair almost exactly reproduces 29 October's own 70.0%/63.7%. docs/checks/balance-start-pose-2026-11-06.md has the full sweep and the isolation proving the start-pose fix alone, not the ring fix below, moved the numbers. This is the third time the unloading dial has moved (25 October's fish-speed fix, 29 October's braking fix, now the start pose); each time the simulation got more faithful and the dial followed it back to hold the three targets where they have always been — the targets themselves have never been reworded. README carries the new numbers. (2) The ring's dark halo (`makeRing()`'s outer disc, 0.7 units wider than the gold band it surrounds, and what the eye actually reads as the ring's edge) overshot the real unloading radius by about 1.4 units, because `setHome()` scaled the whole group against the gold band's own outer radius, not the halo's ("only this far in will it put the fish down — touching the outer edge of the ring does nothing"). The scale now lands the halo's own visible outer edge on the radius it is given. `rush.js` was also scaling that radius by the match's lake-size factor a second time, while the server's own dock check (`RUSH.DOCK_R`) is never scaled by lake size, so a two-boat lake would have drawn the ring at 4.6 units while the server still unloaded at 6.5; that second scaling is dropped.

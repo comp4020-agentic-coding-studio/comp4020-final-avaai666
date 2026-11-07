@@ -17,7 +17,8 @@ export function mount({ world, sound, ui, send, view, post }) {
   const t = ui.t, esc = ui.esc;
   const bootEl = document.getElementById("boot");
   const boot = bootEl ? JSON.parse(bootEl.textContent) : { lang: "en", world: {} };
-  const W = { tiers: [[0.6, "rich", 1.2], [0.35, "fair", 1], [0.15, "lean", 0.8], [0, "none", 0.5]], k: 340, ...(boot.world ?? {}) };
+  // the tiers and K come only from the boot JSON (the server's worldForPage()); they draw the lake bar's marks, never a tier or a score
+  const W = { tiers: [], k: 340, ...(boot.world ?? {}) };
   let cur = null, seats = null, sel = null, sent = "", lastKey = "", frameAt = 0;
   const me = () => view().mySeat;
   const myTurn = () => cur && me() !== null && me() !== undefined && cur.turn === me();
@@ -269,14 +270,14 @@ export function mount({ world, sound, ui, send, view, post }) {
   // ---- the end: the shared ceremony ----
   function renderResults(v, overlayEl) {
     const r = v.results, x = r.extra ?? {};
-    const tierOf = (n) => { for (const [min, id, mult] of W.tiers) if (n >= min * W.k) return { id, mult }; return { id: "none", mult: 0.5 }; };
-    const next = x.next ?? r.lakeAfter, tier = x.dead ? { id: "none", mult: 0.5 } : tierOf(next);
+    // the tier and every final number are the server's (DESIGN.md v5.16): this page computes neither
+    const next = x.next ?? r.lakeAfter, tier = x.scoreTier;
     const data = {
       a: x.left?.a ?? r.lakeAfter, y: 0, next, tier, unit: t("h3_unit"), multKey: "h3_cer_mult", // coins, grounds, buildings and fish: not fish home
       ledger: (x.ledger ?? []).map((l) => ({ seat: l.seat, name: nameOf(l.seat), character: charOf(l.seat), isMe: l.seat === me(), home: l.home, young: 0, spared: 0 })),
       fairShare: Math.max(1, Math.round((x.ledger ?? []).reduce((n, l) => n + l.home, 0) / Math.max(1, (x.ledger ?? []).length))),
       titles: [],
-      podium: r.seats.map((s) => ({ seat: s.seat, name: nameOf(s.seat), character: charOf(s.seat), isMe: s.seat === me(), base: s.detail?.base ?? s.score, score: s.score, sub: t("h3_coins", { c: s.detail?.coins ?? 0, g: s.detail?.grounds ?? 0 }) })),
+      podium: r.seats.map((s) => ({ seat: s.seat, name: nameOf(s.seat), character: charOf(s.seat), isMe: s.seat === me(), base: s.detail?.base ?? s.score, score: s.final, sub: t("h3_coins", { c: s.detail?.coins ?? 0, g: s.detail?.grounds ?? 0 }) })),
     };
     const zh = (key) => (boot.lang === "zh" ? t(key) : (boot.other ?? {})[key] ?? key);
     const html = ceremonySteps(data, { t, esc, portrait: ui.portrait, zh });

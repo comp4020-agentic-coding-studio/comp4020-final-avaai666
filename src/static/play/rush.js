@@ -175,15 +175,11 @@ export function mount({ world, sound, ui, send, view, post }) {
   // ---- the ceremony: the server's results, worded from the room's dictionary ----
   function ceremonyData(results) {
     const extra = results.extra ?? {};
-    const tier = { id: extra.tier?.id, mult: extra.tier?.mult };
-    // the tier itself is not sent directly; derive it from lakeAfter against the shared tiers in the boot world data
-    const boot = JSON.parse(document.getElementById("boot").textContent);
-    const tiers = boot.world?.tiers ?? [[0.6, "rich", 1.2], [0.35, "fair", 1], [0.15, "lean", 0.8], [0, "none", 0.5]];
-    const k = boot.world?.k ?? 340;
-    const tierOf = (n) => { for (const [min, id, mult] of tiers) if (n >= min * k) return { id, mult }; return { id: "none", mult: 0.5 }; };
-    const realTier = tierOf(results.lakeAfter);
+    // the tier and every final number are the server's (DESIGN.md v5.16): this page computes neither.
+    // A Rush seat's score is the unmultiplied base it is ranked on; final is what the podium shows.
+    const realTier = extra.scoreTier;
     const ledger = (extra.ledger ?? []).map((l) => { const s = results.seats.find((x) => x.seat === l.seat); return { seat: l.seat, name: l.seat === me() ? (s?.name ?? "") : nameOf(l.seat), character: s?.character ?? "mei", isMe: l.seat === me(), home: l.home, young: l.young, spared: l.spared }; });
-    const podium = results.seats.map((s) => ({ seat: s.seat, name: s.seat === me() ? s.name : nameOf(s.seat), character: s.character, isMe: s.seat === me(), base: s.score, score: Math.round(s.score * realTier.mult), sub: undefined }));
+    const podium = results.seats.map((s) => ({ seat: s.seat, name: s.seat === me() ? s.name : nameOf(s.seat), character: s.character, isMe: s.seat === me(), base: s.score, score: s.final, sub: undefined }));
     return {
       a: extra.left?.a ?? results.lakeAfter, y: extra.left?.y ?? 0, next: results.lakeAfter, tier: realTier,
       counterfactual: extra.counterfactual, ledger, fairShare: extra.fairShare, unit: t("g_unit_rush"),

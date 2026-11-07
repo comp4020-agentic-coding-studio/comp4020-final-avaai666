@@ -568,9 +568,9 @@ function results(s: PoachSim): Results {
     { title: "The lake", text: `ended at ${Math.round(health(s))}% (the line is ${Q.LINE}%)`, tkey: "p2_hl_lake_t", key: "p2_hl_lake", vars: { h: Math.round(health(s)), line: Q.LINE } },
   ];
   return {
-    seats: seats.map((x) => ({ seat: x.seat, score: x.score, place: 1 + order.filter((v) => v > x.score).length, firstScoreS: null, base: x.base, won: x.won })),
+    seats: seats.map((x) => ({ seat: x.seat, score: x.score, place: 1 + order.filter((v) => v > x.score).length, firstScoreS: null, final: x.score, base: x.base, won: x.won })),
     lakeLeft: left, highlights,
-    winner, why: s.endReason, roles: s.roles, health: health(s), tier: tier.id, next,
+    winner, why: s.endReason, roles: s.roles, health: health(s), tier: tier.id, scoreTier: { id: tier.id, mult: tier.mult }, next,
     left: { a, y },
     ledger: s.boats.map((b) => ({ seat: b.seat, home: b.caught + b.taskFish, young: b.youngKilled, spared: 0 })),
     exiled: s.exiled,

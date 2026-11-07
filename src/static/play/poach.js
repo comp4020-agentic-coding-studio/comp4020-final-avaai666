@@ -325,15 +325,14 @@ export function mount({ world, sound, ui, send, view, post }) {
   }
   function ceremony(v, overlayEl) {
     const r = v.results, x = r.extra ?? {};
-    const tiers = W.tiers, k = W.k;
-    const tierOf = (n) => { for (const [min, id, mult] of tiers) if (n >= min * k) return { id, mult }; return { id: "none", mult: 0.5 }; };
-    const next = x.next ?? r.lakeAfter, tier = tierOf(next);
+    // the tier and every final number are the server's (DESIGN.md v5.16): this page computes neither
+    const next = x.next ?? r.lakeAfter, tier = x.scoreTier;
     const data = {
       a: x.left?.a ?? r.lakeAfter, y: x.left?.y ?? 0, next, tier, unit: t("p2_unit"),
       ledger: (x.ledger ?? []).map((l) => ({ seat: l.seat, name: nameOf(l.seat), character: charOf(l.seat), isMe: l.seat === me(), home: l.home, young: l.young, spared: 0 })),
       fairShare: Math.max(1, Math.round((x.ledger ?? []).reduce((n, l) => n + l.home, 0) / Math.max(1, (x.ledger ?? []).length))),
       titles: [],
-      podium: r.seats.map((s) => ({ seat: s.seat, name: nameOf(s.seat), character: charOf(s.seat), isMe: s.seat === me(), base: s.detail?.base ?? s.score, score: s.score, sub: s.detail?.won ? t("p2_winners") : undefined })),
+      podium: r.seats.map((s) => ({ seat: s.seat, name: nameOf(s.seat), character: charOf(s.seat), isMe: s.seat === me(), base: s.detail?.base ?? s.score, score: s.final, sub: s.detail?.won ? t("p2_winners") : undefined })),
     };
     const zh = (key) => (boot.lang === "zh" ? t(key) : (boot.other ?? {})[key] ?? key);
     const html = ceremonySteps(data, { t, esc, portrait: ui.portrait, zh });
