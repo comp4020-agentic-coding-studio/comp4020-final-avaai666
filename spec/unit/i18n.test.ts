@@ -114,3 +114,28 @@ describe("what a player reads", () => {
     expect(t("zh", "bot_suffix", { name: t("zh", "c_wang") })).toBe("老王（机器人）");
   });
 });
+
+describe("the room's note after a match ended without a score", () => {
+  // A host's "Stop match" and a server restart are both written to the ledger
+  // as "interrupted" (game-store.ts's CHECK allows only running, done,
+  // interrupted), and a room rebuilt from the store cannot tell them apart. So
+  // g_note_interrupted may say only what the record knows: the match ended
+  // without a score, and nothing was scored. It must not name a cause.
+  it("g_note_interrupted names no cause in either language, and says nothing was scored", () => {
+    expect(t("en", "g_note_interrupted")).not.toMatch(/restart|server/i);
+    expect(t("zh", "g_note_interrupted")).not.toMatch(/重启|服务器/);
+    expect(t("en", "g_note_interrupted")).toMatch(/nothing was scored/i);
+    expect(t("zh", "g_note_interrupted")).toContain("没有计分");
+  });
+});
+
+describe("the ceremony's 'what if' line in Chinese", () => {
+  // "one fish in five fewer" is a fifth of each person's catch; 少拿五分之一条鱼
+  // says a fifth of one fish.
+  it("cer_what_same and cer_what say each person's catch is a fifth smaller, not a fifth of a fish", () => {
+    for (const k of ["cer_what_same", "cer_what"]) {
+      expect(DICT.zh[k]).not.toContain("五分之一条鱼");
+      expect(DICT.zh[k]).toMatch(/每人.*少.*五分之一/);
+    }
+  });
+});

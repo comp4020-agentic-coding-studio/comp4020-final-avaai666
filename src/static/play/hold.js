@@ -276,7 +276,7 @@ export function mount({ world, sound, ui, send, view, post }) {
       ledger: (x.ledger ?? []).map((l) => ({ seat: l.seat, name: nameOf(l.seat), character: charOf(l.seat), isMe: l.seat === me(), home: l.home, young: 0, spared: 0 })),
       fairShare: Math.max(1, Math.round((x.ledger ?? []).reduce((n, l) => n + l.home, 0) / Math.max(1, (x.ledger ?? []).length))),
       titles: [],
-      podium: r.seats.map((s) => ({ seat: s.seat, name: nameOf(s.seat), character: charOf(s.seat), isMe: s.seat === me(), base: s.base ?? s.score, score: s.score, sub: t("h3_coins", { c: s.coins ?? 0, g: s.grounds ?? 0 }) })),
+      podium: r.seats.map((s) => ({ seat: s.seat, name: nameOf(s.seat), character: charOf(s.seat), isMe: s.seat === me(), base: s.detail?.base ?? s.score, score: s.score, sub: t("h3_coins", { c: s.detail?.coins ?? 0, g: s.detail?.grounds ?? 0 }) })),
     };
     const zh = (key) => (boot.lang === "zh" ? t(key) : (boot.other ?? {})[key] ?? key);
     const html = ceremonySteps(data, { t, esc, portrait: ui.portrait, zh });

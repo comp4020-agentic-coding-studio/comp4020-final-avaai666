@@ -265,7 +265,7 @@ export function mount({ world, sound, ui, send, view, post }) {
     const data = {
       // what the tier multiplies here is coins, not fish home, so there is no fish ledger step
       a: x.left?.a ?? r.lakeAfter, y: x.left?.y ?? 0, next, tier, multKey: "y2_cer_mult",
-      podium: r.seats.map((s) => ({ seat: s.seat, name: nameOf(s.seat), character: charOf(s.seat), isMe: s.seat === me(), base: s.base ?? s.score, score: s.score })),
+      podium: r.seats.map((s) => ({ seat: s.seat, name: nameOf(s.seat), character: charOf(s.seat), isMe: s.seat === me(), base: s.detail?.base ?? s.score, score: s.score })),
     };
     const zh = (key) => (boot.lang === "zh" ? t(key) : (boot.other ?? {})[key] ?? key);
     const html = ceremonySteps(data, { t, esc, portrait: ui.portrait, zh });

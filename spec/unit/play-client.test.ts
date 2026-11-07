@@ -147,6 +147,95 @@ describe("Who's Poaching", () => {
   });
 });
 
+// The results screens read each seat as game-hub.ts's finish() stores it:
+// seat, name, bot, character, inputs, firstScoreS, score, place, and every
+// other field the mode's results() gave (base, coins, grounds, won) inside
+// `detail`. These build the seats in that shape.
+const summarySeat = (seat: number, name: string, character: string, score: number, detail: Record<string, unknown>) =>
+  ({ seat, name, bot: false, character, inputs: 0, firstScoreS: null, score, place: 1, detail });
+function fake2d() {
+  const noop = () => {};
+  return { clearRect: noop, beginPath: noop, closePath: noop, moveTo: noop, lineTo: noop, arc: noop, fill: noop, stroke: noop, fillText: noop, set fillStyle(_v: unknown) {}, set strokeStyle(_v: unknown) {}, set lineWidth(_v: unknown) {}, set font(_v: unknown) {}, set textAlign(_v: unknown) {} };
+}
+
+describe("Who's Poaching's results", () => {
+  beforeEach(() => {
+    const d = dom();
+    d.window.HTMLCanvasElement.prototype.getContext = function (kind: string) { return kind === "2d" ? fake2d() : null; } as never;
+  });
+
+  it("draws the poacher's path without throwing, and the 'see next year's lake' button then opens the ceremony", async () => {
+    const poach = await importJs("../../src/static/play/poach.js");
+    const { api } = ui("en");
+    const seats = [{ name: "Ava", character: "mei" }, { name: "Bo", character: "jin" }];
+    const world = Object.assign(fakeWorld5(), { boats: new Map() });
+    const mode = poach.mount({ world, sound: api.sound, ui: api, send: () => {}, post: () => {}, view: () => ({ mySeat: 0, seats, code: "ABCD" }) });
+    const overlay = document.createElement("div");
+    document.body.append(overlay);
+    const results = { seats: [summarySeat(0, "Ava", "mei", 32, { base: 10, won: true }), summarySeat(1, "Bo", "jin", 6, { base: 6, won: false })], lakeAfter: 200, highlights: [],
+      extra: { winner: "fishers", roles: ["fisher", "poacher"], health: 80, replay: { path: [[0, 0], [10, 5]], nets: [[10, 5]] }, next: 230, left: { a: 180 }, ledger: [{ seat: 0, home: 10 }, { seat: 1, home: 6 }] } };
+    expect(() => mode.results({ results, code: "ABCD" }, overlay)).not.toThrow();
+    const btn = overlay.querySelector<HTMLElement>("#po-year");
+    expect(btn).not.toBeNull();
+    btn!.click();
+    expect(overlay.querySelector("#po-year")).toBeNull(); // the ceremony replaced the replay sheet
+    expect(overlay.querySelector("[data-cer-next], [data-cer-skip]")).not.toBeNull();
+  });
+
+  it("the podium shows each seat's base and the winners' tag from the stored seat's detail", async () => {
+    const poach = await importJs("../../src/static/play/poach.js");
+    const { api } = ui("en");
+    const seats = [{ name: "Ava", character: "mei" }, { name: "Bo", character: "jin" }];
+    const world = Object.assign(fakeWorld5(), { boats: new Map() });
+    const mode = poach.mount({ world, sound: api.sound, ui: api, send: () => {}, post: () => {}, view: () => ({ mySeat: 0, seats, code: "ABCD" }) });
+    const overlay = document.createElement("div");
+    document.body.append(overlay);
+    const results = { seats: [summarySeat(0, "Ava", "mei", 32, { base: 10, won: true }), summarySeat(1, "Bo", "jin", 6, { base: 6, won: false })], lakeAfter: 300, highlights: [],
+      extra: { winner: "fishers", roles: ["fisher", "poacher"], health: 80, replay: { path: [], nets: [] }, next: 300, left: { a: 280 }, ledger: [{ seat: 0, home: 10 }, { seat: 1, home: 6 }] } };
+    mode.results({ results, code: "ABCD" }, overlay);
+    overlay.querySelector<HTMLElement>("#po-year")!.click();
+    overlay.querySelector<HTMLElement>("[data-cer-skip]")!.click();
+    const podium = overlay.querySelector(".podium")!.textContent!;
+    expect(podium).toContain("10 × ");
+    expect(podium).not.toContain("32 × ");
+    expect(podium).toContain(t("en", "p2_winners"));
+  });
+});
+
+describe("the podium reads base, coins and grounds from the stored seat's detail", () => {
+  beforeEach(() => { dom(); });
+
+  it("Lake Holdings shows each seat's coins, grounds and base, not 0 coins and the final score twice", async () => {
+    const hold = await importJs("../../src/static/play/hold.js");
+    const { api } = ui("en");
+    const seats = [{ name: "Ava", character: "mei" }, { name: "Bo", character: "jin" }];
+    const world = Object.assign(fakeWorld5(), { canvas: document.createElement("canvas") });
+    const mode = hold.mount({ world, sound: api.sound, ui: api, send: () => {}, post: () => {}, view: () => ({ mySeat: 0, seats, code: "ABCD" }) });
+    const overlay = document.createElement("div");
+    mode.results({ results: { seats: [summarySeat(0, "Ava", "mei", 48, { base: 40, coins: 7, grounds: 3 }), summarySeat(1, "Bo", "jin", 24, { base: 20, coins: 14, grounds: 2 })], lakeAfter: 200, highlights: [], extra: { next: 230, left: { a: 180 }, ledger: [{ seat: 0, home: 7 }, { seat: 1, home: 3 }] } }, code: "ABCD" }, overlay);
+    overlay.querySelector<HTMLElement>("[data-cer-skip]")!.click();
+    const podium = overlay.querySelector(".podium")!.textContent!;
+    expect(podium).toContain(t("en", "h3_coins", { c: 7, g: 3 }));
+    expect(podium).toContain(t("en", "h3_coins", { c: 14, g: 2 }));
+    expect(podium).toContain("40 × ");
+    expect(podium).not.toContain("48 × ");
+  });
+
+  it("Fishing Party shows each seat's base, not the final score beside the multiplier", async () => {
+    const party = await importJs("../../src/static/play/party.js");
+    const { api } = ui("en");
+    const seats = [{ name: "Ava", character: "mei" }, { name: "Bo", character: "jin" }];
+    const world = Object.assign(fakeWorld5(), { boats: new Map() });
+    const mode = party.mount({ world, sound: api.sound, ui: api, send: () => {}, post: () => {}, view: () => ({ mySeat: 0, seats, code: "ABCD" }) });
+    const overlay = document.createElement("div");
+    mode.results({ results: { seats: [summarySeat(0, "Ava", "mei", 31, { base: 26 }), summarySeat(1, "Bo", "jin", 12, { base: 10 })], lakeAfter: 300, highlights: [], extra: { next: 300, left: { a: 280 }, ledger: [{ seat: 0, home: 26 }, { seat: 1, home: 10 }] } }, code: "ABCD" }, overlay);
+    overlay.querySelector<HTMLElement>("[data-cer-skip]")!.click();
+    const podium = overlay.querySelector(".podium")!.textContent!;
+    expect(podium).toContain("26 × ");
+    expect(podium).not.toContain("31 × ");
+  });
+});
+
 describe("Fishing Party", () => {
   beforeEach(() => { dom(); });
 
