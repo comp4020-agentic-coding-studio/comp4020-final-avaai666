@@ -53,15 +53,15 @@ Enforced, by checks that fail if broken:
 - Both dictionaries share keys (`spec/unit/i18n.test.ts`); every current page
   renders in both languages (`spec/unit/site-pages.test.ts`).
 
-Measured, not enforced (300 bot matches per table, lake sized to boats; Boat Rush from `docs/checks/balance-unload-countdown-2026-11-07.md`, v4
-in `docs/checks/balance-2026-10-15.md`). About bots and seeds, not people:
+Measured, not enforced (300 bot matches per table, lake sized to boats; Boat Rush from `docs/checks/balance-unload-countdown-2026-11-07.md`,
+Party and Poaching from `docs/checks/balance-party-poach-2026-11-08.md`). About bots and seeds, not people:
 
 - Boat Rush, four boats: no bot kind won over 41% of random-mix tables (keeper
   26.3%); all-greedy ended Lean or No fish in 65.0%; at 80% of their catch,
   Fair or better in 72.3%.
-- Fishing Party, four boats: no shop habit won over 40% (never buy 28.7%);
-  last net held 19.3%.
-- Who's Poaching, six boats: fishers won 67.7%; 50.7% always skipping votes.
+- Fishing Party, four boats: no shop habit won over 40% (the best, Fast Boat
+  always, 27.7%); last net held 23.3%.
+- Who's Poaching, six boats: fishers won 69.3%; 47.7% always skipping votes.
 - Lake Holdings 3.0 (`docs/checks/balance-hold3-2026-10-24.md`): no bot kind
   won over 41% (steady 27.4%); all-greedy ended Fair in 77.0%, all-keeper
   Bountiful in 100%.

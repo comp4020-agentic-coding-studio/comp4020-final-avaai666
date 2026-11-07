@@ -4,8 +4,7 @@ Next Year, No Fish is four multiplayer games on one shared lake: Boat Rush
 (sail, net, ram, race home), Fishing Party (five mini-games), Who's Poaching
 (find the hidden poacher) and Lake Holdings (build on the water). A room keeps
 its lake between games, and every page is in English and Chinese. Design:
-`DESIGN.md` v5.15; rules: `CLAUDE.md`; checks: `spec/`. Earlier versions run
-from /making-of.
+`DESIGN.md` v5.16; rules: `CLAUDE.md`; checks: `spec/`.
 
 ## Stack, and what it cost
 
@@ -19,7 +18,8 @@ step ([0001](docs/decisions/0001-stack.md)).
   it replays exactly. A local file keeps that one transaction. The cost: writes are synchronous and block the event loop. A default
   fsync measured 41 ms per write, so I chose WAL with `synchronous = NORMAL`
   and accepted losing the last commits if the host itself crashes
-  ([0002](docs/decisions/0002-durability.md)).
+  ([0002](docs/decisions/0002-durability.md)). Only the lake store sets it;
+  `game-store.ts` leaves the default, as the setting is per connection.
 - **SSE, not WebSockets.** The server steps each match 20 times a second and
   sends every seat its own frame 10 times a second. Inputs go up as ordinary
   POSTs. SSE reconnects by itself and its `Last-Event-ID` maps onto ledger row
@@ -48,7 +48,7 @@ it.
 
 The art is SVG and Three.js code written by Claude, in chat and in sessions;
 no image model was used. From session 18 the work moved to Claude in
-claude.ai under the same `CLAUDE.md`; I pushed every commit myself.
+claude.ai; I pushed every commit myself.
 
 ## Green tests, bored people
 
@@ -74,8 +74,7 @@ postpone one, and that a blocked mode stops with evidence and alternatives
 Every unit test was green. Then the agent played each mode in a real browser,
 from the home page to the end screen, on a laptop and a phone:
 
-- the end screen said "280 → 280", and buttons showed raw key names
-  ("skipall");
+- the end screen said "280 → 280";
 - WASD could not sail up or down, because the code read `dir.y` where the
   world gives `dir.z`.
 
@@ -88,8 +87,8 @@ That is why `CLAUDE.md` says a /play change is not done until
 
 ## One dial, three physics fixes
 
-Boat Rush publishes three balance targets, measured over 300 bot matches by
-`scripts/balance.ts`. `RUSH.UNLOAD_EVERY` was set to 0.33 on 24 October. Then
+Boat Rush publishes three balance targets, measured over 300 bot matches.
+`RUSH.UNLOAD_EVERY` was set to 0.33 on 24 October. Then
 three physics fixes each made the simulation more faithful and every bot's
 season a little more efficient:
 
@@ -132,9 +131,10 @@ cannot.
 
 ## Where it ended
 
-All four modes are playable from start to results and rematch. On 7 November, with the app running locally:
-typecheck was clean, `pnpm test:unit` passed 526 of 526, `pnpm check` passed
-568 of 568, and `pnpm check:evidence` resolved every cited commit. The newest
+All four modes are playable from start to results and rematch. On 8 November, with the app running locally:
+typecheck was clean, `pnpm test:unit` passed 545 of 545, `pnpm check` passed
+587 of 587 after a rerun, and `pnpm check:evidence` resolved every cited
+commit. The newest
 Boat Rush report (`docs/checks/balance-unload-countdown-2026-11-07.md`) keeps
 all three targets clear.
 
